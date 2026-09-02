@@ -348,7 +348,7 @@ export const useAppStore = create<AppState>()(
       undoCard: () => set((s) => (s.deckIndex > 0 ? { deckIndex: s.deckIndex - 1, flipped: false, dx: 0, dy: 0 } : {})),
     }),
     {
-      name: 'learning-plan/v1',
+      name: 'chunki/v1',
       partialize: (s) => {
         const { dx, dy, dragging, flying, grading, gradingError, checkingContext, ...rest } = s;
         void dx;

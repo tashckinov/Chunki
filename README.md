@@ -1,4 +1,4 @@
-# Learning Plan — English learning app
+# Chunki — English learning app
 
 Implementation of the `LearningPlan.dc.html` design (see below for the original handoff notes).
 

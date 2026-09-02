@@ -1,6 +1,7 @@
 import { useAppStore } from './store/appStore';
 import { BottomNavigation } from './components/ui/BottomNavigation';
 import { Icon, type IconName } from './components/ui/Icon';
+import { Logo } from './components/brand/Logo';
 import { GoalsScreen } from './screens/GoalsScreen';
 import { TestScreen } from './screens/TestScreen';
 import { CheckingScreen } from './screens/CheckingScreen';
@@ -69,7 +70,10 @@ function CurrentScreen() {
 function SidebarNav({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
     <nav className="hidden min-[1200px]:flex flex-col w-[248px] flex-none border-r border-border bg-surface px-3 py-8 gap-1">
-      <div className="px-3 pb-6 text-[17px] font-semibold">Learning Plan</div>
+      <div className="flex items-center gap-2 px-3 pb-6">
+        <Logo size={26} />
+        <span className="text-[17px] font-semibold">Chunki</span>
+      </div>
       {NAV_ITEMS.map((item, i) => {
         const active = i === value;
         return (

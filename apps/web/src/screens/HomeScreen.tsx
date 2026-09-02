@@ -5,6 +5,7 @@ import { useCalendarView, deckSizeLabel, extraListView } from '../store/derived'
 import { plural } from '../lib/plural';
 import { Card } from '../components/ui/Card';
 import { ListRow } from '../components/ui/ListRow';
+import { Logo } from '../components/brand/Logo';
 
 export function HomeScreen() {
   const s = useAppStore();
@@ -18,6 +19,10 @@ export function HomeScreen() {
 
   return (
     <div className="scroll-clean flex-1 min-h-0 pt-2 pb-8 flex flex-col gap-9">
+      <div className="min-[1200px]:hidden flex items-center gap-2 px-5">
+        <Logo size={22} />
+        <span className="text-[15px] font-semibold">Chunki</span>
+      </div>
       {!s.hasProgram && (
         <div className="flex flex-col gap-5 px-5">
           <div>

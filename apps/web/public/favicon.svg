@@ -1,1 +1,21 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect width="48" height="48" rx="12" fill="#6750A4"/><text x="24" y="32" text-anchor="middle" font-family="Roboto, sans-serif" font-size="22" font-weight="500" fill="#FFFFFF">E</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><g transform="translate(6,9.520000000000003) scale(0.88)">
+<defs>
+  <linearGradient id="chunki-top" x1="4" y1="4" x2="96" y2="46" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#3AA7F5" />
+    <stop offset="1" stop-color="#4436E8" />
+  </linearGradient>
+  <linearGradient id="chunki-teal" x1="4" y1="52" x2="46" y2="92" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#13D9A3" />
+    <stop offset="1" stop-color="#2599E9" />
+  </linearGradient>
+  <linearGradient id="chunki-coral" x1="52" y1="52" x2="96" y2="92" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#FF9C6B" />
+    <stop offset="1" stop-color="#F03348" />
+  </linearGradient>
+</defs>
+<path d="M58 44 C 58.5 49, 56.5 53.5, 53 61 C 61.5 56, 67 50.5, 68.5 44 Z" fill="url(#chunki-top)" />
+<rect x="4" y="4" width="92" height="44" rx="22" fill="url(#chunki-top)" />
+<path d="M12 88 C 11 90.5, 13 92, 15.3 90.7 L 24 84 L 12 84 Z" fill="url(#chunki-teal)" />
+<rect x="4" y="52" width="42" height="40" rx="16" fill="url(#chunki-teal)" />
+<rect x="54" y="52" width="42" height="40" rx="16" fill="url(#chunki-coral)" />
+</g></svg>

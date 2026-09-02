@@ -18,10 +18,10 @@ export function BottomNavigation({
             key={item.label}
             type="button"
             onClick={() => onChange(i)}
-            className="pressable flex-1 flex flex-col items-center justify-center gap-1 py-2.5"
+            className="pressable flex-1 min-w-0 basis-0 flex flex-col items-center justify-center gap-1 py-2.5 px-1"
           >
             <Icon name={item.icon} size={23} className={active ? 'text-accent' : 'text-text-tertiary'} />
-            <span className={`text-[11px] font-medium ${active ? 'text-accent' : 'text-text-tertiary'}`}>{item.label}</span>
+            <span className={`w-full text-center truncate text-[11px] font-medium ${active ? 'text-accent' : 'text-text-tertiary'}`}>{item.label}</span>
           </button>
         );
       })}
