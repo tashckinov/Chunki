@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/material-3-design-system-c1aeb334-6afd-44ce-8a85-53d88b205264/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/material-3-design-system-c1aeb334-6afd-44ce-8a85-53d88b205264/tokens/fig-tokens.css">
+<link rel="stylesheet" href="_ds/material-3-design-system-c1aeb334-6afd-44ce-8a85-53d88b205264/tokens/md-sys.css">
+<link rel="stylesheet" href="_ds/material-3-design-system-c1aeb334-6afd-44ce-8a85-53d88b205264/tokens/base.css">
+<link rel="stylesheet" href="_ds/material-3-design-system-c1aeb334-6afd-44ce-8a85-53d88b205264/components/m3.css">
+<link rel="stylesheet" href="_ds/material-3-design-system-c1aeb334-6afd-44ce-8a85-53d88b205264/styles.css">
+<script src="_ds/material-3-design-system-c1aeb334-6afd-44ce-8a85-53d88b205264/_ds_bundle.js"></script>
+<style>
+body{margin:0;background:var(--md-sys-color-surface-dim);font-family:var(--md-sys-typescale-plain-font,Roboto,sans-serif)}
+a{color:var(--md-sys-color-primary)}a:hover{color:var(--md-sys-color-on-primary-container)}
+@keyframes m3rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes m3pulse{0%,100%{opacity:.35}50%{opacity:1}}
+.m3scroll{overflow-y:auto;scrollbar-width:none}
+.m3scroll::-webkit-scrollbar{display:none}
+</style>
+</helmet>
+<div style="min-height:100vh;display:flex;align-items:flex-start;justify-content:center;gap:32px;padding:32px 24px">
+<div style="position:relative;width:412px;height:892px;flex:0 0 auto;overflow:hidden;border-radius:28px;background:var(--md-sys-color-surface);box-shadow:0 0 0 8px var(--md-sys-color-outline-variant),0 4px 8px 3px rgba(0,0,0,.15);display:flex;flex-direction:column;color:var(--md-sys-color-on-surface);touch-action:none">
+
+<div style="display:flex;align-items:center;height:44px;padding:0 24px;flex:0 0 auto;font-size:12px;font-weight:500;letter-spacing:.5px"><span style="flex:1">9:41</span><span style="opacity:.8">Wi-Fi</span></div>
+
+<!-- ══ TODAY / PLAN ══ -->
+<sc-if value="{{ isPlan }}" hint-placeholder-val="{{ true }}">
+<div style="flex:1;min-height:0;display:flex;flex-direction:column">
+<div style="display:flex;align-items:center;gap:4px;padding:4px 4px 0">
+<div style="flex:1;padding:0 16px">
+<div style="font-size:12px;font-weight:500;letter-spacing:.5px;color:var(--md-sys-color-on-surface-variant)">{{ t.hello }}</div>
+<div style="font-size:28px;line-height:36px">{{ t.today }}</div>
+</div>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Button" variant="text" size="xs" onClick="{{ toggleLang }}" hint-size="56px,32px">{{ langLabel }}</x-import>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.IconButton" label="Settings" hint-size="48px,48px"><x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Icon" name="AccountCircle" hint-size="24px,24px"></x-import></x-import>
+</div>
+
+<div class="m3scroll" style="flex:1;min-height:0;padding:12px 16px 24px;display:flex;flex-direction:column;gap:16px">
+
+<sc-if value="{{ needsPlacement }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:12px;background:var(--md-sys-color-tertiary-container);color:var(--md-sys-color-on-tertiary-container)">
+<div style="flex:1;font-size:14px;line-height:20px;letter-spacing:.25px">{{ t.placementNudge }}</div>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Button" variant="filled" size="xs" onClick="{{ goPlacement }}" hint-size="80px,32px">{{ t.start }}</x-import>
+</div>
+</sc-if>
+
+<!-- Home variant A: plan list -->
+<sc-if value="{{ homeA }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:16px">
+<div style="border-radius:28px;background:var(--md-sys-color-primary-container);color:var(--md-sys-color-on-primary-container);padding:24px;display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;align-items:center;gap:20px">
+<div style="position:relative;width:76px;height:76px;flex:0 0 auto;display:flex;align-items:center;justify-content:center">
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.ProgressIndicator" variant="circular" value="{{ dayValue }}" size="{{ n76 }}" thickness="{{ n6 }}" hint-size="76px,76px"></x-import>
+<div style="position:absolute;font-size:16px;font-weight:500">{{ dayPct }}</div>
+</div>
+<div style="flex:1">
+<div style="font-size:22px;line-height:28px">{{ t.dayTitle }}</div>
+<div style="font-size:14px;line-height:20px;letter-spacing:.25px;opacity:.85;margin-top:4px">{{ t.dayMeta }}</div>
+</div>
+</div>
+<div style="display:flex;gap:8px">
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Button" variant="filled" size="s" onClick="{{ goDeck }}" hint-size="150px,40px">{{ t.continueBtn }}</x-import>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Button" variant="text" size="s" onClick="{{ goProgress }}" hint-size="100px,40px">{{ t.progress }}</x-import>
+</div>
+</div>
+
+<div style="font-size:14px;font-weight:500;letter-spacing:.1px;padding:0 4px;color:var(--md-sys-color-on-surface-variant)">{{ t.thisWeekPlan }}</div>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.List" hint-size="100%,280px">
+<sc-for list="{{ planRows }}" as="row" hint-placeholder-count="4">
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.ListItem" interactive="{{ true }}" onClick="{{ row.go }}" leading="{{ row.leading }}" headline="{{ row.headline }}" supporting-text="{{ row.supporting }}" trailing="{{ row.trailing }}" hint-size="100%,72px"></x-import>
+</sc-for>
+</x-import>
+</div>
+</sc-if>
+
+<!-- Home variant B: focus card -->
+<sc-if value="{{ homeB }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;gap:8px;overflow-x:auto;padding:2px 0">
+<sc-for list="{{ streakDots }}" as="d" hint-placeholder-count="7">
+<div style="flex:0 0 auto;width:40px;display:flex;flex-direction:column;align-items:center;gap:6px">
+<div style="width:32px;height:32px;border-radius:1000px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;background:{{ d.bg }};color:{{ d.fg }};border:1px solid {{ d.border }}">{{ d.num }}</div>
+<div style="font-size:11px;color:var(--md-sys-color-on-surface-variant)">{{ d.day }}</div>
+</div>
+</sc-for>
+</div>
+
+<div onClick="{{ goDeck }}" style="cursor:pointer;border-radius:28px;overflow:hidden;background:var(--md-sys-color-surface-container-highest);display:flex;flex-direction:column">
+<div style="padding:28px 24px 24px;background:var(--md-sys-color-secondary-container);color:var(--md-sys-color-on-secondary-container)">
+<div style="font-size:11px;font-weight:500;letter-spacing:.5px;text-transform:uppercase;opacity:.8">{{ t.upNext }}</div>
+<div style="font-size:36px;line-height:44px;margin-top:12px">{{ t.cards }}</div>
+<div style="font-size:16px;line-height:24px;letter-spacing:.5px;margin-top:6px">{{ t.dayMeta }}</div>
+</div>
+<div style="padding:16px 24px;display:flex;align-items:center;gap:12px">
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.ProgressIndicator" variant="linear" value="{{ dayValue }}" hint-size="100%,4px"></x-import>
+<div style="font-size:12px;font-weight:500;flex:0 0 auto;color:var(--md-sys-color-on-surface-variant)">{{ dayPct }}</div>
+</div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+<sc-for list="{{ tiles }}" as="tile" hint-placeholder-count="4">
+<div onClick="{{ tile.go }}" style="cursor:pointer;border-radius:12px;border:1px solid var(--md-sys-color-outline-variant);padding:16px;display:flex;flex-direction:column;gap:10px;min-height:104px" style-hover="background:var(--md-sys-color-surface-container-low)">
+<div style="color:var(--md-sys-color-primary)">{{ tile.icon }}</div>
+<div style="flex:1"></div>
+<div style="font-size:16px;line-height:24px">{{ tile.title }}</div>
+<div style="font-size:12px;line-height:16px;letter-spacing:.4px;color:var(--md-sys-color-on-surface-variant)">{{ tile.meta }}</div>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+</div>
+</div>
+</sc-if>
+
+<!-- ══ PLACEMENT TEST ══ -->
+<sc-if value="{{ isPlacement }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;min-height:0;display:flex;flex-direction:column">
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.TopAppBar" size="center" title="{{ t.placement }}" leading="{{ backBtn }}" hint-size="100%,64px"></x-import>
+<div style="padding:0 16px"><x-import component-from-global-scope="Material3DesignSystem_c1aeb3.ProgressIndicator" variant="linear" value="{{ placeValue }}" hint-size="100%,4px"></x-import></div>
+
+<sc-if value="{{ placeAsking }}" hint-placeholder-val="{{ true }}">
+<div class="m3scroll" style="flex:1;min-height:0;padding:24px 16px;display:flex;flex-direction:column;gap:24px">
+<div style="font-size:12px;font-weight:500;letter-spacing:.5px;color:var(--md-sys-color-on-surface-variant)">{{ placeCounter }}</div>
+<div style="font-size:24px;line-height:32px">{{ t.pickNatural }}</div>
+<div style="font-size:22px;line-height:32px;padding:20px;border-radius:12px;background:var(--md-sys-color-surface-container-low)">{{ pq.sentence }}</div>
+<div style="display:flex;flex-direction:column;gap:12px">
+<sc-for list="{{ pq.options }}" as="opt" hint-placeholder-count="3">
+<div onClick="{{ opt.pick }}" style="cursor:pointer;padding:16px 20px;border-radius:1000px;border:1px solid var(--md-sys-color-outline);font-size:16px;letter-spacing:.5px;text-align:center;background:{{ opt.bg }};color:{{ opt.fg }}">{{ opt.label }}</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ placeDone }}" hint-placeholder-val="{{ false }}">
+<div class="m3scroll" style="flex:1;min-height:0;padding:24px 16px;display:flex;flex-direction:column;gap:20px;animation:m3rise .4s cubic-bezier(.05,.7,.1,1)">
+<div style="font-size:32px;line-height:40px">{{ t.planReady }}</div>
+<div style="display:flex;gap:12px">
+<div style="flex:1;padding:16px;border-radius:12px;background:var(--md-sys-color-primary-container);color:var(--md-sys-color-on-primary-container)">
+<div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;opacity:.8">{{ t.level }}</div>
+<div style="font-size:28px;line-height:36px;margin-top:4px">{{ placeLevel }}</div>
+</div>
+<div style="flex:1;padding:16px;border-radius:12px;background:var(--md-sys-color-tertiary-container);color:var(--md-sys-color-on-tertiary-container)">
+<div style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;opacity:.8">{{ t.perDay }}</div>
+<div style="font-size:28px;line-height:36px;margin-top:4px">12 min</div>
+</div>
+</div>
+<div style="font-size:14px;line-height:20px;letter-spacing:.25px;color:var(--md-sys-color-on-surface-variant)">{{ t.planExplain }}</div>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.List" hint-size="100%,220px">
+<sc-for list="{{ planRows }}" as="row" hint-placeholder-count="3">
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.ListItem" leading="{{ row.leading }}" headline="{{ row.headline }}" supporting-text="{{ row.supporting }}" hint-size="100%,72px"></x-import>
+</sc-for>
+</x-import>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Button" variant="filled" size="m" onClick="{{ finishPlacement }}" hint-size="100%,56px">{{ t.startPlan }}</x-import>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<!-- ══ SWIPE DECK ══ -->
+<sc-if value="{{ isDeck }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;min-height:0;display:flex;flex-direction:column;background:var(--md-sys-color-surface-container-low)">
+<div style="display:flex;align-items:center;gap:8px;padding:8px 8px 0">
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.IconButton" label="Close" onClick="{{ goPlan }}" hint-size="48px,48px"><x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Icon" name="Close" hint-size="24px,24px"></x-import></x-import>
+<div style="flex:1;display:flex;flex-direction:column;gap:6px">
+<div style="font-size:12px;font-weight:500;letter-spacing:.5px;color:var(--md-sys-color-on-surface-variant)">{{ deckCounter }}</div>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.ProgressIndicator" variant="linear" value="{{ deckValue }}" hint-size="100%,4px"></x-import>
+</div>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.IconButton" label="Undo" onClick="{{ undoCard }}" hint-size="48px,48px"><x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Icon" name="Undo" hint-size="24px,24px"></x-import></x-import>
+</div>
+
+<div style="flex:1;min-height:0;position:relative;margin:12px 16px 0">
+<sc-for list="{{ behind }}" as="b" hint-placeholder-count="2">
+<div style="position:absolute;inset:0;transform:{{ b.transform }};border-radius:28px;background:var(--md-sys-color-surface-container-highest);border:1px solid var(--md-sys-color-outline-variant);opacity:{{ b.opacity }}"></div>
+</sc-for>
+
+<div onPointerDown="{{ onDown }}" onPointerMove="{{ onMove }}" onPointerUp="{{ onUp }}" onPointerCancel="{{ onUp }}" onPointerLeave="{{ onUp }}" style="position:absolute;inset:0;border-radius:28px;background:var(--md-sys-color-surface);box-shadow:0 1px 3px 1px rgba(0,0,0,.15);display:flex;flex-direction:column;cursor:grab;user-select:none;overflow:hidden;transform:{{ cardTransform }};transition:{{ cardTransition }}">
+<div style="position:absolute;inset:0;background:{{ tintColor }};opacity:{{ tintOpacity }};pointer-events:none"></div>
+<div style="position:absolute;top:20px;left:20px;padding:6px 14px;border-radius:1000px;font-size:14px;font-weight:500;letter-spacing:.1px;background:var(--md-sys-color-error);color:var(--md-sys-color-on-error);opacity:{{ opDont }};pointer-events:none">{{ t.dont }}</div>
+<div style="position:absolute;top:20px;right:20px;padding:6px 14px;border-radius:1000px;font-size:14px;font-weight:500;letter-spacing:.1px;background:var(--md-sys-color-primary);color:var(--md-sys-color-on-primary);opacity:{{ opKnow }};pointer-events:none">{{ t.know }}</div>
+<div style="position:absolute;left:50%;top:20px;transform:translateX(-50%);padding:6px 14px;border-radius:1000px;font-size:14px;font-weight:500;background:var(--md-sys-color-tertiary);color:var(--md-sys-color-on-tertiary);opacity:{{ opSave }};pointer-events:none">{{ t.save }}</div>
+<div style="position:absolute;left:50%;top:20px;transform:translateX(-50%);padding:6px 14px;border-radius:1000px;font-size:14px;font-weight:500;background:var(--md-sys-color-inverse-surface);color:var(--md-sys-color-inverse-on-surface);opacity:{{ opBury }};pointer-events:none">{{ t.bury }}</div>
+
+<div onClick="{{ flip }}" style="flex:1;min-height:0;display:flex;flex-direction:column;justify-content:center;gap:16px;padding:32px 28px;text-align:center">
+<div style="font-size:11px;font-weight:500;letter-spacing:.5px;text-transform:uppercase;color:var(--md-sys-color-on-surface-variant)">{{ cur.kind }}</div>
+<div style="font-size:36px;line-height:44px;font-weight:400">{{ cur.en }}</div>
+<div style="font-size:14px;letter-spacing:.25px;color:var(--md-sys-color-on-surface-variant)">{{ cur.ipa }}</div>
+<sc-if value="{{ flipped }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:14px;animation:m3rise .3s cubic-bezier(.05,.7,.1,1)">
+<div style="height:1px;background:var(--md-sys-color-outline-variant)"></div>
+<div style="font-size:22px;line-height:28px;color:var(--md-sys-color-primary)">{{ cur.ru }}</div>
+<div style="font-size:16px;line-height:24px;letter-spacing:.5px;color:var(--md-sys-color-on-surface-variant);font-style:italic">{{ cur.ex1 }}</div>
+</div>
+</sc-if>
+<sc-if value="{{ notFlipped }}" hint-placeholder-val="{{ true }}">
+<div style="font-size:14px;letter-spacing:.25px;color:var(--md-sys-color-on-surface-variant);animation:m3pulse 2.4s ease-in-out infinite">{{ t.tapReveal }}</div>
+</sc-if>
+</div>
+<div style="padding:0 20px 20px;display:flex;justify-content:center">
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Button" variant="text" size="s" onClick="{{ openDetail }}" hint-size="120px,40px">{{ t.details }}</x-import>
+</div>
+</div>
+</div>
+
+<div style="flex:0 0 auto;padding:20px 24px 28px;display:flex;align-items:center;justify-content:center;gap:16px">
+<div onClick="{{ swipeDont }}" style="cursor:pointer;width:56px;height:56px;border-radius:1000px;display:flex;align-items:center;justify-content:center;border:1px solid var(--md-sys-color-outline);color:var(--md-sys-color-error)">{{ icClose }}</div>
+<div onClick="{{ swipeBury }}" style="cursor:pointer;width:48px;height:48px;border-radius:1000px;display:flex;align-items:center;justify-content:center;border:1px solid var(--md-sys-color-outline-variant);color:var(--md-sys-color-on-surface-variant)">{{ icBury }}</div>
+<div onClick="{{ swipeSave }}" style="cursor:pointer;width:48px;height:48px;border-radius:1000px;display:flex;align-items:center;justify-content:center;background:var(--md-sys-color-tertiary-container);color:var(--md-sys-color-on-tertiary-container)">{{ icSave }}</div>
+<div onClick="{{ swipeKnow }}" style="cursor:pointer;width:56px;height:56px;border-radius:1000px;display:flex;align-items:center;justify-content:center;background:var(--md-sys-color-primary);color:var(--md-sys-color-on-primary)">{{ icCheck }}</div>
+</div>
+</div>
+</sc-if>
+
+<!-- ══ DECK DONE ══ -->
+<sc-if value="{{ isDeckDone }}" hint-placeholder-val="{{ false }}">
+<div class="m3scroll" style="flex:1;min-height:0;padding:32px 24px;display:flex;flex-direction:column;gap:24px;animation:m3rise .4s cubic-bezier(.05,.7,.1,1)">
+<div style="font-size:32px;line-height:40px">{{ t.deckDone }}</div>
+<div style="display:flex;gap:12px">
+<sc-for list="{{ deckTally }}" as="s" hint-placeholder-count="3">
+<div style="flex:1;padding:16px 12px;border-radius:12px;background:{{ s.bg }};color:{{ s.fg }}">
+<div style="font-size:28px;line-height:36px">{{ s.n }}</div>
+<div style="font-size:12px;letter-spacing:.4px;margin-top:2px">{{ s.label }}</div>
+</div>
+</sc-for>
+</div>
+<div style="font-size:14px;line-height:20px;letter-spacing:.25px;color:var(--md-sys-color-on-surface-variant)">{{ t.deckDoneHint }}</div>
+<div style="display:flex;flex-direction:column;gap:12px">
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Button" variant="filled" size="m" onClick="{{ goTest }}" hint-size="100%,56px">{{ t.goToTest }}</x-import>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Button" variant="tonal" size="s" onClick="{{ goRead }}" hint-size="100%,40px">{{ t.readArticle }}</x-import>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Button" variant="text" size="s" onClick="{{ goPlan }}" hint-size="100%,40px">{{ t.backToPlan }}</x-import>
+</div>
+</div>
+</sc-if>
+
+<!-- ══ CHUNK DETAIL ══ -->
+<sc-if value="{{ isDetail }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;min-height:0;display:flex;flex-direction:column">
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.TopAppBar" title="" leading="{{ backBtn }}" actions="{{ detailActions }}" hint-size="100%,64px"></x-import>
+<div class="m3scroll" style="flex:1;min-height:0;padding:0 24px 32px;display:flex;flex-direction:column;gap:24px">
+<div>
+<div style="font-size:36px;line-height:44px">{{ dc.en }}</div>
+<div style="font-size:16px;letter-spacing:.5px;color:var(--md-sys-color-on-surface-variant);margin-top:8px">{{ dc.ipa }}</div>
+<div style="font-size:22px;line-height:28px;color:var(--md-sys-color-primary);margin-top:12px">{{ dc.ru }}</div>
+</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Chip" variant="assist" hint-size="90px,32px">{{ dc.kind }}</x-import>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Chip" variant="assist" hint-size="90px,32px">{{ dc.register }}</x-import>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Chip" variant="assist" hint-size="90px,32px">{{ dc.freq }}</x-import>
+</div>
+<div style="display:flex;align-items:center;gap:16px;padding:16px;border-radius:12px;background:var(--md-sys-color-surface-container-low)">
+<div onClick="{{ playAudio }}" style="cursor:pointer;width:48px;height:48px;flex:0 0 auto;border-radius:1000px;background:var(--md-sys-color-primary);color:var(--md-sys-color-on-primary);display:flex;align-items:center;justify-content:center">{{ icPlay }}</div>
+<div style="flex:1;display:flex;align-items:center;gap:3px;height:32px">
+<sc-for list="{{ wave }}" as="w" hint-placeholder-count="24">
+<div style="flex:1;border-radius:1000px;background:var(--md-sys-color-primary);height:{{ w.h }};opacity:{{ w.o }}"></div>
+</sc-for>
+</div>
+<div style="font-size:12px;letter-spacing:.4px;color:var(--md-sys-color-on-surface-variant)">0:02</div>
+</div>
+<div>
+<div style="font-size:14px;font-weight:500;letter-spacing:.1px;color:var(--md-sys-color-on-surface-variant);margin-bottom:12px">{{ t.pattern }}</div>
+<div style="font-size:18px;line-height:26px;padding:14px 16px;border-radius:8px;border:1px dashed var(--md-sys-color-outline);font-family:var(--md-sys-typescale-mono-font,Roboto Mono,monospace)">{{ dc.pattern }}</div>
+</div>
+<div>
+<div style="font-size:14px;font-weight:500;letter-spacing:.1px;color:var(--md-sys-color-on-surface-variant);margin-bottom:8px">{{ t.examples }}</div>
+<div style="display:flex;flex-direction:column;gap:12px">
+<sc-for list="{{ dcExamples }}" as="ex" hint-placeholder-count="3">
+<div style="display:flex;gap:12px;font-size:16px;line-height:24px;letter-spacing:.5px">
+<div style="width:2px;flex:0 0 auto;border-radius:1000px;background:var(--md-sys-color-primary)"></div>
+<div>{{ ex.text }}</div>
+</div>
+</sc-for>
+</div>
+</div>
+<div>
+<div style="font-size:14px;font-weight:500;letter-spacing:.1px;color:var(--md-sys-color-on-surface-variant);margin-bottom:8px">{{ t.nearby }}</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+<sc-for list="{{ dcNear }}" as="nb" hint-placeholder-count="3">
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Chip" variant="suggestion" hint-size="120px,32px">{{ nb.text }}</x-import>
+</sc-for>
+</div>
+</div>
+<div style="display:flex;gap:8px">
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Button" variant="tonal" size="s" onClick="{{ goRead }}" hint-size="100%,40px">{{ t.seeInContext }}</x-import>
+</div>
+</div>
+</div>
+</sc-if>
+
+<!-- ══ READING ══ -->
+<sc-if value="{{ isRead }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;min-height:0;display:flex;flex-direction:column">
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.TopAppBar" title="{{ t.read }}" leading="{{ backBtn }}" hint-size="100%,64px"></x-import>
+<div class="m3scroll" style="flex:1;min-height:0;padding:0 24px 32px;display:flex;flex-direction:column;gap:20px">
+<div style="font-size:12px;font-weight:500;letter-spacing:.5px;color:var(--md-sys-color-on-surface-variant)">{{ t.readMeta }}</div>
+<div style="font-size:28px;line-height:36px">A month to decide</div>
+<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:8px;background:var(--md-sys-color-surface-container-low);font-size:12px;line-height:16px;letter-spacing:.4px;color:var(--md-sys-color-on-surface-variant)">{{ t.tapHint }}</div>
+<div style="font-size:18px;line-height:30px;letter-spacing:.25px;text-wrap:pretty">
+Anna had been putting off the decision for weeks. She is not <span data-k="sleeper" onClick="{{ tapChunk }}" style="cursor:pointer;border-radius:4px;padding:1px 3px;background:var(--md-sys-color-primary-container);color:var(--md-sys-color-on-primary-container);box-shadow:inset 0 -2px 0 var(--md-sys-color-primary)">a heavy sleeper</span>, and lately she had been <span data-k="late" onClick="{{ tapChunk }}" style="cursor:pointer;border-radius:4px;padding:1px 3px;background:var(--md-sys-color-primary-container);color:var(--md-sys-color-on-primary-container);box-shadow:inset 0 -2px 0 var(--md-sys-color-primary)">running late</span> every morning, which made everything worse.
+</div>
+<div style="font-size:18px;line-height:30px;letter-spacing:.25px;text-wrap:pretty">
+On Friday her manager said one thing that stuck: <span data-k="bear" onClick="{{ tapChunk }}" style="cursor:pointer;border-radius:4px;padding:1px 3px;background:var(--md-sys-color-primary-container);color:var(--md-sys-color-on-primary-container);box-shadow:inset 0 -2px 0 var(--md-sys-color-primary)">bear in mind</span> that nobody gets this perfect on the first try. That afternoon she finally <span data-k="mind" onClick="{{ tapChunk }}" style="cursor:pointer;border-radius:4px;padding:1px 3px;background:var(--md-sys-color-primary-container);color:var(--md-sys-color-on-primary-container);box-shadow:inset 0 -2px 0 var(--md-sys-color-primary)">made up her mind</span>.
+</div>
+<div style="font-size:18px;line-height:30px;letter-spacing:.25px;text-wrap:pretty">
+She would take the job, spend a month learning the tools, and accept that it takes time to <span data-k="hang" onClick="{{ tapChunk }}" style="cursor:pointer;border-radius:4px;padding:1px 3px;background:var(--md-sys-color-primary-container);color:var(--md-sys-color-on-primary-container);box-shadow:inset 0 -2px 0 var(--md-sys-color-primary)">get the hang of</span> a new system. It was <span data-k="longshot" onClick="{{ tapChunk }}" style="cursor:pointer;border-radius:4px;padding:1px 3px;background:var(--md-sys-color-primary-container);color:var(--md-sys-color-on-primary-container);box-shadow:inset 0 -2px 0 var(--md-sys-color-primary)">a long shot</span>, but she had stopped <span data-k="granted" onClick="{{ tapChunk }}" style="cursor:pointer;border-radius:4px;padding:1px 3px;background:var(--md-sys-color-primary-container);color:var(--md-sys-color-on-primary-container);box-shadow:inset 0 -2px 0 var(--md-sys-color-primary)">taking</span> her old routine <span data-k="granted" onClick="{{ tapChunk }}" style="cursor:pointer;border-radius:4px;padding:1px 3px;background:var(--md-sys-color-primary-container);color:var(--md-sys-color-on-primary-container);box-shadow:inset 0 -2px 0 var(--md-sys-color-primary)">for granted</span>.
+</div>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Button" variant="filled" size="m" onClick="{{ goTest }}" hint-size="100%,56px">{{ t.goToTest }}</x-import>
+</div>
+
+<sc-if value="{{ hasPop }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ closePop }}" style="position:absolute;inset:0;background:rgba(0,0,0,.32);display:flex;align-items:flex-end">
+<div style="width:100%;background:var(--md-sys-color-surface-container-high);border-radius:28px 28px 0 0;padding:20px 24px 28px;display:flex;flex-direction:column;gap:14px;animation:m3rise .3s cubic-bezier(.05,.7,.1,1)">
+<div style="width:32px;height:4px;border-radius:1000px;background:var(--md-sys-color-outline-variant);align-self:center"></div>
+<div style="font-size:28px;line-height:36px">{{ pop.en }}</div>
+<div style="font-size:18px;line-height:26px;color:var(--md-sys-color-primary)">{{ pop.ru }}</div>
+<div style="font-size:14px;line-height:20px;letter-spacing:.25px;color:var(--md-sys-color-on-surface-variant)">{{ pop.ex1 }}</div>
+<div style="display:flex;gap:8px;margin-top:4px">
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Button" variant="filled" size="s" onClick="{{ savePop }}" hint-size="140px,40px">{{ popSaveLabel }}</x-import>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Button" variant="text" size="s" onClick="{{ openPopDetail }}" hint-size="110px,40px">{{ t.details }}</x-import>
+</div>
+</div>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<!-- ══ TEST ══ -->
+<sc-if value="{{ isTest }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;min-height:0;display:flex;flex-direction:column">
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.TopAppBar" size="center" title="{{ testCounter }}" leading="{{ backBtn }}" hint-size="100%,64px"></x-import>
+<div style="padding:0 16px"><x-import component-from-global-scope="Material3DesignSystem_c1aeb3.ProgressIndicator" variant="linear" value="{{ testValue }}" hint-size="100%,4px"></x-import></div>
+
+<div class="m3scroll" style="flex:1;min-height:0;padding:24px 16px;display:flex;flex-direction:column;gap:20px">
+<div style="font-size:12px;font-weight:500;letter-spacing:.5px;text-transform:uppercase;color:var(--md-sys-color-on-surface-variant)">{{ testKindLabel }}</div>
+
+<sc-if value="{{ isGap }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:20px">
+<div style="font-size:24px;line-height:36px;padding:20px;border-radius:12px;background:var(--md-sys-color-surface-container-low)">{{ gapBefore }}<span style="display:inline-block;min-width:88px;border-bottom:2px solid var(--md-sys-color-primary);text-align:center;color:var(--md-sys-color-primary)">{{ gapFill }}</span>{{ gapAfter }}</div>
+<div style="display:flex;flex-wrap:wrap;gap:12px">
+<sc-for list="{{ gapOptions }}" as="opt" hint-placeholder-count="3">
+<div onClick="{{ opt.pick }}" style="cursor:pointer;padding:14px 24px;border-radius:1000px;border:1px solid {{ opt.border }};background:{{ opt.bg }};color:{{ opt.fg }};font-size:16px;letter-spacing:.5px">{{ opt.label }}</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isListen }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;flex-direction:column;align-items:center;gap:16px;padding:28px 20px;border-radius:28px;background:var(--md-sys-color-surface-container-low)">
+<div onClick="{{ playAudio }}" style="cursor:pointer;width:72px;height:72px;border-radius:1000px;background:var(--md-sys-color-primary);color:var(--md-sys-color-on-primary);display:flex;align-items:center;justify-content:center">{{ icPlay }}</div>
+<div style="display:flex;align-items:center;gap:3px;height:28px;width:100%">
+<sc-for list="{{ wave }}" as="w" hint-placeholder-count="24">
+<div style="flex:1;border-radius:1000px;background:var(--md-sys-color-primary);height:{{ w.h }};opacity:{{ w.o }}"></div>
+</sc-for>
+</div>
+<div style="font-size:12px;letter-spacing:.4px;color:var(--md-sys-color-on-surface-variant)">{{ t.playAgain }}</div>
+</div>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.TextField" variant="outlined" label="{{ t.typeHeard }}" value="{{ typed }}" onChange="{{ onType }}" supporting-text="{{ typedHint }}" error="{{ typedError }}" hint-size="100%,56px"></x-import>
+</div>
+</sc-if>
+
+<sc-if value="{{ isMatch }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;gap:12px">
+<div style="flex:1;display:flex;flex-direction:column;gap:10px">
+<sc-for list="{{ matchLeft }}" as="m" hint-placeholder-count="3">
+<div onClick="{{ m.pick }}" style="cursor:pointer;padding:14px;border-radius:12px;font-size:15px;line-height:20px;border:1px solid {{ m.border }};background:{{ m.bg }};color:{{ m.fg }};min-height:64px;display:flex;align-items:center">{{ m.label }}</div>
+</sc-for>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:10px">
+<sc-for list="{{ matchRight }}" as="m" hint-placeholder-count="3">
+<div onClick="{{ m.pick }}" style="cursor:pointer;padding:14px;border-radius:12px;font-size:14px;line-height:20px;border:1px solid {{ m.border }};background:{{ m.bg }};color:{{ m.fg }};min-height:64px;display:flex;align-items:center">{{ m.label }}</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<div style="flex:1"></div>
+<sc-if value="{{ hasFeedback }}" hint-placeholder-val="{{ false }}">
+<div style="padding:16px;border-radius:12px;background:{{ fbBg }};color:{{ fbFg }};animation:m3rise .25s cubic-bezier(.05,.7,.1,1)">
+<div style="font-size:16px;font-weight:500;letter-spacing:.15px">{{ fbTitle }}</div>
+<div style="font-size:14px;line-height:20px;letter-spacing:.25px;margin-top:4px">{{ fbBody }}</div>
+</div>
+</sc-if>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Button" variant="filled" size="m" onClick="{{ testPrimary }}" disabled="{{ testPrimaryDisabled }}" hint-size="100%,56px">{{ testPrimaryLabel }}</x-import>
+</div>
+</div>
+</sc-if>
+
+<!-- ══ PROGRESS ══ -->
+<sc-if value="{{ isProgress }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;min-height:0;display:flex;flex-direction:column">
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.TopAppBar" size="medium" title="{{ t.progress }}" actions="{{ langAction }}" hint-size="100%,112px"></x-import>
+<div class="m3scroll" style="flex:1;min-height:0;padding:8px 16px 24px;display:flex;flex-direction:column;gap:24px">
+
+<sc-if value="{{ progA }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:24px">
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+<sc-for list="{{ statCards }}" as="s" hint-placeholder-count="4">
+<div style="padding:16px;border-radius:12px;background:{{ s.bg }};color:{{ s.fg }}">
+<div style="font-size:32px;line-height:40px">{{ s.n }}</div>
+<div style="font-size:12px;line-height:16px;letter-spacing:.4px;margin-top:4px;opacity:.9">{{ s.label }}</div>
+</div>
+</sc-for>
+</div>
+<div>
+<div style="font-size:14px;font-weight:500;letter-spacing:.1px;color:var(--md-sys-color-on-surface-variant);margin-bottom:16px">{{ t.last7 }}</div>
+<div style="display:flex;align-items:flex-end;gap:10px;height:132px">
+<sc-for list="{{ bars }}" as="b" hint-placeholder-count="7">
+<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;height:100%;justify-content:flex-end">
+<div style="font-size:11px;font-weight:500;color:var(--md-sys-color-on-surface-variant)">{{ b.n }}</div>
+<div style="width:100%;border-radius:8px 8px 4px 4px;background:{{ b.bg }};height:{{ b.h }}"></div>
+<div style="font-size:11px;color:var(--md-sys-color-on-surface-variant)">{{ b.day }}</div>
+</div>
+</sc-for>
+</div>
+</div>
+<div>
+<div style="font-size:14px;font-weight:500;letter-spacing:.1px;color:var(--md-sys-color-on-surface-variant);margin-bottom:12px">{{ t.byChunk }}</div>
+<div style="display:flex;flex-direction:column;gap:16px">
+<sc-for list="{{ mastery }}" as="m" hint-placeholder-count="6">
+<div onClick="{{ m.go }}" style="cursor:pointer;display:flex;flex-direction:column;gap:8px">
+<div style="display:flex;align-items:baseline;gap:8px">
+<div style="flex:1;font-size:16px;line-height:22px">{{ m.en }}</div>
+<div style="font-size:12px;font-weight:500;color:{{ m.fg }}">{{ m.tag }}</div>
+</div>
+<div style="height:6px;border-radius:1000px;background:var(--md-sys-color-surface-container-highest);overflow:hidden">
+<div style="height:100%;border-radius:1000px;background:{{ m.fg }};width:{{ m.w }}"></div>
+</div>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ progB }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:28px">
+<div style="display:flex;align-items:center;gap:20px;padding:20px;border-radius:28px;background:var(--md-sys-color-primary-container);color:var(--md-sys-color-on-primary-container)">
+<div style="position:relative;width:96px;height:96px;flex:0 0 auto;display:flex;align-items:center;justify-content:center">
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.ProgressIndicator" variant="circular" value="{{ masteryValue }}" size="{{ n96 }}" thickness="{{ n8 }}" hint-size="96px,96px"></x-import>
+<div style="position:absolute;text-align:center">
+<div style="font-size:22px;line-height:26px;font-weight:500">{{ masteryPct }}</div>
+</div>
+</div>
+<div style="flex:1">
+<div style="font-size:22px;line-height:28px">{{ t.activeVocab }}</div>
+<div style="font-size:14px;line-height:20px;letter-spacing:.25px;opacity:.85;margin-top:6px">{{ t.activeVocabMeta }}</div>
+</div>
+</div>
+<div>
+<div style="font-size:14px;font-weight:500;letter-spacing:.1px;color:var(--md-sys-color-on-surface-variant);margin-bottom:14px">{{ t.masteryMap }}</div>
+<div style="display:flex;flex-wrap:wrap;gap:8px">
+<sc-for list="{{ cloud }}" as="c" hint-placeholder-count="9">
+<div onClick="{{ c.go }}" style="cursor:pointer;padding:8px 14px;border-radius:1000px;background:{{ c.bg }};color:{{ c.fg }};border:1px solid {{ c.border }};font-size:{{ c.size }};line-height:1.4">{{ c.en }}</div>
+</sc-for>
+</div>
+<div style="display:flex;gap:16px;margin-top:16px;flex-wrap:wrap">
+<sc-for list="{{ legend }}" as="l" hint-placeholder-count="3">
+<div style="display:flex;align-items:center;gap:6px;font-size:12px;letter-spacing:.4px;color:var(--md-sys-color-on-surface-variant)">
+<div style="width:10px;height:10px;border-radius:1000px;background:{{ l.bg }}"></div>{{ l.label }}
+</div>
+</sc-for>
+</div>
+</div>
+<div>
+<div style="font-size:14px;font-weight:500;letter-spacing:.1px;color:var(--md-sys-color-on-surface-variant);margin-bottom:14px">{{ t.streak }}</div>
+<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px">
+<sc-for list="{{ heat }}" as="h" hint-placeholder-count="28">
+<div style="aspect-ratio:1;border-radius:8px;background:{{ h.bg }}"></div>
+</sc-for>
+</div>
+</div>
+</div>
+</sc-if>
+
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ showNav }}" hint-placeholder-val="{{ true }}">
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.NavigationBar" items="{{ tabs }}" value="{{ tab }}" onChange="{{ setTab }}" hint-size="100%,80px"></x-import>
+</sc-if>
+
+</div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:480,&quot;height&quot;:980},&quot;homeVariant&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Plan list&quot;,&quot;Focus card&quot;],&quot;default&quot;:&quot;Plan list&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Variants&quot;},&quot;progressVariant&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Stats &amp; bars&quot;,&quot;Mastery map&quot;],&quot;default&quot;:&quot;Stats &amp; bars&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Variants&quot;},&quot;startLang&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;ru&quot;,&quot;en&quot;],&quot;default&quot;:&quot;ru&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Content&quot;}}">
+const CHUNKS = [
+  { k:'mind', en:'make up your mind', ru:'принять решение', ipa:'/meɪk ʌp jɔː maɪnd/', kind:'verb chunk', register:'neutral', freq:'very common',
+    pattern:"make up + one's + mind (about sth)",
+    ex:['Make up your mind — we leave in five minutes.',"I still haven't made up my mind about the offer.",'She made up her mind to stay another year.'],
+    near:['make a decision','come to a decision','be in two minds'], strength:0.9 },
+  { k:'granted', en:'take it for granted', ru:'принимать как должное', ipa:'/teɪk ɪt fə ˈɡrɑːntɪd/', kind:'verb chunk', register:'neutral', freq:'common',
+    pattern:'take + sth/sb + for granted',
+    ex:["Don't take it for granted that he'll agree.",'We took the good weather for granted.','He felt taken for granted at work.'],
+    near:['assume','count on','not appreciate'], strength:0.45 },
+  { k:'bear', en:'bear in mind', ru:'иметь в виду', ipa:'/beər ɪn maɪnd/', kind:'verb chunk', register:'slightly formal', freq:'very common',
+    pattern:'bear in mind (that) + clause',
+    ex:['Bear in mind that the office closes at six.','Bearing in mind the cost, it went well.','Please bear this in mind next time.'],
+    near:['keep in mind','remember that','take into account'], strength:0.7 },
+  { k:'hang', en:'get the hang of', ru:'освоиться, научиться', ipa:'/ɡet ðə hæŋ ɒv/', kind:'verb chunk', register:'informal', freq:'common',
+    pattern:'get the hang of + sth/-ing',
+    ex:['It took me a week to get the hang of it.',"You'll get the hang of driving here.",'Once you get the hang of it, it is quick.'],
+    near:['get used to','pick up','learn the ropes'], strength:0.3 },
+  { k:'balance', en:'strike a balance', ru:'найти баланс', ipa:'/straɪk ə ˈbæləns/', kind:'verb chunk', register:'neutral', freq:'common',
+    pattern:'strike a balance between A and B',
+    ex:['We need to strike a balance between speed and quality.','It is hard to strike a balance at first.','They struck a balance everyone accepted.'],
+    near:['find a middle ground','trade off','compromise'], strength:0.2 },
+  { k:'longshot', en:'a long shot', ru:'маловероятно, попытка наудачу', ipa:'/ə lɒŋ ʃɒt/', kind:'noun chunk', register:'informal', freq:'common',
+    pattern:'it is / that is a long shot',
+    ex:['It was a long shot, but she applied anyway.','I know it is a long shot — ask him.','Not a long shot at all, actually.'],
+    near:['unlikely','a slim chance','worth a try'], strength:0.55 },
+  { k:'late', en:'run late', ru:'опаздывать', ipa:'/rʌn leɪt/', kind:'verb chunk', register:'informal', freq:'very common',
+    pattern:'be running late (for sth)',
+    ex:['Sorry, I am running late for the call.','The trains are running late again.','We ran late all morning.'],
+    near:['be behind schedule','be delayed'], strength:0.8 },
+  { k:'sleeper', en:'a heavy sleeper', ru:'крепко спящий человек', ipa:'/ə ˈhevi ˈsliːpə/', kind:'noun chunk', register:'neutral', freq:'less common',
+    pattern:'be a heavy / light sleeper',
+    ex:['He is a heavy sleeper — the alarm never wakes him.','I am a light sleeper, so any noise wakes me.'],
+    near:['sleep like a log','a light sleeper'], strength:0.35 },
+  { k:'corners', en:'cut corners', ru:'халтурить, экономить на качестве', ipa:'/kʌt ˈkɔːnəz/', kind:'verb chunk', register:'informal', freq:'common',
+    pattern:'cut corners (on sth)',
+    ex:["I'd rather not cut corners on this.",'They cut corners and it showed.','No cutting corners with safety.'],
+    near:['do a rushed job','skimp on'], strength:0.15 },
+];
+const BY_K = {}; CHUNKS.forEach(c => { BY_K[c.k] = c; });
+
+const PQ = [
+  { sentence:'We were ___ late for the meeting.', options:['running','doing','making'], answer:'running' },
+  { sentence:'Please ___ in mind that the deadline is Friday.', options:['hold','bear','take'], answer:'bear' },
+  { sentence:'It took me a week to ___ the hang of it.', options:['catch','take','get'], answer:'get' },
+  { sentence:"I'd rather not ___ corners on this project.", options:['cut','cross','break'], answer:'cut' },
+];
+
+const TESTS = [
+  { type:'gap', before:"Don't ", after:" it for granted that he'll agree.", options:['take','get','hold'], answer:'take', k:'granted' },
+  { type:'listen', answer:'strike a balance', k:'balance' },
+  { type:'match', pairs:[
+      { k:'hang', en:'get the hang of', meaning:'to learn how to do something with practice' },
+      { k:'longshot', en:'a long shot', meaning:'an attempt unlikely to succeed' },
+      { k:'corners', en:'cut corners', meaning:'to do something cheaply or badly to save time' },
+    ] },
+];
+
+const T = {
+  ru: { hello:'ПРИВЕТ, АННА', today:'Сегодня', start:'Начать', placement:'Входной тест', placementNudge:'Пройдите входной тест — программа подстроится под ваш уровень.',
+    dayTitle:'Урок дня', dayMeta:'12 карточек · 1 статья · 1 тест', continueBtn:'Продолжить', progress:'Прогресс', thisWeekPlan:'ПЛАН НА НЕДЕЛЮ',
+    cards:'Карточки', read:'Чтение', test:'Тест', upNext:'Дальше', know:'Знаю', dont:'Не знаю', save:'В коллекцию', bury:'Отложить',
+    tapReveal:'Нажмите, чтобы увидеть перевод', details:'Подробнее', pickNatural:'Выберите естественный вариант',
+    planReady:'Программа готова', level:'Уровень', perDay:'В день', planExplain:'Мы начнём с чанков, где вы ошиблись, и добавим чтение с этими же выражениями.',
+    startPlan:'Начать программу', deckDone:'Колода пройдена', deckDoneHint:'Слабые чанки вернутся завтра и появятся в статье и тесте.',
+    goToTest:'Перейти к тесту', readArticle:'Читать статью', backToPlan:'К плану', pattern:'ШАБЛОН', examples:'ПРИМЕРЫ', nearby:'РЯДОМ ПО СМЫСЛУ',
+    seeInContext:'Посмотреть в тексте', readMeta:'ЧТЕНИЕ · 2 МИН · 7 ЧАНКОВ', tapHint:'Выделенные выражения можно нажать — появится перевод.',
+    gapKind:'Заполните пропуск', listenKind:'Прослушайте и напишите', matchKind:'Сопоставьте выражение и значение',
+    typeHeard:'Что вы услышали', playAgain:'Нажмите, чтобы прослушать снова', check:'Проверить', next:'Дальше', finish:'Завершить',
+    correct:'Верно', notQuite:'Почти', saveToCollection:'В коллекцию', saved:'Сохранено', last7:'ПОСЛЕДНИЕ 7 ДНЕЙ', byChunk:'ПО ЧАНКАМ',
+    masteryMap:'КАРТА ОСВОЕНИЯ', streak:'АКТИВНОСТЬ ЗА МЕСЯЦ', activeVocab:'Активный запас', activeVocabMeta:'34 чанка уверенно · 12 в работе',
+    strong:'Уверенно', medium:'В работе', weak:'Слабо', stStreak:'дней подряд', stChunks:'чанков изучено', stAccuracy:'точность', stMinutes:'минут за неделю' },
+  en: { hello:'HELLO, ANNA', today:'Today', start:'Start', placement:'Placement test', placementNudge:'Take the placement test — your plan adapts to the result.',
+    dayTitle:"Today's lesson", dayMeta:'12 cards · 1 article · 1 test', continueBtn:'Continue', progress:'Progress', thisWeekPlan:'THIS WEEK',
+    cards:'Cards', read:'Reading', test:'Test', upNext:'Up next', know:'Know it', dont:"Don't know", save:'Save', bury:'Bury',
+    tapReveal:'Tap to reveal the meaning', details:'Details', pickNatural:'Choose the natural collocation',
+    planReady:'Your plan is ready', level:'Level', perDay:'Per day', planExplain:'We start with the chunks you missed and pair them with reading that uses the same wording.',
+    startPlan:'Start the plan', deckDone:'Deck complete', deckDoneHint:'Weak chunks come back tomorrow and appear in the article and the test.',
+    goToTest:'Go to the test', readArticle:'Read the article', backToPlan:'Back to plan', pattern:'PATTERN', examples:'EXAMPLES', nearby:'NEARBY WORDING',
+    seeInContext:'See it in context', readMeta:'READING · 2 MIN · 7 CHUNKS', tapHint:'Highlighted chunks are tappable — tap for the meaning.',
+    gapKind:'Fill the gap', listenKind:'Listen and type', matchKind:'Match chunk to meaning',
+    typeHeard:'What you heard', playAgain:'Tap to play again', check:'Check', next:'Next', finish:'Finish',
+    correct:'Correct', notQuite:'Not quite', saveToCollection:'Save', saved:'Saved', last7:'LAST 7 DAYS', byChunk:'BY CHUNK',
+    masteryMap:'MASTERY MAP', streak:'THIS MONTH', activeVocab:'Active vocabulary', activeVocabMeta:'34 chunks confident · 12 in progress',
+    strong:'Confident', medium:'In progress', weak:'Weak', stStreak:'day streak', stChunks:'chunks learned', stAccuracy:'accuracy', stMinutes:'minutes this week' },
+};
+
+const V = (n) => `var(--md-sys-color-${n})`;
+
+class Component extends DCLogic {
+  state = {
+    screen: 'plan', tab: 0, lang: 'ru', tookPlacement: false,
+    pi: 0, pAns: [], pPicked: null,
+    deck: 0, flipped: false, dx: 0, dy: 0, dragging: false, flying: null, verdicts: {}, history: [],
+    detailK: 'mind', detailFrom: 'deck', popK: null, saved: ['bear'],
+    ti: 0, tPicked: null, typed: '', checked: false, matchSel: null, matched: {}, matchWrong: null, tScore: 0,
+  };
+
+  componentDidMount() {
+    if (this.props.startLang === 'en') this.setState({ lang: 'en' });
+  }
+
+  t() { return T[this.state.lang]; }
+
+  go(screen) { this.setState({ screen }); }
+
+  // ---- deck ----
+  resolve(dir) {
+    const s = this.state;
+    const cur = CHUNKS[s.deck];
+    if (!cur) return;
+    const verdicts = { ...s.verdicts, [cur.k]: dir };
+    const saved = dir === 'save' && s.saved.indexOf(cur.k) < 0 ? s.saved.concat([cur.k]) : s.saved;
+    this.setState({ flying: dir, dragging: false });
+    setTimeout(() => {
+      const next = s.deck + 1;
+      this.setState({
+        deck: next, flipped: false, dx: 0, dy: 0, flying: null, verdicts, saved,
+        history: s.history.concat([cur.k]),
+        screen: next >= CHUNKS.length ? 'deckdone' : 'deck',
+      });
+    }, 240);
+  }
+
+  renderVals() {
+    const s = this.state, t = this.t();
+    const NS = window.Material3DesignSystem_c1aeb3 || {};
+    const Icon = NS.Icon, IconButton = NS.IconButton, Button = NS.Button;
+    const ic = (name, size) => (Icon ? React.createElement(Icon, { name, size }) : null);
+    const homeVariant = this.props.homeVariant ?? 'Plan list';
+    const progressVariant = this.props.progressVariant ?? 'Stats & bars';
+
+    // deck geometry
+    const fly = s.flying;
+    const flyOff = { know: [520, -60], dont: [-520, -60], save: [0, -760], bury: [0, 760] };
+    let dx = s.dx, dy = s.dy;
+    if (fly) { dx = flyOff[fly][0]; dy = flyOff[fly][1]; }
+    const rot = dx / 26;
+    const clamp01 = (v) => Math.max(0, Math.min(1, v));
+    const opKnow = clamp01(dx / 36), opDont = clamp01(-dx / 36);
+    const opSave = clamp01(-dy / 36) * (Math.abs(dy) > Math.abs(dx) ? 1 : 0);
+    const opBury = clamp01(dy / 36) * (Math.abs(dy) > Math.abs(dx) ? 1 : 0);
+    const tintOpacity = Math.max(opKnow, opDont, opSave, opBury) * 0.14;
+    let tintColor = V('primary');
+    if (opDont >= Math.max(opKnow, opSave, opBury)) tintColor = V('error');
+    if (opSave > Math.max(opKnow, opDont, opBury)) tintColor = V('tertiary');
+    if (opBury > Math.max(opKnow, opDont, opSave)) tintColor = V('on-surface-variant');
+
+    const cur = CHUNKS[s.deck] || CHUNKS[CHUNKS.length - 1];
+    const behind = [1, 2].map((i) => CHUNKS[s.deck + i]).filter(Boolean).map((c, i) => ({
+      transform: `scale(${1 - (i + 1) * 0.04}) translateY(${(i + 1) * 12}px)`, opacity: String(0.55 - i * 0.25),
+    })).reverse();
+
+    const pointer = (e) => ({ x: e.clientX, y: e.clientY });
+    const onDown = (e) => { this._start = pointer(e); this.setState({ dragging: true }); };
+    const onMove = (e) => {
+      if (!this._start || !this.state.dragging) return;
+      const p = pointer(e);
+      this.setState({ dx: p.x - this._start.x, dy: p.y - this._start.y });
+    };
+    const onUp = () => {
+      if (!this._start) return;
+      const { dx: x, dy: y } = this.state;
+      this._start = null;
+      if (Math.abs(x) > Math.abs(y) && Math.abs(x) > 90) this.resolve(x > 0 ? 'know' : 'dont');
+      else if (Math.abs(y) > 90) this.resolve(y < 0 ? 'save' : 'bury');
+      else this.setState({ dx: 0, dy: 0, dragging: false });
+    };
+
+    // placement
+    const pq = PQ[Math.min(s.pi, PQ.length - 1)];
+    const pOptions = pq.options.map((o) => {
+      const picked = s.pPicked === o;
+      const right = o === pq.answer;
+      let bg = 'transparent', fg = V('on-surface');
+      if (picked && right) { bg = V('primary-container'); fg = V('on-primary-container'); }
+      if (picked && !right) { bg = V('error-container'); fg = V('on-error-container'); }
+      return { label: o, bg, fg, pick: () => {
+        if (s.pPicked) return;
+        this.setState({ pPicked: o, pAns: s.pAns.concat([o === pq.answer]) });
+        setTimeout(() => {
+          const n = s.pi + 1;
+          if (n >= PQ.length) this.setState({ pi: n, pPicked: null });
+          else this.setState({ pi: n, pPicked: null });
+        }, 620);
+      } };
+    });
+    const pCorrect = s.pAns.filter(Boolean).length;
+
+    // test
+    const q = TESTS[Math.min(s.ti, TESTS.length - 1)];
+    const gapOptions = q.type === 'gap' ? q.options.map((o) => {
+      const picked = s.tPicked === o;
+      let bg = 'transparent', fg = V('on-surface'), border = V('outline');
+      if (picked && s.checked && o === q.answer) { bg = V('primary-container'); fg = V('on-primary-container'); border = V('primary'); }
+      else if (picked && s.checked) { bg = V('error-container'); fg = V('on-error-container'); border = V('error'); }
+      else if (picked) { bg = V('secondary-container'); fg = V('on-secondary-container'); border = V('secondary'); }
+      return { label: o, bg, fg, border, pick: () => { if (!s.checked) this.setState({ tPicked: o }); } };
+    }) : [];
+
+    const matchPairs = q.type === 'match' ? q.pairs : [];
+    const meanOrder = [1, 2, 0];
+    const matchLeft = matchPairs.map((p) => {
+      const done = !!s.matched[p.k];
+      const sel = s.matchSel === p.k;
+      return {
+        label: p.en, pick: () => { if (!done) this.setState({ matchSel: p.k, matchWrong: null }); },
+        bg: done ? V('primary-container') : sel ? V('secondary-container') : 'transparent',
+        fg: done ? V('on-primary-container') : sel ? V('on-secondary-container') : V('on-surface'),
+        border: done ? V('primary') : sel ? V('secondary') : V('outline-variant'),
+      };
+    });
+    const matchRight = meanOrder.map((i) => matchPairs[i]).filter(Boolean).map((p) => {
+      const done = !!s.matched[p.k];
+      const wrong = s.matchWrong === p.k;
+      return {
+        label: p.meaning,
+        pick: () => {
+          if (done || !s.matchSel) return;
+          if (s.matchSel === p.k) this.setState({ matched: { ...s.matched, [p.k]: true }, matchSel: null, matchWrong: null });
+          else this.setState({ matchWrong: p.k, matchSel: null });
+        },
+        bg: done ? V('primary-container') : wrong ? V('error-container') : 'transparent',
+        fg: done ? V('on-primary-container') : wrong ? V('on-error-container') : V('on-surface-variant'),
+        border: done ? V('primary') : wrong ? V('error') : V('outline-variant'),
+      };
+    });
+    const matchComplete = matchPairs.length > 0 && matchPairs.every((p) => s.matched[p.k]);
+
+    const typedOk = s.typed.trim().toLowerCase() === (q.answer || '');
+    let primaryLabel = t.check, primaryDisabled = false, onPrimary = () => {};
+    if (q.type === 'gap') {
+      primaryDisabled = !s.tPicked;
+      if (s.checked) { primaryLabel = s.ti >= TESTS.length - 1 ? t.finish : t.next; onPrimary = () => this.nextTest(); }
+      else onPrimary = () => this.setState({ checked: true, tScore: s.tScore + (s.tPicked === q.answer ? 1 : 0) });
+    } else if (q.type === 'listen') {
+      primaryDisabled = s.typed.trim().length < 3;
+      if (s.checked) { primaryLabel = s.ti >= TESTS.length - 1 ? t.finish : t.next; onPrimary = () => this.nextTest(); }
+      else onPrimary = () => this.setState({ checked: true, tScore: s.tScore + (typedOk ? 1 : 0) });
+    } else {
+      primaryDisabled = !matchComplete;
+      primaryLabel = s.ti >= TESTS.length - 1 ? t.finish : t.next;
+      onPrimary = () => this.nextTest();
+    }
+
+    let fbTitle = '', fbBody = '', fbBg = V('primary-container'), fbFg = V('on-primary-container'), hasFeedback = false;
+    if (s.checked && (q.type === 'gap' || q.type === 'listen')) {
+      const ok = q.type === 'gap' ? s.tPicked === q.answer : typedOk;
+      hasFeedback = true;
+      fbTitle = ok ? t.correct : t.notQuite;
+      const chunk = BY_K[q.k];
+      fbBody = ok ? `${chunk.en} — ${chunk.ru}` : `${t.correct}: ${chunk.en} — ${chunk.ru}`;
+      if (!ok) { fbBg = V('error-container'); fbFg = V('on-error-container'); }
+    }
+
+    // progress data
+    const dayCounts = [8, 14, 0, 12, 20, 6, 12];
+    const dayNames = this.state.lang === 'ru' ? ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'] : ['M','T','W','T','F','S','S'];
+    const maxDay = 20;
+    const bars = dayCounts.map((n, i) => ({
+      n: String(n), day: dayNames[i], h: `${Math.max(4, (n / maxDay) * 96)}px`,
+      bg: i === 6 ? V('primary') : n === 0 ? V('surface-container-highest') : V('primary-container'),
+    }));
+    const strengthTag = (v) => (v >= 0.7 ? t.strong : v >= 0.4 ? t.medium : t.weak);
+    const strengthColor = (v) => (v >= 0.7 ? V('primary') : v >= 0.4 ? V('tertiary') : V('error'));
+    const openK = (k) => () => this.setState({ detailK: k, detailFrom: 'progress', screen: 'detail' });
+    const mastery = CHUNKS.map((c) => ({ en: c.en, tag: strengthTag(c.strength), fg: strengthColor(c.strength), w: `${Math.round(c.strength * 100)}%`, go: openK(c.k) }));
+    const cloud = CHUNKS.map((c) => ({
+      en: c.en, size: `${13 + Math.round(c.strength * 9)}px`, go: openK(c.k),
+      bg: c.strength >= 0.7 ? V('primary-container') : c.strength >= 0.4 ? V('tertiary-container') : 'transparent',
+      fg: c.strength >= 0.7 ? V('on-primary-container') : c.strength >= 0.4 ? V('on-tertiary-container') : V('on-surface-variant'),
+      border: c.strength >= 0.4 ? 'transparent' : V('outline-variant'),
+    }));
+    const heat = Array.from({ length: 28 }, (_, i) => {
+      const v = [0,1,2,2,0,1,3,2,3,1,0,2,3,3,1,2,0,1,3,2,2,3,1,0,2,3,3,2][i];
+      return { bg: v === 0 ? V('surface-container-highest') : v === 1 ? V('primary-container') : v === 2 ? V('secondary') : V('primary') };
+    });
+
+    const planRows = [
+      { headline: t.cards, supporting: this.state.lang === 'ru' ? '12 чанков · 4 мин' : '12 chunks · 4 min', trailing: '4 min', go: () => this.go('deck'), leading: ic('Stars') },
+      { headline: t.read, supporting: this.state.lang === 'ru' ? 'A month to decide · 7 чанков' : 'A month to decide · 7 chunks', trailing: '2 min', go: () => this.go('read'), leading: ic('Language') },
+      { headline: t.test, supporting: this.state.lang === 'ru' ? '3 задания · пропуск, аудио, пары' : '3 tasks · gap, audio, pairs', trailing: '3 min', go: () => this.go('test'), leading: ic('CheckBox') },
+      { headline: this.state.lang === 'ru' ? 'Коллекция' : 'My collection', supporting: `${s.saved.length} ${this.state.lang === 'ru' ? 'сохранённых чанков' : 'saved chunks'}`, trailing: ic('ChevronForward'), go: () => this.go('progress'), leading: ic('Bookmark') },
+    ];
+
+    const tiles = [
+      { title: t.read, meta: '2 min · 7 chunks', icon: ic('Language'), go: () => this.go('read') },
+      { title: t.test, meta: '3 tasks', icon: ic('CheckBox'), go: () => this.go('test') },
+      { title: this.state.lang === 'ru' ? 'Коллекция' : 'Collection', meta: `${s.saved.length} saved`, icon: ic('Bookmark'), go: () => this.go('progress') },
+      { title: t.progress, meta: '7 ' + (this.state.lang === 'ru' ? 'дней' : 'day streak'), icon: ic('Stars'), go: () => this.go('progress') },
+    ];
+
+    const streakDots = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map((d, i) => {
+      const done = i < 4, today = i === 4;
+      return {
+        day: this.state.lang === 'ru' ? d : dayNames[i], num: String(11 + i),
+        bg: done ? V('primary') : today ? V('primary-container') : 'transparent',
+        fg: done ? V('on-primary') : today ? V('on-primary-container') : V('on-surface-variant'),
+        border: done || today ? 'transparent' : V('outline-variant'),
+      };
+    });
+
+    const tally = [
+      { label: t.know, n: String(Object.values(s.verdicts).filter((v) => v === 'know').length), bg: V('primary-container'), fg: V('on-primary-container') },
+      { label: t.dont, n: String(Object.values(s.verdicts).filter((v) => v === 'dont').length), bg: V('error-container'), fg: V('on-error-container') },
+      { label: t.save, n: String(Object.values(s.verdicts).filter((v) => v === 'save').length), bg: V('tertiary-container'), fg: V('on-tertiary-container') },
+    ];
+
+    const wave = Array.from({ length: 26 }, (_, i) => {
+      const h = 6 + Math.round(Math.abs(Math.sin(i * 0.9)) * 22);
+      return { h: `${h}px`, o: String(0.35 + (h / 34) * 0.65) };
+    });
+
+    const dc = BY_K[s.detailK];
+    const pop = s.popK ? BY_K[s.popK] : { en: '', ru: '', ex1: '' };
+    const back = () => {
+      if (s.screen === 'detail') this.setState({ screen: s.detailFrom === 'progress' ? 'progress' : s.detailFrom === 'read' ? 'read' : 'deck' });
+      else this.go('plan');
+    };
+    const backBtn = IconButton ? React.createElement(IconButton, { label: 'Back', onClick: back }, ic('ArrowBack')) : null;
+    const isSaved = s.saved.indexOf(s.detailK) >= 0;
+    const detailActions = IconButton ? React.createElement(IconButton, {
+      label: 'Save', selected: isSaved,
+      onClick: () => this.setState({ saved: isSaved ? s.saved.filter((k) => k !== s.detailK) : s.saved.concat([s.detailK]) }),
+    }, ic(isSaved ? 'BookmarkFilled' : 'Bookmark')) : null;
+    const langAction = Button ? React.createElement(Button, {
+      variant: 'text', size: 'xs', onClick: () => this.setState({ lang: s.lang === 'ru' ? 'en' : 'ru' }),
+    }, s.lang === 'ru' ? 'EN' : 'RU') : null;
+
+    const tabIndex = s.screen === 'plan' ? 0 : s.screen === 'deck' || s.screen === 'deckdone' ? 1 : s.screen === 'read' ? 2 : s.screen === 'progress' ? 3 : s.tab;
+
+    return {
+      t, langLabel: s.lang === 'ru' ? 'EN' : 'RU', toggleLang: () => this.setState({ lang: s.lang === 'ru' ? 'en' : 'ru' }),
+      isPlan: s.screen === 'plan', isPlacement: s.screen === 'placement', isDeck: s.screen === 'deck',
+      isDeckDone: s.screen === 'deckdone', isDetail: s.screen === 'detail', isRead: s.screen === 'read',
+      isTest: s.screen === 'test', isProgress: s.screen === 'progress',
+      showNav: ['plan', 'progress'].indexOf(s.screen) >= 0,
+      homeA: homeVariant === 'Plan list', homeB: homeVariant !== 'Plan list',
+      progA: progressVariant === 'Stats & bars', progB: progressVariant !== 'Stats & bars',
+      needsPlacement: !s.tookPlacement,
+
+      tabs: [
+        { label: t.today, icon: ic('Today') },
+        { label: t.cards, icon: ic('Stars') },
+        { label: t.read, icon: ic('Language') },
+        { label: t.progress, icon: ic('Stars') },
+      ],
+      tab: tabIndex,
+      setTab: (v) => this.setState({ tab: v, screen: ['plan', 'deck', 'read', 'progress'][v] || 'plan' }),
+
+      goPlan: () => this.go('plan'), goDeck: () => this.setState({ screen: 'deck', deck: 0, flipped: false, dx: 0, dy: 0, verdicts: {} }),
+      goRead: () => this.go('read'), goTest: () => this.setState({ screen: 'test', ti: 0, tPicked: null, checked: false, typed: '', matched: {}, matchSel: null, tScore: 0 }),
+      goProgress: () => this.go('progress'), goPlacement: () => this.setState({ screen: 'placement', pi: 0, pAns: [], pPicked: null }),
+      backBtn,
+
+      dayValue: 0.35, dayPct: '35%', planRows, tiles, streakDots,
+
+      placeValue: Math.min(1, s.pi / PQ.length), placeAsking: s.pi < PQ.length, placeDone: s.pi >= PQ.length,
+      placeCounter: `${Math.min(s.pi + 1, PQ.length)} / ${PQ.length}`,
+      pq: { sentence: pq.sentence, options: pOptions },
+      placeLevel: pCorrect >= 3 ? 'B2' : pCorrect >= 2 ? 'B1+' : 'B1',
+      finishPlacement: () => this.setState({ tookPlacement: true, screen: 'plan' }),
+
+      cur, behind, flipped: s.flipped, notFlipped: !s.flipped,
+      flip: () => this.setState({ flipped: !s.flipped }),
+      cardTransform: `translate(${dx}px, ${dy}px) rotate(${rot}deg)`,
+      cardTransition: s.dragging ? 'none' : 'transform .34s cubic-bezier(.2,0,0,1)',
+      opKnow: String(opKnow), opDont: String(opDont), opSave: String(opSave), opBury: String(opBury),
+      tintColor, tintOpacity: String(tintOpacity),
+      onDown, onMove, onUp,
+      swipeKnow: () => this.resolve('know'), swipeDont: () => this.resolve('dont'),
+      swipeSave: () => this.resolve('save'), swipeBury: () => this.resolve('bury'),
+      undoCard: () => { if (s.deck > 0) this.setState({ deck: s.deck - 1, flipped: false, dx: 0, dy: 0 }); },
+      deckCounter: `${Math.min(s.deck + 1, CHUNKS.length)} / ${CHUNKS.length}`,
+      deckValue: s.deck / CHUNKS.length,
+      icClose: ic('Close'), icCheck: ic('Check'), icSave: ic('Bookmark'), icBury: ic('Snooze'), icPlay: ic('PlayArrowFilled'),
+      openDetail: () => this.setState({ detailK: cur.k, detailFrom: 'deck', screen: 'detail' }),
+
+      deckTally: tally, deckDoneHint: t.deckDoneHint,
+
+      dc, dcExamples: dc.ex.map((x) => ({ text: x })), dcNear: dc.near.map((x) => ({ text: x })),
+      detailActions, playAudio: () => {}, wave,
+
+      tapChunk: (e) => this.setState({ popK: e.currentTarget.dataset.k }),
+      hasPop: !!s.popK, pop: { en: pop.en, ru: pop.ru, ex1: pop.ex ? pop.ex[0] : '' },
+      closePop: () => this.setState({ popK: null }),
+      popSaveLabel: s.popK && s.saved.indexOf(s.popK) >= 0 ? t.saved : t.saveToCollection,
+      savePop: () => { if (s.popK && s.saved.indexOf(s.popK) < 0) this.setState({ saved: s.saved.concat([s.popK]) }); },
+      openPopDetail: () => this.setState({ detailK: s.popK, detailFrom: 'read', popK: null, screen: 'detail' }),
+
+      testCounter: `${Math.min(s.ti + 1, TESTS.length)} / ${TESTS.length}`,
+      testValue: s.ti / TESTS.length,
+      testKindLabel: q.type === 'gap' ? t.gapKind : q.type === 'listen' ? t.listenKind : t.matchKind,
+      isGap: q.type === 'gap', isListen: q.type === 'listen', isMatch: q.type === 'match',
+      gapBefore: q.before || '', gapAfter: q.after || '', gapFill: s.tPicked || ' ', gapOptions,
+      typed: s.typed, onType: (v) => this.setState({ typed: v }),
+      typedHint: s.checked && !typedOk ? `${t.correct}: ${q.answer}` : '',
+      typedError: s.checked && !typedOk,
+      matchLeft, matchRight,
+      hasFeedback, fbTitle, fbBody, fbBg, fbFg,
+      testPrimary: onPrimary, testPrimaryLabel: primaryLabel, testPrimaryDisabled: primaryDisabled,
+
+      statCards: [
+        { n: '7', label: t.stStreak, bg: V('primary-container'), fg: V('on-primary-container') },
+        { n: '46', label: t.stChunks, bg: V('secondary-container'), fg: V('on-secondary-container') },
+        { n: '82%', label: t.stAccuracy, bg: V('tertiary-container'), fg: V('on-tertiary-container') },
+        { n: '74', label: t.stMinutes, bg: V('surface-container-highest'), fg: V('on-surface') },
+      ],
+      bars, mastery, cloud, heat,
+      masteryValue: 0.62, masteryPct: '62%',
+      legend: [
+        { label: t.strong, bg: V('primary') },
+        { label: t.medium, bg: V('tertiary') },
+        { label: t.weak, bg: V('outline-variant') },
+      ],
+      n76: 76, n96: 96, n6: 6, n8: 8,
+    };
+  }
+
+  nextTest() {
+    const s = this.state;
+    if (s.ti >= TESTS.length - 1) this.setState({ screen: 'progress', tab: 3 });
+    else this.setState({ ti: s.ti + 1, tPicked: null, checked: false, typed: '', matchSel: null, matched: {}, matchWrong: null });
+  }
+}
+</script>
+</body>
+</html>

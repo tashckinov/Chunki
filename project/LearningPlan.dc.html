@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/material-3-design-system-c1aeb334-6afd-44ce-8a85-53d88b205264/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/material-3-design-system-c1aeb334-6afd-44ce-8a85-53d88b205264/tokens/fig-tokens.css">
+<link rel="stylesheet" href="_ds/material-3-design-system-c1aeb334-6afd-44ce-8a85-53d88b205264/tokens/md-sys.css">
+<link rel="stylesheet" href="_ds/material-3-design-system-c1aeb334-6afd-44ce-8a85-53d88b205264/tokens/base.css">
+<link rel="stylesheet" href="_ds/material-3-design-system-c1aeb334-6afd-44ce-8a85-53d88b205264/components/m3.css">
+<link rel="stylesheet" href="_ds/material-3-design-system-c1aeb334-6afd-44ce-8a85-53d88b205264/styles.css">
+<script src="_ds/material-3-design-system-c1aeb334-6afd-44ce-8a85-53d88b205264/_ds_bundle.js"></script>
+<style>
+body{margin:0;background:var(--md-sys-color-surface-dim);font-family:Roboto,sans-serif}
+a{color:var(--md-sys-color-primary)}a:hover{color:var(--md-sys-color-on-primary-container)}
+@keyframes m3rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes m3pulse{0%,100%{opacity:.3}50%{opacity:1}}
+@keyframes m3spin{to{transform:rotate(360deg)}}
+.m3scroll{overflow-y:auto;scrollbar-width:none}
+.m3scroll::-webkit-scrollbar{display:none}
+.m3xscroll{scrollbar-width:none}
+.m3xscroll::-webkit-scrollbar{display:none}
+textarea{font-family:Roboto,sans-serif}
+</style>
+</helmet>
+<div style="min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:32px 24px">
+<div style="position:relative;width:412px;height:892px;flex:0 0 auto;overflow:hidden;border-radius:28px;background:var(--md-sys-color-surface);box-shadow:0 0 0 8px var(--md-sys-color-outline-variant),0 4px 8px 3px rgba(0,0,0,.15);display:flex;flex-direction:column;color:var(--md-sys-color-on-surface)">
+
+<div style="display:flex;align-items:center;height:40px;padding:0 24px;flex:0 0 auto;font-size:12px;font-weight:500;letter-spacing:.5px"><span style="flex:1">9:41</span><span style="opacity:.75">Wi-Fi</span></div>
+
+<!-- ═══ 1. ЦЕЛИ ═══ -->
+<sc-if value="{{ isGoals }}" hint-placeholder-val="{{ true }}">
+<div style="flex:1;min-height:0;display:flex;flex-direction:column">
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.TopAppBar" title="" leading="{{ backBtn }}" hint-size="100%,64px"></x-import>
+<div class="m3scroll" style="flex:1;min-height:0;padding:0 24px 32px;display:flex;flex-direction:column;gap:28px">
+<div>
+<div style="font-size:32px;line-height:40px">С чего начнём</div>
+<div style="font-size:14px;line-height:20px;letter-spacing:.25px;color:var(--md-sys-color-on-surface-variant);margin-top:8px">Программа собирается под цель и результат теста. Открытые ответы проверяем по смыслу, а не по совпадению слов.</div>
+</div>
+
+<div>
+<div style="font-size:14px;font-weight:500;letter-spacing:.1px;margin-bottom:12px">Мой уровень сейчас</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+<sc-for list="{{ levelsFrom }}" as="l" hint-placeholder-count="6">
+<div onClick="{{ l.pick }}" style="cursor:pointer;padding:10px 18px;border-radius:1000px;border:1px solid {{ l.border }};background:{{ l.bg }};color:{{ l.fg }};font-size:14px;font-weight:500;letter-spacing:.1px">{{ l.label }}</div>
+</sc-for>
+</div>
+</div>
+
+<div>
+<div style="font-size:14px;font-weight:500;letter-spacing:.1px;margin-bottom:12px">Хочу дойти до</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+<sc-for list="{{ levelsTo }}" as="l" hint-placeholder-count="4">
+<div onClick="{{ l.pick }}" style="cursor:pointer;padding:10px 18px;border-radius:1000px;border:1px solid {{ l.border }};background:{{ l.bg }};color:{{ l.fg }};font-size:14px;font-weight:500;letter-spacing:.1px">{{ l.label }}</div>
+</sc-for>
+</div>
+</div>
+
+<div>
+<div style="font-size:14px;font-weight:500;letter-spacing:.1px;margin-bottom:12px">Зачем английский</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+<sc-for list="{{ purposes }}" as="p" hint-placeholder-count="5">
+<div onClick="{{ p.pick }}" style="cursor:pointer;padding:8px 16px;border-radius:8px;border:1px solid {{ p.border }};background:{{ p.bg }};color:{{ p.fg }};font-size:14px;letter-spacing:.25px">{{ p.label }}</div>
+</sc-for>
+</div>
+</div>
+
+<div style="padding:16px;border-radius:12px;background:var(--md-sys-color-surface-container-low);font-size:14px;line-height:20px;letter-spacing:.25px;color:var(--md-sys-color-on-surface-variant)">Дальше 11 заданий: грамматика и лексика, чтение, свободное письмо. Примерно 15 минут.</div>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Button" variant="filled" size="m" onClick="{{ startTest }}" hint-size="100%,56px">Перейти к тесту</x-import>
+</div>
+</div>
+</sc-if>
+
+<!-- ═══ 2. ТЕСТ ═══ -->
+<sc-if value="{{ isTest }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;min-height:0;display:flex;flex-direction:column">
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.TopAppBar" size="center" title="{{ testTitle }}" leading="{{ backBtn }}" hint-size="100%,64px"></x-import>
+<div style="padding:0 16px 12px"><x-import component-from-global-scope="Material3DesignSystem_c1aeb3.ProgressIndicator" variant="linear" value="{{ testValue }}" hint-size="100%,4px"></x-import></div>
+
+<div style="margin:0 16px 12px;padding:12px 16px;border-radius:12px;background:var(--md-sys-color-tertiary-container);color:var(--md-sys-color-on-tertiary-container);font-size:13px;line-height:18px;letter-spacing:.25px">Не пользуйся переводчиком и не гугли. Если не знаешь — так и пиши.</div>
+
+<!-- Часть 1 -->
+<sc-if value="{{ part1 }}" hint-placeholder-val="{{ true }}">
+<div class="m3scroll" style="flex:1;min-height:0;padding:0 16px 24px;display:flex;flex-direction:column;gap:14px">
+<div style="font-size:12px;font-weight:500;letter-spacing:.5px;color:var(--md-sys-color-on-surface-variant)">ЧАСТЬ 1 · GRAMMAR &amp; VOCABULARY · {{ mcqCounter }}</div>
+<div style="font-size:22px;line-height:30px">{{ mq.n }}. {{ mq.q }}</div>
+<div style="display:flex;flex-direction:column;gap:10px">
+<sc-for list="{{ mqOptions }}" as="o" hint-placeholder-count="4">
+<div onClick="{{ o.pick }}" style="cursor:pointer;display:flex;gap:12px;align-items:flex-start;padding:14px 16px;border-radius:12px;border:1px solid {{ o.border }};background:{{ o.bg }};color:{{ o.fg }};font-size:16px;line-height:22px;letter-spacing:.25px">
+<div style="font-weight:500;flex:0 0 auto;width:16px">{{ o.letter }}</div>
+<div>{{ o.label }}</div>
+</div>
+</sc-for>
+<div onClick="{{ pickUnknown }}" style="cursor:pointer;padding:14px 16px;border-radius:12px;border:1px dashed {{ unknownBorder }};background:{{ unknownBg }};color:{{ unknownFg }};font-size:15px;letter-spacing:.25px;text-align:center">Не знаю</div>
+</div>
+<div style="flex:1"></div>
+<div style="display:flex;gap:8px;align-items:center">
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Button" variant="text" size="s" onClick="{{ prevQ }}" disabled="{{ atFirstQ }}" hint-size="100px,40px">Назад</x-import>
+<div style="flex:1"></div>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Button" variant="filled" size="s" onClick="{{ nextQ }}" disabled="{{ mqUnanswered }}" hint-size="120px,40px">{{ nextQLabel }}</x-import>
+</div>
+</div>
+</sc-if>
+
+<!-- Часть 2 -->
+<sc-if value="{{ part2 }}" hint-placeholder-val="{{ false }}">
+<div class="m3scroll" style="flex:1;min-height:0;padding:0 16px 24px;display:flex;flex-direction:column;gap:16px">
+<div style="font-size:12px;font-weight:500;letter-spacing:.5px;color:var(--md-sys-color-on-surface-variant)">ЧАСТЬ 2 · READING</div>
+<div style="font-size:17px;line-height:28px;letter-spacing:.25px;padding:18px;border-radius:12px;background:var(--md-sys-color-surface-container-low);text-wrap:pretty">Daniel had been planning to move abroad for several years, but he kept putting it off because he was worried about finding a job. Eventually, he decided to apply for a few positions just to see what would happen. To his surprise, a company in Dublin offered him a job. Although he was nervous about leaving his friends and family, he accepted the offer. Six months later, he says the move was one of the best decisions he has ever made.</div>
+<div style="font-size:16px;line-height:24px;letter-spacing:.25px">9. Why hadn't Daniel moved earlier? <span style="color:var(--md-sys-color-on-surface-variant)">Ответь своими словами на английском, не копируя предложение.</span></div>
+<textarea value="{{ open9 }}" onChange="{{ onOpen9 }}" placeholder="Your answer" rows="3" style="width:100%;box-sizing:border-box;padding:14px;border-radius:8px;border:1px solid var(--md-sys-color-outline);background:transparent;color:var(--md-sys-color-on-surface);font-size:16px;line-height:24px;resize:none;outline:none"></textarea>
+<div style="font-size:16px;line-height:24px;letter-spacing:.25px">10. Was Daniel certain he wanted to move when he started applying? Why/why not?</div>
+<textarea value="{{ open10 }}" onChange="{{ onOpen10 }}" placeholder="Your answer" rows="3" style="width:100%;box-sizing:border-box;padding:14px;border-radius:8px;border:1px solid var(--md-sys-color-outline);background:transparent;color:var(--md-sys-color-on-surface);font-size:16px;line-height:24px;resize:none;outline:none"></textarea>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Button" variant="filled" size="m" onClick="{{ goPart3 }}" hint-size="100%,56px">Часть 3</x-import>
+</div>
+</sc-if>
+
+<!-- Часть 3 -->
+<sc-if value="{{ part3 }}" hint-placeholder-val="{{ false }}">
+<div class="m3scroll" style="flex:1;min-height:0;padding:0 16px 24px;display:flex;flex-direction:column;gap:16px">
+<div style="font-size:12px;font-weight:500;letter-spacing:.5px;color:var(--md-sys-color-on-surface-variant)">ЧАСТЬ 3 · ACTIVE ENGLISH</div>
+<div style="font-size:16px;line-height:24px;letter-spacing:.25px">11. Напиши 5–8 предложений на английском:</div>
+<div style="font-size:19px;line-height:28px;padding:16px;border-radius:12px;background:var(--md-sys-color-secondary-container);color:var(--md-sys-color-on-secondary-container);text-wrap:pretty">“If you could move to another country next year, where would you go and why? What problems do you think you might face?”</div>
+<div style="font-size:14px;line-height:20px;letter-spacing:.25px;color:var(--md-sys-color-on-surface-variant)">Не старайся специально писать сложно. Пиши так, как реально написал бы человеку в переписке.</div>
+<textarea value="{{ essay }}" onChange="{{ onEssay }}" placeholder="Your answer" rows="9" style="width:100%;box-sizing:border-box;padding:14px;border-radius:8px;border:1px solid var(--md-sys-color-outline);background:transparent;color:var(--md-sys-color-on-surface);font-size:16px;line-height:24px;resize:none;outline:none"></textarea>
+<div style="display:flex;justify-content:space-between;font-size:12px;letter-spacing:.4px;color:var(--md-sys-color-on-surface-variant)"><span>{{ essayWords }} слов</span><span>нужно 5–8 предложений</span></div>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Button" variant="filled" size="m" onClick="{{ submitTest }}" hint-size="100%,56px">Отправить на проверку</x-import>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<!-- ═══ 3. ПРОВЕРКА ═══ -->
+<sc-if value="{{ isChecking }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;padding:32px">
+<div style="width:56px;height:56px;border-radius:1000px;border:4px solid var(--md-sys-color-surface-container-highest);border-top-color:var(--md-sys-color-primary);animation:m3spin 1s linear infinite"></div>
+<div style="font-size:22px;line-height:28px;text-align:center">{{ checkingTitle }}</div>
+<div style="display:flex;flex-direction:column;gap:10px;width:100%">
+<sc-for list="{{ checkSteps }}" as="c" hint-placeholder-count="3">
+<div style="display:flex;align-items:center;gap:10px;font-size:14px;letter-spacing:.25px;color:{{ c.fg }}">{{ c.icon }}<span>{{ c.label }}</span></div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<!-- ═══ 4. РЕЗУЛЬТАТ ТЕСТА ═══ -->
+<sc-if value="{{ isResult }}" hint-placeholder-val="{{ false }}">
+<div class="m3scroll" style="flex:1;min-height:0;padding:16px 24px 32px;display:flex;flex-direction:column;gap:24px;animation:m3rise .4s cubic-bezier(.05,.7,.1,1)">
+<div>
+<div style="font-size:12px;font-weight:500;letter-spacing:.5px;color:var(--md-sys-color-on-surface-variant)">РЕЗУЛЬТАТ ТЕСТА</div>
+<div style="font-size:57px;line-height:64px;letter-spacing:-.25px;margin-top:8px">B1</div>
+<div style="font-size:16px;line-height:24px;letter-spacing:.5px;color:var(--md-sys-color-on-surface-variant)">Цель: {{ goalTo }} · разрыв около двух подуровней</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:14px">
+<sc-for list="{{ skillBars }}" as="s" hint-placeholder-count="4">
+<div style="display:flex;flex-direction:column;gap:6px">
+<div style="display:flex;align-items:baseline;gap:8px">
+<div style="flex:1;font-size:15px;line-height:20px">{{ s.label }}</div>
+<div style="font-size:13px;font-weight:500;color:{{ s.fg }}">{{ s.tag }}</div>
+</div>
+<div style="height:6px;border-radius:1000px;background:var(--md-sys-color-surface-container-highest);overflow:hidden"><div style="height:100%;border-radius:1000px;background:{{ s.fg }};width:{{ s.w }}"></div></div>
+</div>
+</sc-for>
+</div>
+
+<div style="padding:16px;border-radius:12px;background:var(--md-sys-color-primary-container);color:var(--md-sys-color-on-primary-container)">
+<div style="font-size:14px;font-weight:500;letter-spacing:.1px;margin-bottom:8px">Уже выше уровня</div>
+<div style="font-size:14px;line-height:22px;letter-spacing:.25px">Чтение и понимание смысла, разговорные чанки (ended up staying, putting it off), базовый Past Simple.</div>
+</div>
+<div style="padding:16px;border-radius:12px;background:var(--md-sys-color-error-container);color:var(--md-sys-color-on-error-container)">
+<div style="font-size:14px;font-weight:500;letter-spacing:.1px;margin-bottom:8px">Тянет уровень вниз</div>
+<div style="font-size:14px;line-height:22px;letter-spacing:.25px">Perfect и Past Perfect в письме, артикли, порядок слов с наречиями, условные предложения второго типа.</div>
+</div>
+
+<div style="font-size:14px;line-height:20px;letter-spacing:.25px;color:var(--md-sys-color-on-surface-variant)">Программа собрана из этих слабых мест: 14 тем до B2, первые четыре — грамматический фундамент.</div>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Button" variant="filled" size="m" onClick="{{ goSchedule }}" hint-size="100%,56px">Настроить расписание</x-import>
+</div>
+</sc-if>
+
+<!-- ═══ 5. РАСПИСАНИЕ ═══ -->
+<sc-if value="{{ isSchedule }}" hint-placeholder-val="{{ false }}">
+<div class="m3scroll" style="flex:1;min-height:0;padding:16px 24px 32px;display:flex;flex-direction:column;gap:28px">
+<div>
+<div style="font-size:32px;line-height:40px">Сколько готовы заниматься</div>
+<div style="font-size:14px;line-height:20px;letter-spacing:.25px;color:var(--md-sys-color-on-surface-variant);margin-top:8px">От этого зависит, за сколько недель закроется программа до {{ goalTo }}.</div>
+</div>
+<div>
+<div style="font-size:14px;font-weight:500;letter-spacing:.1px;margin-bottom:12px">Дни занятий</div>
+<div style="display:flex;gap:8px">
+<sc-for list="{{ dayPicks }}" as="d" hint-placeholder-count="7">
+<div onClick="{{ d.pick }}" style="cursor:pointer;flex:1;aspect-ratio:1;border-radius:1000px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:500;border:1px solid {{ d.border }};background:{{ d.bg }};color:{{ d.fg }}">{{ d.label }}</div>
+</sc-for>
+</div>
+</div>
+<div>
+<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px">
+<div style="font-size:14px;font-weight:500;letter-spacing:.1px">Минут за занятие</div>
+<div style="font-size:22px;line-height:28px">{{ minutes }}</div>
+</div>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Slider" value="{{ minutes }}" min="{{ n10 }}" max="{{ n60 }}" step="{{ n5 }}" onChange="{{ setMinutes }}" hint-size="100%,44px"></x-import>
+</div>
+<div>
+<div style="font-size:14px;font-weight:500;letter-spacing:.1px;margin-bottom:12px">Время напоминания</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+<sc-for list="{{ timePicks }}" as="tp" hint-placeholder-count="4">
+<div onClick="{{ tp.pick }}" style="cursor:pointer;padding:10px 18px;border-radius:1000px;border:1px solid {{ tp.border }};background:{{ tp.bg }};color:{{ tp.fg }};font-size:14px;font-weight:500">{{ tp.label }}</div>
+</sc-for>
+</div>
+</div>
+<div style="padding:16px;border-radius:12px;background:var(--md-sys-color-secondary-container);color:var(--md-sys-color-on-secondary-container);font-size:15px;line-height:22px;letter-spacing:.25px">{{ scheduleSummary }}</div>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Button" variant="filled" size="m" onClick="{{ goPaywall }}" hint-size="100%,56px">Готово</x-import>
+</div>
+</sc-if>
+
+<!-- ═══ 5b. ПОДПИСКА ═══ -->
+<sc-if value="{{ isPaywall }}" hint-placeholder-val="{{ false }}">
+<div class="m3scroll" style="flex:1;min-height:0;padding:16px 24px 32px;display:flex;flex-direction:column;gap:24px;animation:m3rise .4s cubic-bezier(.05,.7,.1,1)">
+<div>
+<div style="font-size:12px;font-weight:500;letter-spacing:.5px;color:var(--md-sys-color-on-surface-variant)">ПЛАН ГОТОВ</div>
+<div style="font-size:32px;line-height:40px;margin-top:8px">14 тем до {{ goalTo }}</div>
+<div style="font-size:15px;line-height:22px;letter-spacing:.25px;color:var(--md-sys-color-on-surface-variant);margin-top:8px">{{ scheduleSummary }}</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:12px">
+<sc-for list="{{ planCompare }}" as="row" hint-placeholder-count="4">
+<div style="display:flex;align-items:center;gap:12px;font-size:15px;line-height:22px">
+<div style="width:100px;flex:0 0 auto;font-size:13px;letter-spacing:.4px;color:var(--md-sys-color-on-surface-variant)">{{ row.free }}</div>
+<div style="flex:1">{{ row.label }}</div>
+<div style="flex:0 0 auto;color:{{ row.fg }}">{{ row.icon }}</div>
+</div>
+</sc-for>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:10px">
+<sc-for list="{{ plans }}" as="p" hint-placeholder-count="2">
+<div onClick="{{ p.pick }}" style="cursor:pointer;padding:18px 20px;border-radius:16px;border:2px solid {{ p.border }};background:{{ p.bg }};display:flex;align-items:center;gap:14px">
+<div style="flex:1">
+<div style="font-size:17px;line-height:24px">{{ p.title }}</div>
+<div style="font-size:13px;line-height:18px;letter-spacing:.25px;color:var(--md-sys-color-on-surface-variant);margin-top:2px">{{ p.meta }}</div>
+</div>
+<div style="font-size:20px;font-weight:500;color:{{ p.priceFg }}">{{ p.price }}</div>
+</div>
+</sc-for>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:8px">
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Button" variant="filled" size="m" onClick="{{ subscribe }}" hint-size="100%,56px">Попробовать 7 дней бесплатно</x-import>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Button" variant="text" size="s" onClick="{{ skipPaywall }}" hint-size="100%,40px">Продолжить бесплатно</x-import>
+<div style="font-size:12px;line-height:18px;letter-spacing:.4px;color:var(--md-sys-color-on-surface-variant);text-align:center">Первые 7 дней бесплатно, потом {{ chosenPrice }}. Отмена в любой момент.</div>
+</div>
+</div>
+</sc-if>
+
+<!-- ═══ 6. ГЛАВНАЯ ═══ -->
+<sc-if value="{{ isHome }}" hint-placeholder-val="{{ false }}">
+<div class="m3scroll" style="flex:1;min-height:0;padding:8px 0 24px;display:flex;flex-direction:column;gap:20px">
+<sc-if value="{{ noProgram }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:20px">
+<div style="padding:0 24px">
+<div style="font-size:12px;font-weight:500;letter-spacing:.5px;color:var(--md-sys-color-on-surface-variant)">ПРИВЕТ, АННА</div>
+<div style="font-size:28px;line-height:36px;margin-top:2px">Пока учимся без плана</div>
+</div>
+<div style="padding:0 24px">
+<div onClick="{{ goGoals }}" style="cursor:pointer;border-radius:28px;background:var(--md-sys-color-primary-container);color:var(--md-sys-color-on-primary-container);padding:24px;display:flex;flex-direction:column;gap:16px">
+<div style="font-size:22px;line-height:30px">Проверить уровень и составить программу</div>
+<div style="font-size:14px;line-height:20px;letter-spacing:.25px;opacity:.85">11 заданий, около 15 минут. Не обязательно — карточки работают и без этого.</div>
+<div style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:500;letter-spacing:.1px">Начать проверку {{ icChevron }}</div>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ hasProgram }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:20px">
+<div style="padding:0 24px">
+<div style="font-size:12px;font-weight:500;letter-spacing:.5px;color:var(--md-sys-color-on-surface-variant)">B1 → {{ goalTo }} · НЕДЕЛЯ 3</div>
+<div style="font-size:28px;line-height:36px;margin-top:2px">Следующий урок</div>
+</div>
+
+<div style="padding:0 24px">
+<div onClick="{{ openTopic }}" style="cursor:pointer;border-radius:28px;overflow:hidden;background:var(--md-sys-color-surface-container-low)">
+<div style="padding:22px 24px;background:var(--md-sys-color-primary-container);color:var(--md-sys-color-on-primary-container)">
+<div style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:500;letter-spacing:.5px">{{ nextWhen }}</div>
+<div style="font-size:26px;line-height:34px;margin-top:10px">Present Perfect vs Past Simple</div>
+<div style="font-size:14px;line-height:20px;letter-spacing:.25px;opacity:.85;margin-top:6px">Материал 6 мин · 8 упражнений · с проверкой</div>
+</div>
+<div style="padding:14px 24px;display:flex;align-items:center;gap:12px">
+<div style="flex:1;display:flex;gap:6px">
+<sc-for list="{{ blockDots }}" as="b" hint-placeholder-count="4">
+<div style="flex:1;height:6px;border-radius:1000px;background:{{ b.bg }}"></div>
+</sc-for>
+</div>
+<div style="font-size:12px;font-weight:500;color:var(--md-sys-color-on-surface-variant)">{{ minutes }} мин</div>
+</div>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:10px">
+<div onClick="{{ toggleCal }}" style="cursor:pointer;padding:0 24px;display:flex;align-items:center;gap:8px">
+<div style="flex:1;font-size:14px;font-weight:500;letter-spacing:.1px;color:var(--md-sys-color-on-surface-variant)">{{ calMonth }}</div>
+<div style="font-size:13px;font-weight:500;letter-spacing:.1px;color:var(--md-sys-color-primary)">{{ calToggleLabel }}</div>
+<div style="color:var(--md-sys-color-primary)">{{ calToggleIcon }}</div>
+</div>
+
+<div class="m3xscroll" style="padding:0 24px 4px;display:flex;gap:8px;overflow-x:auto;scroll-snap-type:x proximity">
+<sc-for list="{{ calStrip }}" as="d" hint-placeholder-count="21">
+<div onClick="{{ d.tap }}" style="cursor:pointer;flex:0 0 auto;width:48px;scroll-snap-align:center;display:flex;flex-direction:column;align-items:center;gap:6px">
+<div style="font-size:11px;letter-spacing:.4px;color:var(--md-sys-color-on-surface-variant)">{{ d.day }}</div>
+<div style="width:40px;height:40px;border-radius:1000px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:500;background:{{ d.bg }};color:{{ d.fg }};border:1px solid {{ d.border }}">{{ d.num }}</div>
+<div style="width:6px;height:6px;border-radius:1000px;background:{{ d.dot }}"></div>
+</div>
+</sc-for>
+</div>
+
+<sc-if value="{{ calOpen }}" hint-placeholder-val="{{ false }}">
+<div style="padding:4px 24px 0;display:flex;flex-direction:column;animation:m3rise .3s cubic-bezier(.05,.7,.1,1)">
+<sc-for list="{{ calList }}" as="l" hint-placeholder-count="8">
+<div onClick="{{ l.go }}" style="display:flex;gap:14px;padding:12px;margin:0 -12px;border-radius:8px;border-bottom:1px solid var(--md-sys-color-outline-variant);cursor:{{ l.cursor }};background:{{ l.rowBg }}">
+<div style="width:56px;flex:0 0 auto">
+<div style="font-size:15px;font-weight:500;color:{{ l.dateFg }}">{{ l.date }}</div>
+<div style="font-size:11px;letter-spacing:.4px;color:var(--md-sys-color-on-surface-variant)">{{ l.day }}</div>
+</div>
+<div style="flex:1">
+<div style="font-size:15px;line-height:22px;color:{{ l.titleFg }}">{{ l.title }}</div>
+<div style="font-size:12px;line-height:16px;letter-spacing:.4px;color:var(--md-sys-color-on-surface-variant);margin-top:2px">{{ l.meta }}</div>
+</div>
+<div style="flex:0 0 auto;font-size:13px;font-weight:500;color:{{ l.tagFg }}">{{ l.tag }}</div>
+</div>
+</sc-for>
+<div style="font-size:12px;line-height:18px;letter-spacing:.4px;color:var(--md-sys-color-on-surface-variant);padding:12px 0">{{ calFooter }}</div>
+</div>
+</sc-if>
+</div>
+
+</div>
+</sc-if>
+
+<div style="padding:0 24px">
+<div onClick="{{ goDeck }}" style="cursor:pointer;border-radius:28px;background:var(--md-sys-color-tertiary-container);color:var(--md-sys-color-on-tertiary-container);padding:20px 24px;display:flex;align-items:center;gap:16px">
+<div style="flex:1">
+<div style="font-size:12px;font-weight:500;letter-spacing:.5px">КАРТОЧКИ НА СЕГОДНЯ</div>
+<div style="font-size:22px;line-height:28px;margin-top:6px">{{ deckSize }}</div>
+<div style="font-size:13px;line-height:18px;letter-spacing:.25px;opacity:.85;margin-top:4px">{{ deckMinutes }}</div>
+</div>
+<div style="width:44px;height:44px;flex:0 0 auto;border-radius:1000px;background:var(--md-sys-color-tertiary);color:var(--md-sys-color-on-tertiary);display:flex;align-items:center;justify-content:center">{{ icPlay }}</div>
+</div>
+</div>
+
+<sc-if value="{{ hasProgram }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:20px">
+<div style="padding:0 24px">
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+<div style="flex:1;font-size:14px;font-weight:500;letter-spacing:.1px;color:var(--md-sys-color-on-surface-variant)">ПРОГРАММА</div>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Button" variant="text" size="xs" onClick="{{ goProgram }}" hint-size="80px,32px">Все темы</x-import>
+</div>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.List" hint-size="100%,220px">
+<sc-for list="{{ homeTopics }}" as="tp" hint-placeholder-count="3">
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.ListItem" interactive="{{ true }}" onClick="{{ tp.go }}" leading="{{ tp.leading }}" headline="{{ tp.headline }}" supporting-text="{{ tp.supporting }}" trailing="{{ tp.trailing }}" hint-size="100%,72px"></x-import>
+</sc-for>
+</x-import>
+</div>
+
+<div style="padding:0 24px">
+<div onClick="{{ goExtras }}" style="cursor:pointer;display:flex;align-items:center;gap:12px;padding:16px;border-radius:12px;border:1px solid var(--md-sys-color-outline-variant)">
+<div style="color:var(--md-sys-color-primary)">{{ icAdd }}</div>
+<div style="flex:1">
+<div style="font-size:16px;line-height:22px">Доп. уроки</div>
+<div style="font-size:13px;line-height:18px;letter-spacing:.25px;color:var(--md-sys-color-on-surface-variant)">{{ extrasMeta }}</div>
+</div>
+<div style="color:var(--md-sys-color-on-surface-variant)">{{ icChevron }}</div>
+</div>
+</div>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<!-- ═══ 7. ПРОГРАММА ═══ -->
+<sc-if value="{{ isProgram }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;min-height:0;display:flex;flex-direction:column">
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.TopAppBar" size="medium" title="Программа до {{ goalTo }}" leading="{{ backBtn }}" hint-size="100%,112px"></x-import>
+<div class="m3scroll" style="flex:1;min-height:0;padding:8px 24px 24px;display:flex;flex-direction:column;gap:8px">
+<div style="font-size:13px;line-height:18px;letter-spacing:.25px;color:var(--md-sys-color-on-surface-variant);margin-bottom:8px">{{ programMeta }}</div>
+<sc-for list="{{ programList }}" as="p" hint-placeholder-count="8">
+<div onClick="{{ p.go }}" style="display:flex;gap:14px;padding:14px 0;border-bottom:1px solid var(--md-sys-color-outline-variant);cursor:{{ p.cursor }}">
+<div style="width:32px;height:32px;flex:0 0 auto;border-radius:1000px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;background:{{ p.dotBg }};color:{{ p.dotFg }}">{{ p.dotLabel }}</div>
+<div style="flex:1">
+<div style="font-size:16px;line-height:22px;color:{{ p.titleFg }}">{{ p.title }}</div>
+<div style="font-size:13px;line-height:18px;letter-spacing:.25px;color:var(--md-sys-color-on-surface-variant);margin-top:2px">{{ p.meta }}</div>
+</div>
+<div style="font-size:13px;font-weight:500;flex:0 0 auto;color:{{ p.scoreFg }}">{{ p.score }}</div>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<!-- ═══ 8. ТЕМА: МАТЕРИАЛ ═══ -->
+<sc-if value="{{ isTopic }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;min-height:0;display:flex;flex-direction:column">
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.TopAppBar" title="Тема 5 из 14" leading="{{ backBtn }}" hint-size="100%,64px"></x-import>
+<div class="m3scroll" style="flex:1;min-height:0;padding:0 24px 24px;display:flex;flex-direction:column;gap:20px">
+<div>
+<div style="font-size:28px;line-height:36px">Present Perfect vs Past Simple</div>
+<div style="font-size:13px;letter-spacing:.4px;color:var(--md-sys-color-on-surface-variant);margin-top:6px">МАТЕРИАЛ · 6 МИН · ЗАТЕМ 8 УПРАЖНЕНИЙ</div>
+</div>
+<div style="padding:16px;border-radius:12px;background:var(--md-sys-color-surface-container-low);font-size:15px;line-height:22px;letter-spacing:.25px">Тема в программе потому, что в задании 1 и в письме вы использовали Past Simple там, где нужен Perfect.</div>
+<div style="font-size:17px;line-height:28px;letter-spacing:.25px;text-wrap:pretty">Past Simple ставит событие в закрытое время: <b>I worked here in 2022</b> — период закончился. Present Perfect связывает прошлое с сейчас: <b>I have worked here since 2022</b> — работаю до сих пор.</div>
+<div style="display:flex;flex-direction:column;gap:10px">
+<sc-for list="{{ contrast }}" as="c" hint-placeholder-count="3">
+<div style="display:flex;gap:12px;padding:14px;border-radius:12px;border:1px solid var(--md-sys-color-outline-variant)">
+<div style="flex:1;font-size:15px;line-height:22px"><div style="font-size:11px;font-weight:500;letter-spacing:.5px;color:var(--md-sys-color-on-surface-variant);margin-bottom:4px">PAST SIMPLE</div>{{ c.past }}</div>
+<div style="width:1px;background:var(--md-sys-color-outline-variant)"></div>
+<div style="flex:1;font-size:15px;line-height:22px"><div style="font-size:11px;font-weight:500;letter-spacing:.5px;color:var(--md-sys-color-primary);margin-bottom:4px">PRESENT PERFECT</div>{{ c.perfect }}</div>
+</div>
+</sc-for>
+</div>
+<div>
+<div style="font-size:14px;font-weight:500;letter-spacing:.1px;color:var(--md-sys-color-on-surface-variant);margin-bottom:10px">МАРКЕРЫ ВРЕМЕНИ</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+<sc-for list="{{ markers }}" as="m" hint-placeholder-count="6">
+<div style="padding:8px 14px;border-radius:1000px;background:{{ m.bg }};color:{{ m.fg }};font-size:14px">{{ m.label }}</div>
+</sc-for>
+</div>
+</div>
+<div style="padding:16px;border-radius:12px;background:var(--md-sys-color-secondary-container);color:var(--md-sys-color-on-secondary-container);font-size:15px;line-height:22px;letter-spacing:.25px">Чанки этой темы: <b>I've never been to…</b>, <b>have you ever…</b>, <b>by the time I arrived</b>. Они же придут в карточках.</div>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Button" variant="filled" size="m" onClick="{{ goExercises }}" hint-size="100%,56px">К упражнениям</x-import>
+</div>
+</div>
+</sc-if>
+
+<!-- ═══ 9. УПРАЖНЕНИЯ ═══ -->
+<sc-if value="{{ isEx }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;min-height:0;display:flex;flex-direction:column">
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.TopAppBar" size="center" title="Упражнения" leading="{{ backBtn }}" hint-size="100%,64px"></x-import>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Tabs" variant="secondary" items="{{ exTabs }}" value="{{ exTab }}" onChange="{{ setExTab }}" hint-size="100%,48px"></x-import>
+
+<div class="m3scroll" style="flex:1;min-height:0;padding:20px 16px 24px;display:flex;flex-direction:column;gap:18px">
+<div style="font-size:12px;font-weight:500;letter-spacing:.5px;color:var(--md-sys-color-on-surface-variant)">{{ exBlockMeta }}</div>
+
+<sc-if value="{{ exHasText }}" hint-placeholder-val="{{ false }}">
+<div style="font-size:16px;line-height:26px;letter-spacing:.25px;padding:16px;border-radius:12px;background:var(--md-sys-color-surface-container-low);text-wrap:pretty">{{ exText }}</div>
+</sc-if>
+
+<sc-for list="{{ exItems }}" as="it" hint-placeholder-count="3">
+<div style="display:flex;flex-direction:column;gap:12px">
+<div style="font-size:17px;line-height:26px;letter-spacing:.25px">{{ it.n }}. {{ it.q }}</div>
+<sc-if value="{{ it.isChoice }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+<sc-for list="{{ it.options }}" as="o" hint-placeholder-count="3">
+<div onClick="{{ o.pick }}" style="cursor:pointer;padding:12px 18px;border-radius:1000px;border:1px solid {{ o.border }};background:{{ o.bg }};color:{{ o.fg }};font-size:15px;letter-spacing:.25px">{{ o.label }}</div>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{ it.isWrite }}" hint-placeholder-val="{{ false }}">
+<textarea value="{{ it.value }}" onChange="{{ it.onChange }}" placeholder="{{ it.placeholder }}" rows="{{ it.rows }}" style="width:100%;box-sizing:border-box;padding:14px;border-radius:8px;border:1px solid var(--md-sys-color-outline);background:transparent;color:var(--md-sys-color-on-surface);font-size:16px;line-height:24px;resize:none;outline:none"></textarea>
+</sc-if>
+</div>
+</sc-for>
+
+<div style="height:4px"></div>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Button" variant="filled" size="m" onClick="{{ exPrimary }}" hint-size="100%,56px">{{ exPrimaryLabel }}</x-import>
+<div style="font-size:12px;line-height:18px;letter-spacing:.4px;color:var(--md-sys-color-on-surface-variant);text-align:center">Открытые ответы проверяем по смыслу. Оценка и слабые места придут после всех блоков.</div>
+</div>
+</div>
+</sc-if>
+
+<!-- ═══ 10. ОЦЕНКА ТЕМЫ ═══ -->
+<sc-if value="{{ isTopicResult }}" hint-placeholder-val="{{ false }}">
+<div class="m3scroll" style="flex:1;min-height:0;padding:16px 24px 32px;display:flex;flex-direction:column;gap:24px;animation:m3rise .4s cubic-bezier(.05,.7,.1,1)">
+<div style="display:flex;align-items:center;gap:20px">
+<div style="position:relative;width:96px;height:96px;flex:0 0 auto;display:flex;align-items:center;justify-content:center">
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.ProgressIndicator" variant="circular" value="{{ scoreValue }}" size="{{ n96 }}" thickness="{{ n8 }}" hint-size="96px,96px"></x-import>
+<div style="position:absolute;font-size:24px;font-weight:500">8/10</div>
+</div>
+<div style="flex:1">
+<div style="font-size:24px;line-height:32px">Хорошо</div>
+<div style="font-size:14px;line-height:20px;letter-spacing:.25px;color:var(--md-sys-color-on-surface-variant);margin-top:4px">Present Perfect vs Past Simple</div>
+</div>
+</div>
+
+<div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-radius:12px;background:var(--md-sys-color-tertiary-container);color:var(--md-sys-color-on-tertiary-container);font-size:15px;line-height:22px;letter-spacing:.25px">{{ icAlarm }}<span>Контрольная проверка через 3 дня — 15 октября</span></div>
+
+<div>
+<div style="font-size:14px;font-weight:500;letter-spacing:.1px;color:var(--md-sys-color-on-surface-variant);margin-bottom:12px">ПО БЛОКАМ</div>
+<div style="display:flex;flex-direction:column;gap:12px">
+<sc-for list="{{ blockScores }}" as="b" hint-placeholder-count="4">
+<div style="display:flex;align-items:center;gap:12px">
+<div style="flex:1;font-size:15px">{{ b.label }}</div>
+<div style="width:96px;height:6px;border-radius:1000px;background:var(--md-sys-color-surface-container-highest);overflow:hidden"><div style="height:100%;border-radius:1000px;background:{{ b.fg }};width:{{ b.w }}"></div></div>
+<div style="width:34px;text-align:right;font-size:13px;font-weight:500;color:{{ b.fg }}">{{ b.score }}</div>
+</div>
+</sc-for>
+</div>
+</div>
+
+<div>
+<div style="font-size:14px;font-weight:500;letter-spacing:.1px;color:var(--md-sys-color-on-surface-variant);margin-bottom:8px">ЧТО МЫ ЗАМЕТИЛИ</div>
+<div style="display:flex;flex-direction:column;gap:10px">
+<sc-for list="{{ notes }}" as="nt" hint-placeholder-count="3">
+<div style="display:flex;gap:10px;font-size:15px;line-height:22px;letter-spacing:.25px">
+<div style="width:2px;flex:0 0 auto;border-radius:1000px;background:{{ nt.fg }}"></div>
+<div>{{ nt.text }}</div>
+</div>
+</sc-for>
+</div>
+</div>
+
+<div>
+<div style="font-size:14px;font-weight:500;letter-spacing:.1px;color:var(--md-sys-color-on-surface-variant);margin-bottom:12px">СЛАБЫЕ СТОРОНЫ — ДОБАВИТЬ К ИЗУЧЕНИЮ</div>
+<div style="display:flex;flex-direction:column;gap:10px">
+<sc-for list="{{ weakOffers }}" as="w" hint-placeholder-count="3">
+<div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:12px;border:1px solid {{ w.border }};background:{{ w.bg }}">
+<div style="flex:1">
+<div style="font-size:16px;line-height:22px">{{ w.title }}</div>
+<div style="font-size:13px;line-height:18px;letter-spacing:.25px;color:var(--md-sys-color-on-surface-variant);margin-top:2px">{{ w.meta }}</div>
+</div>
+<div onClick="{{ w.toggle }}" style="cursor:pointer;padding:8px 16px;border-radius:1000px;font-size:14px;font-weight:500;background:{{ w.btnBg }};color:{{ w.btnFg }};border:1px solid {{ w.btnBorder }}">{{ w.btnLabel }}</div>
+</div>
+</sc-for>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:10px">
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Button" variant="filled" size="m" onClick="{{ goHome }}" hint-size="100%,56px">К программе</x-import>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Button" variant="tonal" size="s" onClick="{{ goExtras }}" hint-size="100%,40px">Открыть доп. уроки</x-import>
+</div>
+</div>
+</sc-if>
+
+<!-- ═══ 11. ДОП. УРОКИ ═══ -->
+<sc-if value="{{ isExtras }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;min-height:0;display:flex;flex-direction:column">
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.TopAppBar" size="medium" title="Доп. уроки" leading="{{ backBtn }}" hint-size="100%,112px"></x-import>
+<div class="m3scroll" style="flex:1;min-height:0;padding:8px 24px 24px;display:flex;flex-direction:column;gap:16px">
+<div style="font-size:14px;line-height:20px;letter-spacing:.25px;color:var(--md-sys-color-on-surface-variant)">Ваши слабые темы — их стоит подтянуть. Включённые встают в расписание между основными темами.</div>
+<div style="display:flex;flex-direction:column;gap:10px">
+<sc-for list="{{ extraList }}" as="e" hint-placeholder-count="5">
+<div style="display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:12px;border:1px solid {{ e.border }};background:{{ e.bg }}">
+<div style="flex:1">
+<div style="font-size:16px;line-height:22px">{{ e.title }}</div>
+<div style="font-size:13px;line-height:18px;letter-spacing:.25px;color:var(--md-sys-color-on-surface-variant);margin-top:2px">{{ e.meta }}</div>
+</div>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Switch" checked="{{ e.on }}" onChange="{{ e.toggle }}" hint-size="52px,32px"></x-import>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.IconButton" label="Удалить тему" onClick="{{ e.remove }}" hint-size="40px,40px">{{ icDelete }}</x-import>
+</div>
+</sc-for>
+</div>
+<div style="padding:16px;border-radius:12px;background:var(--md-sys-color-secondary-container);color:var(--md-sys-color-on-secondary-container);font-size:15px;line-height:22px;letter-spacing:.25px">{{ extrasPlan }}</div>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Button" variant="filled" size="m" onClick="{{ goHome }}" hint-size="100%,56px">Вставить в расписание</x-import>
+</div>
+
+</div>
+</sc-if>
+
+<!-- ═══ 12. КАРТОЧКИ ═══ -->
+<sc-if value="{{ isDeck }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;min-height:0;display:flex;flex-direction:column;background:var(--md-sys-color-surface-container-low)">
+<div style="display:flex;align-items:center;gap:8px;padding:4px 8px 0">
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.IconButton" label="Закрыть" onClick="{{ goHome }}" hint-size="48px,48px">{{ icClose }}</x-import>
+<div style="flex:1;display:flex;flex-direction:column;gap:6px">
+<div style="font-size:12px;font-weight:500;letter-spacing:.5px;color:var(--md-sys-color-on-surface-variant)">{{ deckCounter }}</div>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.ProgressIndicator" variant="linear" value="{{ deckValue }}" hint-size="100%,4px"></x-import>
+</div>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.IconButton" label="Отменить" onClick="{{ undoCard }}" hint-size="48px,48px">{{ icUndo }}</x-import>
+</div>
+
+<div style="flex:1;min-height:0;position:relative;margin:12px 16px 0">
+<sc-for list="{{ behind }}" as="b" hint-placeholder-count="2">
+<div style="position:absolute;inset:0;transform:{{ b.transform }};border-radius:28px;background:var(--md-sys-color-surface-container-highest);border:1px solid var(--md-sys-color-outline-variant);opacity:{{ b.opacity }}"></div>
+</sc-for>
+<div onPointerDown="{{ onDown }}" onPointerMove="{{ onMove }}" onPointerUp="{{ onUp }}" onPointerCancel="{{ onUp }}" onPointerLeave="{{ onUp }}" style="position:absolute;inset:0;border-radius:28px;background:var(--md-sys-color-surface);box-shadow:0 1px 3px 1px rgba(0,0,0,.15);display:flex;flex-direction:column;cursor:grab;user-select:none;overflow:hidden;transform:{{ cardTransform }};transition:{{ cardTransition }}">
+<div style="position:absolute;inset:0;background:{{ tintColor }};opacity:{{ tintOpacity }};pointer-events:none"></div>
+<div style="position:absolute;top:18px;left:18px;padding:6px 14px;border-radius:1000px;font-size:14px;font-weight:500;background:var(--md-sys-color-error);color:var(--md-sys-color-on-error);opacity:{{ opDont }};pointer-events:none">Не знаю</div>
+<div style="position:absolute;top:18px;right:18px;padding:6px 14px;border-radius:1000px;font-size:14px;font-weight:500;background:var(--md-sys-color-primary);color:var(--md-sys-color-on-primary);opacity:{{ opKnow }};pointer-events:none">Знаю</div>
+<div style="position:absolute;left:50%;top:18px;transform:translateX(-50%);padding:6px 14px;border-radius:1000px;font-size:14px;font-weight:500;background:var(--md-sys-color-tertiary);color:var(--md-sys-color-on-tertiary);opacity:{{ opSave }};pointer-events:none">В коллекцию</div>
+<div style="position:absolute;left:50%;top:18px;transform:translateX(-50%);padding:6px 14px;border-radius:1000px;font-size:14px;font-weight:500;background:var(--md-sys-color-inverse-surface);color:var(--md-sys-color-inverse-on-surface);opacity:{{ opBury }};pointer-events:none">Отложить</div>
+<div onClick="{{ flip }}" style="flex:1;min-height:0;display:flex;flex-direction:column;justify-content:center;gap:14px;padding:32px 28px;text-align:center">
+<div style="font-size:11px;font-weight:500;letter-spacing:.5px;color:var(--md-sys-color-on-surface-variant)">{{ cur.kind }}</div>
+<div style="font-size:34px;line-height:42px">{{ cur.en }}</div>
+<div style="font-size:14px;letter-spacing:.25px;color:var(--md-sys-color-on-surface-variant)">{{ cur.ipa }}</div>
+<sc-if value="{{ flipped }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:12px;animation:m3rise .3s cubic-bezier(.05,.7,.1,1)">
+<div style="height:1px;background:var(--md-sys-color-outline-variant)"></div>
+<div style="font-size:22px;line-height:28px;color:var(--md-sys-color-primary)">{{ cur.ru }}</div>
+<div style="font-size:16px;line-height:24px;letter-spacing:.5px;color:var(--md-sys-color-on-surface-variant);font-style:italic">{{ cur.ex }}</div>
+<div style="font-size:13px;letter-spacing:.4px;color:var(--md-sys-color-on-surface-variant)">Из темы: {{ cur.topic }}</div>
+</div>
+</sc-if>
+<sc-if value="{{ notFlipped }}" hint-placeholder-val="{{ true }}">
+<div style="font-size:14px;letter-spacing:.25px;color:var(--md-sys-color-on-surface-variant);animation:m3pulse 2.4s ease-in-out infinite">Нажмите, чтобы увидеть перевод</div>
+</sc-if>
+</div>
+</div>
+</div>
+
+<div style="flex:0 0 auto;padding:18px 24px 26px;display:flex;align-items:center;justify-content:center;gap:16px">
+<div onClick="{{ swipeDont }}" style="cursor:pointer;width:56px;height:56px;border-radius:1000px;display:flex;align-items:center;justify-content:center;border:1px solid var(--md-sys-color-outline);color:var(--md-sys-color-error)">{{ icClose }}</div>
+<div onClick="{{ swipeBury }}" style="cursor:pointer;width:48px;height:48px;border-radius:1000px;display:flex;align-items:center;justify-content:center;border:1px solid var(--md-sys-color-outline-variant);color:var(--md-sys-color-on-surface-variant)">{{ icSnooze }}</div>
+<div onClick="{{ swipeSave }}" style="cursor:pointer;width:48px;height:48px;border-radius:1000px;display:flex;align-items:center;justify-content:center;background:var(--md-sys-color-tertiary-container);color:var(--md-sys-color-on-tertiary-container)">{{ icBookmark }}</div>
+<div onClick="{{ swipeKnow }}" style="cursor:pointer;width:56px;height:56px;border-radius:1000px;display:flex;align-items:center;justify-content:center;background:var(--md-sys-color-primary);color:var(--md-sys-color-on-primary)">{{ icCheck }}</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isDeckDone }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;min-height:0;padding:32px 24px;display:flex;flex-direction:column;gap:24px;animation:m3rise .4s cubic-bezier(.05,.7,.1,1)">
+<div style="font-size:32px;line-height:40px">Колода пройдена</div>
+<div style="display:flex;gap:12px">
+<sc-for list="{{ deckTally }}" as="s" hint-placeholder-count="3">
+<div style="flex:1;padding:16px 12px;border-radius:12px;background:{{ s.bg }};color:{{ s.fg }}">
+<div style="font-size:28px;line-height:36px">{{ s.n }}</div>
+<div style="font-size:12px;letter-spacing:.4px;margin-top:2px">{{ s.label }}</div>
+</div>
+</sc-for>
+</div>
+<div style="font-size:15px;line-height:22px;letter-spacing:.25px;color:var(--md-sys-color-on-surface-variant)">Чанки, которые вы не знали, вернутся в упражнения темы и в колоду через день.</div>
+<div style="flex:1"></div>
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Button" variant="filled" size="m" onClick="{{ goHome }}" hint-size="100%,56px">На главную</x-import>
+</div>
+</sc-if>
+
+<sc-if value="{{ hasConfirm }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,.32)">
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.Dialog" headline="{{ confirmTitle }}" actions="{{ confirmActions }}" hint-size="320px,220px">Тема исчезнет из доп. уроков и из расписания. Она вернётся, если ошибки повторятся в следующих проверках.</x-import>
+</div>
+</sc-if>
+
+<sc-if value="{{ showNav }}" hint-placeholder-val="{{ false }}">
+<x-import component-from-global-scope="Material3DesignSystem_c1aeb3.NavigationBar" items="{{ tabs }}" value="{{ navTab }}" onChange="{{ setNavTab }}" hint-size="100%,80px"></x-import>
+</sc-if>
+
+</div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:480,&quot;height&quot;:980}}">
+const MCQ = [
+  { n:1, q:'I ___ here since 2022.', options:['work','have worked','am working','worked'] },
+  { n:2, q:"If I ___ more money, I'd travel more often.", options:['have','had','would have','will have'] },
+  { n:3, q:'I was tired, ___ I decided to go home early.', options:['although','because','so','however'] },
+  { n:4, q:'She asked me where ___.', options:['did I live','I lived','do I live','I do live'] },
+  { n:5, q:"I've never ___ to Canada.", options:['been','gone','went','being'] },
+  { n:6, q:'Which sounds most natural?', options:['I very like this movie.','I like very much this movie.','I really like this movie.','I much like this movie.'] },
+  { n:7, q:'By the time I arrived, they ___ dinner.', options:['finished','have finished','had finished','were finish'] },
+  { n:8, q:'What does “I ended up staying there” mean?', options:['I planned to stay there.',"Eventually, I stayed there, although that wasn't necessarily the original plan.",'I stopped staying there.','I was forced to leave.'] },
+];
+
+const PROGRAM = [
+  { title:'Артикли: a / the / нулевой', meta:'Грамматика · пройдено', state:'done', score:'9/10' },
+  { title:'Порядок слов и наречия частоты', meta:'Use of English · пройдено', state:'done', score:'7/10' },
+  { title:'Past Simple: закрытое время', meta:'Грамматика · пройдено', state:'done', score:'10/10' },
+  { title:'Chunks: рассказ о прошлом', meta:'Лексика · пройдено', state:'done', score:'8/10' },
+  { title:'Present Perfect vs Past Simple', meta:'Грамматика · материал + 8 упражнений', state:'current', score:'сейчас' },
+  { title:'Past Perfect и последовательность', meta:'Грамматика · 5 упражнений', state:'next', score:'' },
+  { title:'Второй тип условных', meta:'Грамматика · 6 упражнений', state:'next', score:'' },
+  { title:'Reported speech: вопросы', meta:'Use of English · 6 упражнений', state:'next', score:'' },
+  { title:'Chunks: работа и переезд', meta:'Лексика · 12 чанков', state:'next', score:'' },
+  { title:'Reading: длинный текст на время', meta:'Понимание · 4 задания', state:'next', score:'' },
+  { title:'Письмо: неформальное сообщение', meta:'Письмо · с проверкой', state:'next', score:'' },
+  { title:'Модальные глаголы вероятности', meta:'Грамматика · 6 упражнений', state:'next', score:'' },
+  { title:'Chunks: мнение и согласие', meta:'Лексика · 14 чанков', state:'next', score:'' },
+  { title:'Итоговая проверка уровня', meta:'Все блоки · итог', state:'next', score:'' },
+];
+
+const EX_BLOCKS = [
+  { label:'Понимание', meta:'ПОНИМАНИЕ · 1 ТЕКСТ · 2 ЗАДАНИЯ',
+    text:"Since she moved to Dublin, Maria has changed jobs twice. Her first job was in a small café, where she worked for four months before a design studio offered her a junior role. She has been there since March and says she has finally stopped translating everything in her head.",
+    items:[
+      { type:'choice', q:'How long has Maria been at the design studio?', options:['Four months','Since March','Twice'], answer:'Since March' },
+      { type:'write', q:'Why does the writer use “has changed jobs” and not “changed jobs”? Ответь на английском.', rows:3, placeholder:'Your answer' },
+    ] },
+  { label:'Грамматика', meta:'ГРАММАТИКА · 3 ЗАДАНИЯ',
+    items:[
+      { type:'choice', q:'I ___ this film three times, and I still like it.', options:['saw',"have seen",'had seen'], answer:'have seen' },
+      { type:'choice', q:'We ___ to Prague in 2019 and loved it.', options:['have gone','went','have been'], answer:'went' },
+      { type:'choice', q:'She ___ her keys, so she is waiting outside.', options:['lost','has lost','had lost'], answer:'has lost' },
+    ] },
+  { label:'Use of English', meta:'USE OF ENGLISH · 2 ЗАДАНИЯ',
+    items:[
+      { type:'write', q:'Перепиши естественно: “I am working here since two years.”', rows:2, placeholder:'Your version' },
+      { type:'choice', q:'Какой маркер невозможен с Present Perfect?', options:['ever','yesterday','so far'], answer:'yesterday' },
+    ] },
+  { label:'Письмо', meta:'ПИСЬМО · 1 ЗАДАНИЕ',
+    items:[
+      { type:'write', q:'3–4 предложения другу: что изменилось в твоей жизни за этот год. Используй Present Perfect хотя бы дважды.', rows:6, placeholder:'Your message' },
+    ] },
+];
+
+const CARDS = [
+  { en:"I've never been to…", ru:'я никогда не был в…', ipa:'/aɪv ˈnevə biːn tuː/', kind:'чанк · опыт', ex:"I've never been to Canada, but I'd like to go.", topic:'Present Perfect' },
+  { en:'by the time I arrived', ru:'к тому моменту, как я приехал', ipa:'/baɪ ðə taɪm aɪ əˈraɪvd/', kind:'чанк · время', ex:'By the time I arrived, they had finished dinner.', topic:'Past Perfect' },
+  { en:'end up doing sth', ru:'в итоге сделать что-то', ipa:'/end ʌp ˈduːɪŋ/', kind:'чанк · результат', ex:'I ended up staying there for a week.', topic:'Chunks: рассказ о прошлом' },
+  { en:'put sth off', ru:'откладывать', ipa:'/pʊt ɪt ɒf/', kind:'фразовый глагол', ex:'He kept putting it off because he was worried.', topic:'Chunks: работа и переезд' },
+  { en:'so far', ru:'пока что, до сих пор', ipa:'/səʊ fɑː/', kind:'маркер времени', ex:'So far it has gone well.', topic:'Present Perfect' },
+  { en:'get the hang of', ru:'освоиться', ipa:'/ɡet ðə hæŋ ɒv/', kind:'чанк · навык', ex:'It took me a week to get the hang of it.', topic:'Chunks: работа и переезд' },
+];
+
+const V = (n) => `var(--md-sys-color-${n})`;
+const DAYS = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+
+class Component extends DCLogic {
+  state = {
+    screen: 'home', navTab: 0, hasProgram: false, plan: 'monthly', subscribed: false,
+    from: 'A2+', to: 'B2', purpose: ['Работа', 'Переезд'],
+    qi: 0, answers: {},
+    open9: '', open10: '', essay: '',
+    days: [1, 3, 5], minutes: 25, time: '19:00',
+    exTab: 0, exAnswers: {}, exWrites: {},
+    extras: { articles: true, modals: false, conditionals: false, wordorder: false, listening: false },
+    deck: 0, flipped: false, dx: 0, dy: 0, dragging: false, flying: null, verdicts: {},
+  };
+
+  go(screen) { this.setState({ screen }); }
+
+  resolve(dir) {
+    const s = this.state, cur = CARDS[s.deck];
+    if (!cur) return;
+    this.setState({ flying: dir, dragging: false });
+    setTimeout(() => {
+      const next = s.deck + 1;
+      this.setState({
+        deck: next, flipped: false, dx: 0, dy: 0, flying: null,
+        verdicts: { ...s.verdicts, [cur.en]: dir },
+        screen: next >= CARDS.length ? 'deckdone' : 'deck',
+      });
+    }, 230);
+  }
+
+  submitTest() {
+    this.setState({ screen: 'checking' });
+    setTimeout(() => this.setState({ screen: 'result' }), 2200);
+  }
+
+  submitExercises() {
+    this.setState({ screen: 'checking' });
+    setTimeout(() => this.setState({ screen: 'topicresult' }), 2000);
+  }
+
+  renderVals() {
+    const s = this.state;
+    const NS = window.Material3DesignSystem_c1aeb3 || {};
+    const Icon = NS.Icon, IconButton = NS.IconButton;
+    const ic = (name, size) => (Icon ? React.createElement(Icon, { name, size }) : null);
+
+    const plural = (n, one, few, many) => (n % 10 === 1 && n % 100 !== 11 ? one : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? few : many);
+
+    const chip = (active) => ({
+      bg: active ? V('primary-container') : 'transparent',
+      fg: active ? V('on-primary-container') : V('on-surface'),
+      border: active ? 'transparent' : V('outline'),
+    });
+
+    // ---- goals ----
+    const levelsFrom = ['A1', 'A2', 'A2+', 'B1', 'B1+', 'B2'].map((l) => ({
+      label: l, ...chip(s.from === l), pick: () => this.setState({ from: l }),
+    }));
+    const levelsTo = ['B1', 'B1+', 'B2', 'C1'].map((l) => ({
+      label: l, ...chip(s.to === l), pick: () => this.setState({ to: l }),
+    }));
+    const purposes = ['Работа', 'Переезд', 'Учёба', 'IELTS', 'Общение'].map((p) => {
+      const on = s.purpose.indexOf(p) >= 0;
+      return { label: p, ...chip(on), pick: () => this.setState({ purpose: on ? s.purpose.filter((x) => x !== p) : s.purpose.concat([p]) }) };
+    });
+
+    // ---- test part 1 ----
+    const mq = MCQ[Math.min(s.qi, MCQ.length - 1)];
+    const picked = s.answers[mq.n];
+    const letters = ['A', 'B', 'C', 'D'];
+    const mqOptions = mq.options.map((o, i) => {
+      const on = picked === letters[i];
+      return {
+        letter: letters[i], label: o, ...chip(on),
+        pick: () => this.setState({ answers: { ...s.answers, [mq.n]: letters[i] } }),
+      };
+    });
+    const unknown = picked === '—';
+    const part = s.screen === 'test' ? (s.testPart || null) : null;
+
+    // ---- exercises ----
+    const block = EX_BLOCKS[s.exTab];
+    const exItems = block.items.map((it, i) => {
+      const key = `${s.exTab}-${i}`;
+      if (it.type === 'choice') {
+        return {
+          n: i + 1, q: it.q, isChoice: true, isWrite: false,
+          options: it.options.map((o) => {
+            const on = s.exAnswers[key] === o;
+            return { label: o, ...chip(on), pick: () => this.setState({ exAnswers: { ...s.exAnswers, [key]: o } }) };
+          }),
+        };
+      }
+      return {
+        n: i + 1, q: it.q, isChoice: false, isWrite: true, rows: it.rows, placeholder: it.placeholder,
+        value: s.exWrites[key] || '',
+        onChange: (e) => this.setState({ exWrites: { ...s.exWrites, [key]: e && e.target ? e.target.value : e } }),
+      };
+    });
+    const lastBlock = s.exTab >= EX_BLOCKS.length - 1;
+
+    // ---- extras ----
+    const EXTRA_DEFS = [
+      { k: 'articles', title: 'Артикли: повтор', meta: 'Слабое место в теме 1 · 4 упражнения' },
+      { k: 'modals', title: 'Модальные глаголы', meta: 'Слабое место в письме · 6 упражнений' },
+      { k: 'conditionals', title: 'Условные второго типа', meta: 'Ошибка в задании 2 · 5 упражнений' },
+      { k: 'wordorder', title: 'Наречия и порядок слов', meta: 'Ошибка в задании 6 · 4 упражнения' },
+      { k: 'listening', title: 'Аудирование: короткие диалоги', meta: 'Блок не проверялся тестом · 5 упражнений' },
+    ];
+    const removed = s.removed || [];
+    const visibleExtras = EXTRA_DEFS.filter((e) => removed.indexOf(e.k) < 0);
+    const extraList = visibleExtras.map((e) => {
+      const on = !!s.extras[e.k];
+      return {
+        title: e.title, meta: e.meta, on,
+        bg: on ? V('surface-container-low') : 'transparent',
+        border: on ? 'transparent' : V('outline-variant'),
+        toggle: () => this.setState({ extras: { ...s.extras, [e.k]: !on } }),
+        remove: () => this.setState({ confirmRemove: e.k }),
+        removeBtn: IconButton ? React.createElement(IconButton, {
+          label: 'Удалить тему', onClick: () => this.setState({ confirmRemove: e.k }),
+        }, ic('Delete')) : null,
+      };
+    });
+    const extrasOn = visibleExtras.filter((e) => s.extras[e.k]).length;
+    const extrasTotal = visibleExtras.length;
+    const pendingRemove = s.confirmRemove ? EXTRA_DEFS.filter((e) => e.k === s.confirmRemove)[0] : null;
+
+    const weakOffers = [
+      { k: 'modals', title: 'Модальные глаголы', meta: 'might / should в письме — 2 ошибки' },
+      { k: 'articles', title: 'Артикли', meta: 'пропущен the перед уникальным объектом' },
+      { k: 'wordorder', title: 'Наречия частоты', meta: 'место наречия в предложении' },
+    ].map((w) => {
+      const on = !!s.extras[w.k];
+      return {
+        title: w.title, meta: w.meta,
+        bg: on ? V('primary-container') : 'transparent',
+        border: on ? 'transparent' : V('outline-variant'),
+        btnLabel: on ? 'Добавлено' : 'Добавить',
+        btnBg: on ? V('primary') : 'transparent',
+        btnFg: on ? V('on-primary') : V('primary'),
+        btnBorder: on ? 'transparent' : V('outline'),
+        toggle: () => this.setState({ extras: { ...s.extras, [w.k]: !on } }),
+      };
+    });
+
+    // ---- deck geometry ----
+    const flyOff = { know: [520, -60], dont: [-520, -60], save: [0, -760], bury: [0, 760] };
+    let dx = s.dx, dy = s.dy;
+    if (s.flying) { dx = flyOff[s.flying][0]; dy = flyOff[s.flying][1]; }
+    const c01 = (v) => Math.max(0, Math.min(1, v));
+    const opKnow = c01(dx / 36), opDont = c01(-dx / 36);
+    const vert = Math.abs(dy) > Math.abs(dx) ? 1 : 0;
+    const opSave = c01(-dy / 36) * vert, opBury = c01(dy / 36) * vert;
+    const maxOp = Math.max(opKnow, opDont, opSave, opBury);
+    let tintColor = V('primary');
+    if (opDont >= Math.max(opKnow, opSave, opBury)) tintColor = V('error');
+    if (opSave > Math.max(opKnow, opDont, opBury)) tintColor = V('tertiary');
+    if (opBury > Math.max(opKnow, opDont, opSave)) tintColor = V('on-surface-variant');
+    const cur = CARDS[s.deck] || CARDS[CARDS.length - 1];
+    const behind = [1, 2].map((i) => CARDS[s.deck + i]).filter(Boolean).map((c, i) => ({
+      transform: `scale(${1 - (i + 1) * 0.04}) translateY(${(i + 1) * 12}px)`, opacity: String(0.55 - i * 0.25),
+    })).reverse();
+    const onDown = (e) => { this._st = { x: e.clientX, y: e.clientY }; this.setState({ dragging: true }); };
+    const onMove = (e) => { if (this._st && this.state.dragging) this.setState({ dx: e.clientX - this._st.x, dy: e.clientY - this._st.y }); };
+    const onUp = () => {
+      if (!this._st) return;
+      const { dx: x, dy: y } = this.state; this._st = null;
+      if (Math.abs(x) > Math.abs(y) && Math.abs(x) > 90) this.resolve(x > 0 ? 'know' : 'dont');
+      else if (Math.abs(y) > 90) this.resolve(y < 0 ? 'save' : 'bury');
+      else this.setState({ dx: 0, dy: 0, dragging: false });
+    };
+    const tally = (d) => String(Object.values(s.verdicts).filter((v) => v === d).length);
+
+    // ---- schedule ----
+    const dayPicks = DAYS.map((d, i) => {
+      const on = s.days.indexOf(i) >= 0;
+      return { label: d, ...chip(on), pick: () => this.setState({ days: on ? s.days.filter((x) => x !== i) : s.days.concat([i]).sort() }) };
+    });
+    const timePicks = ['08:00', '13:00', '19:00', '21:30'].map((tp) => ({
+      label: tp, ...chip(s.time === tp), pick: () => this.setState({ time: tp }),
+    }));
+    const perWeek = s.days.length * s.minutes;
+    const weeks = Math.max(4, Math.round((14 * 45) / Math.max(30, perWeek)));
+    const nextDay = DAYS[s.days.length ? s.days[0] : 1];
+
+    // ---- calendar: даты → темы ----
+    const MONTHS = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+    const START = new Date(2025, 9, 6); // Пн, 6 окт
+    const TODAY_I = 8; // 14 окт — сегодня
+    const doneCount = 4;
+    const lessonDays = s.days.length ? s.days : [1];
+    const sessions = [];
+    for (let i = 0; i < 220 && sessions.length < PROGRAM.length + extrasOn; i++) {
+      const d = new Date(START.getTime() + i * 86400000);
+      const wd = (d.getDay() + 6) % 7;
+      if (lessonDays.indexOf(wd) >= 0) sessions.push({ i, d, wd });
+    }
+    const sessionByIndex = {};
+    sessions.forEach((ses, n) => { sessionByIndex[ses.i] = n; });
+
+    const calStrip = Array.from({ length: 35 }, (_, i) => {
+      const d = new Date(START.getTime() + i * 86400000);
+      const wd = (d.getDay() + 6) % 7;
+      const n = sessionByIndex[i];
+      const lesson = n !== undefined;
+      const isToday = i === TODAY_I;
+      const passed = i < TODAY_I;
+      return {
+        day: DAYS[wd], num: String(d.getDate()),
+        bg: isToday ? V('primary') : lesson && !passed ? V('primary-container') : 'transparent',
+        fg: isToday ? V('on-primary') : lesson && !passed ? V('on-primary-container') : passed ? V('on-surface-variant') : V('on-surface'),
+        border: isToday || (lesson && !passed) ? 'transparent' : V('outline-variant'),
+        dot: lesson ? (passed ? V('outline-variant') : V('tertiary')) : 'transparent',
+        tap: () => this.setState({ calOpen: !(s.calOpen && s.calFocus === i), calFocus: i }),
+        focusBg: '',
+      };
+    });
+    const calMonthLabel = `ОКТЯБРЬ — ${'НОЯБРЬ'} ${START.getFullYear()}`;
+
+    const calList = sessions.slice(0, PROGRAM.length).map((ses, n) => {
+      const p = PROGRAM[n];
+      const past = n < doneCount, current = n === doneCount;
+      return {
+        date: `${ses.d.getDate()} ${MONTHS[ses.d.getMonth()]}`, day: DAYS[ses.wd],
+        title: p.title, meta: p.meta, highlight: s.calFocus === ses.i,
+        tag: past ? p.score : current ? 'сейчас' : s.time,
+        dateFg: current ? V('primary') : past ? V('on-surface-variant') : V('on-surface'),
+        titleFg: past ? V('on-surface-variant') : V('on-surface'),
+        tagFg: current ? V('primary') : past ? V('primary') : V('on-surface-variant'),
+        cursor: current ? 'pointer' : 'default',
+        rowBg: s.calFocus === ses.i ? V('surface-container-low') : 'transparent',
+        go: current ? () => this.go('topic') : undefined,
+      };
+    });
+    const nextSes = sessions[doneCount];
+    const nextDelta = nextSes ? nextSes.i - TODAY_I : 0;
+    const deltaLabel = nextDelta <= 0 ? 'СЕГОДНЯ' : `ЧЕРЕЗ ${nextDelta} ${plural(nextDelta, 'ДЕНЬ', 'ДНЯ', 'ДНЕЙ')}`;
+    const nextWhenLabel = nextSes
+      ? `${DAYS[nextSes.wd]}, ${nextSes.d.getDate()} ${MONTHS[nextSes.d.getMonth()]}, ${s.time} · ${deltaLabel}`
+      : `${s.time}`;
+    const lastSes = sessions[Math.min(PROGRAM.length - 1, sessions.length - 1)];
+    const calFooter = `Программа заканчивается ${lastSes.d.getDate()} ${MONTHS[lastSes.d.getMonth()]}. ${extrasOn ? `Доп. ${plural(extrasOn, 'урок', 'урока', 'уроков')} сдвинет даты на ${extrasOn} ${plural(extrasOn, 'занятие', 'занятия', 'занятий')}.` : 'Доп. уроки сдвинут даты, если включить их.'}`;
+
+    const back = () => {
+      const map = { goals: 'home', test: 'goals', result: 'goals', schedule: 'result', paywall: 'schedule', program: 'home', topic: 'home', exercises: 'topic', extras: 'home', topicresult: 'exercises' };
+      this.go(map[s.screen] || 'home');
+    };
+
+    const programList = PROGRAM.map((p, i) => ({
+      title: p.title, meta: p.state === 'next' ? `${p.meta} · откроется по расписанию` : p.meta, score: p.score,
+      dotLabel: p.state === 'done' ? '✓' : String(i + 1),
+      dotBg: p.state === 'done' ? V('primary') : p.state === 'current' ? V('secondary-container') : V('surface-container-highest'),
+      dotFg: p.state === 'done' ? V('on-primary') : p.state === 'current' ? V('on-secondary-container') : V('on-surface-variant'),
+      titleFg: p.state === 'next' ? V('on-surface-variant') : V('on-surface'),
+      scoreFg: p.state === 'current' ? V('primary') : V('on-surface-variant'),
+      cursor: p.state === 'current' ? 'pointer' : 'default',
+      go: () => { if (p.state === 'current') this.go('topic'); },
+    }));
+
+    const testPart = s.testPart || 1;
+
+    return {
+      isGoals: s.screen === 'goals', isTest: s.screen === 'test', isChecking: s.screen === 'checking',
+      isResult: s.screen === 'result', isSchedule: s.screen === 'schedule', isHome: s.screen === 'home',
+      isProgram: s.screen === 'program', isTopic: s.screen === 'topic', isEx: s.screen === 'exercises',
+      isTopicResult: s.screen === 'topicresult', isExtras: s.screen === 'extras',
+      isDeck: s.screen === 'deck', isDeckDone: s.screen === 'deckdone',
+      showNav: ['home', 'program', 'extras'].indexOf(s.screen) >= 0,
+      backBtn: IconButton ? React.createElement(IconButton, { label: 'Назад', onClick: back }, ic('ArrowBack')) : null,
+
+      tabs: [
+        { label: 'Главная', icon: ic('Today') },
+        { label: 'Программа', icon: ic('CheckBox') },
+        { label: 'Карточки', icon: ic('Stars') },
+        { label: 'Доп. уроки', icon: ic('Add') },
+      ],
+      navTab: s.screen === 'program' ? 1 : s.screen === 'extras' ? 3 : 0,
+      setNavTab: (v) => {
+        if (v === 2) return this.setState({ screen: 'deck', deck: 0, flipped: false, dx: 0, dy: 0, verdicts: {} });
+        if ((v === 1 || v === 3) && !s.hasProgram) return this.go('goals');
+        this.go(['home', 'program', 'deck', 'extras'][v] || 'home');
+      },
+
+      goalTo: s.to, levelsFrom, levelsTo, purposes,
+      startTest: () => this.setState({ screen: 'test', testPart: 1, qi: 0 }),
+      goGoals: () => this.go('goals'),
+      hasProgram: !!s.hasProgram, noProgram: !s.hasProgram,
+      isPaywall: s.screen === 'paywall', goPaywall: () => this.go('paywall'),
+      subscribe: () => this.setState({ subscribed: true, hasProgram: true, screen: 'home' }),
+      skipPaywall: () => this.setState({ hasProgram: true, screen: 'home' }),
+      chosenPrice: s.plan === 'yearly' ? '3 990 ₽ в год' : '590 ₽ в месяц',
+      plans: [
+        { key: 'monthly', title: 'Месяц', meta: 'без обязательств', price: '590 ₽' },
+        { key: 'yearly', title: 'Год', meta: 'выгоднее на 44%', price: '3 990 ₽' },
+      ].map((p) => {
+        const on = s.plan === p.key;
+        return {
+          title: p.title, meta: p.meta, price: p.price,
+          bg: on ? V('primary-container') : 'transparent',
+          border: on ? V('primary') : V('outline-variant'),
+          priceFg: on ? V('on-primary-container') : V('on-surface'),
+          pick: () => this.setState({ plan: p.key }),
+        };
+      }),
+      planCompare: [
+        { label: 'Карточки с чанками', free: 'БЕСПЛАТНО', icon: ic('Check'), fg: V('primary') },
+        { label: 'Проверка уровня раз в месяц', free: 'БЕСПЛАТНО', icon: ic('Check'), fg: V('primary') },
+        { label: 'Все 14 тем и упражнения', free: 'В ПОДПИСКЕ', icon: ic('Stars'), fg: V('tertiary') },
+        { label: 'Проверка открытых ответов и письма', free: 'В ПОДПИСКЕ', icon: ic('Stars'), fg: V('tertiary') },
+        { label: 'Доп. уроки по слабым темам', free: 'В ПОДПИСКЕ', icon: ic('Stars'), fg: V('tertiary') },
+      ],
+
+      testTitle: testPart === 1 ? 'Часть 1 из 3' : testPart === 2 ? 'Часть 2 из 3' : 'Часть 3 из 3',
+      testValue: testPart === 1 ? (s.qi / 11) : testPart === 2 ? (8 / 11) : (10 / 11),
+      part1: testPart === 1, part2: testPart === 2, part3: testPart === 3,
+      mcqCounter: `${Math.min(s.qi + 1, MCQ.length)} / 8`,
+      mq, mqOptions,
+      unknownBg: unknown ? V('surface-container-highest') : 'transparent',
+      unknownFg: unknown ? V('on-surface') : V('on-surface-variant'),
+      unknownBorder: unknown ? V('on-surface-variant') : V('outline-variant'),
+      pickUnknown: () => this.setState({ answers: { ...s.answers, [mq.n]: '—' } }),
+      mqUnanswered: !picked, atFirstQ: s.qi === 0,
+      nextQLabel: s.qi >= MCQ.length - 1 ? 'Часть 2' : 'Дальше',
+      nextQ: () => { if (s.qi >= MCQ.length - 1) this.setState({ testPart: 2 }); else this.setState({ qi: s.qi + 1 }); },
+      prevQ: () => this.setState({ qi: Math.max(0, s.qi - 1) }),
+      open9: s.open9, onOpen9: (e) => this.setState({ open9: e && e.target ? e.target.value : e }),
+      open10: s.open10, onOpen10: (e) => this.setState({ open10: e && e.target ? e.target.value : e }),
+      goPart3: () => this.setState({ testPart: 3 }),
+      essay: s.essay, onEssay: (e) => this.setState({ essay: e && e.target ? e.target.value : e }),
+      essayWords: String(s.essay.trim() ? s.essay.trim().split(/\s+/).length : 0),
+      submitTest: () => this.submitTest(),
+
+      checkingTitle: 'Проверяем ваши ответы',
+      checkSteps: [
+        { label: 'Грамматика и лексика — 8 ответов', icon: ic('Check'), fg: V('primary') },
+        { label: 'Открытые ответы — смысл, а не совпадение слов', icon: ic('Check'), fg: V('primary') },
+        { label: 'Свободное письмо — уровень конструкций', icon: ic('MoreHoriz'), fg: V('on-surface-variant') },
+      ],
+
+      skillBars: [
+        { label: 'Грамматика', tag: 'A2+', fg: V('error'), w: '42%' },
+        { label: 'Чтение и понимание', tag: 'B1+', fg: V('primary'), w: '76%' },
+        { label: 'Лексика и чанки', tag: 'B1', fg: V('tertiary'), w: '62%' },
+        { label: 'Письмо', tag: 'A2+', fg: V('error'), w: '45%' },
+      ],
+      goSchedule: () => this.go('schedule'), backBtnGoals: null,
+
+      dayPicks, minutes: s.minutes, setMinutes: (v) => this.setState({ minutes: Math.round(v) }),
+      timePicks, n10: 10, n60: 60, n5: 5, n96: 96, n8: 8,
+      scheduleSummary: `${s.days.length} ${plural(s.days.length, 'занятие', 'занятия', 'занятий')} в неделю по ${s.minutes} минут — программа до ${s.to} закроется примерно за ${weeks} ${plural(weeks, 'неделю', 'недели', 'недель')}. Напоминание в ${s.time}.`,
+      goHome: () => this.go('home'),
+
+      calMonth: calMonthLabel, calOpen: !!s.calOpen,
+      calToggleLabel: s.calOpen ? 'Свернуть' : 'Все даты',
+      calToggleIcon: ic(s.calOpen ? 'KeyboardArrowUp' : 'KeyboardArrowDown'),
+      toggleCal: () => this.setState({ calOpen: !s.calOpen }),
+      calStrip, calList, calFooter,
+      nextWhen: nextWhenLabel,
+      blockDots: [V('primary'), V('primary'), V('surface-container-highest'), V('surface-container-highest')].map((bg) => ({ bg })),
+      weekStrip: DAYS.map((d, i) => {
+        const planned = s.days.indexOf(i) >= 0, done = i < 2 && planned;
+        return {
+          day: d, num: String(9 + i),
+          bg: done ? V('primary') : planned ? V('primary-container') : 'transparent',
+          fg: done ? V('on-primary') : planned ? V('on-primary-container') : V('on-surface-variant'),
+          border: done || planned ? 'transparent' : V('outline-variant'),
+        };
+      }),
+      homeTopics: PROGRAM.slice(4, 7).map((p, i) => ({
+        headline: p.title, supporting: p.meta,
+        trailing: i === 0 ? 'сейчас' : 'позже',
+        leading: ic(i === 0 ? 'PlayArrowFilled' : 'Bookmark'),
+        go: i === 0 ? () => this.go('topic') : undefined,
+      })),
+      extrasMeta: `${extrasOn} ${plural(extrasOn, 'урок включён', 'урока включено', 'уроков включено')} · ${extrasTotal} ${plural(extrasTotal, 'слабая тема', 'слабых темы', 'слабых тем')}`,
+      deckSize: `${CARDS.length} ${plural(CARDS.length, 'чанк', 'чанка', 'чанков')}`,
+      deckMinutes: `Свайпом, отдельно от программы · ${Math.max(2, Math.round(CARDS.length * 0.5))} мин`,
+      goProgram: () => this.go('program'), goExtras: () => this.go('extras'),
+      openTopic: () => this.go('topic'),
+      programMeta: `14 тем · 4 пройдено · ${extrasOn} доп. ${plural(extrasOn, 'урок', 'урока', 'уроков')} в расписании`,
+      programList,
+
+      contrast: [
+        { past: 'I worked there for two years.', perfect: "I've worked here for two years." },
+        { past: 'Did you see this film?', perfect: 'Have you ever seen this film?' },
+        { past: 'She lost her keys yesterday.', perfect: 'She has lost her keys — she is locked out.' },
+      ],
+      markers: [
+        { label: 'since 2022', bg: V('primary-container'), fg: V('on-primary-container') },
+        { label: 'ever / never', bg: V('primary-container'), fg: V('on-primary-container') },
+        { label: 'so far', bg: V('primary-container'), fg: V('on-primary-container') },
+        { label: 'yesterday', bg: V('surface-container-highest'), fg: V('on-surface-variant') },
+        { label: 'in 2019', bg: V('surface-container-highest'), fg: V('on-surface-variant') },
+        { label: 'ago', bg: V('surface-container-highest'), fg: V('on-surface-variant') },
+      ],
+      goExercises: () => this.setState({ screen: 'exercises', exTab: 0 }),
+
+      exTabs: EX_BLOCKS.map((b) => ({ label: b.label })),
+      exTab: s.exTab, setExTab: (v) => this.setState({ exTab: v }),
+      exBlockMeta: block.meta, exHasText: !!block.text, exText: block.text || '', exItems,
+      exPrimaryLabel: lastBlock ? 'Отправить на проверку' : 'Следующий блок',
+      exPrimary: () => { if (lastBlock) this.submitExercises(); else this.setState({ exTab: s.exTab + 1 }); },
+
+      scoreValue: 0.8,
+      blockScores: [
+        { label: 'Понимание', score: '2/2', w: '100%', fg: V('primary') },
+        { label: 'Грамматика', score: '3/3', w: '100%', fg: V('primary') },
+        { label: 'Use of English', score: '2/3', w: '66%', fg: V('tertiary') },
+        { label: 'Письмо', score: '1/2', w: '50%', fg: V('error') },
+      ],
+      notes: [
+        { text: 'Present Perfect в упражнениях — уверенно, ошибок нет.', fg: V('primary') },
+        { text: '“I am working here since two years” исправлено верно, но время в письме дважды сбилось на Past Simple.', fg: V('tertiary') },
+        { text: 'В письме пропущены артикли: a new job, the same team.', fg: V('error') },
+      ],
+      weakOffers,
+      extraList,
+      hasConfirm: !!pendingRemove,
+      confirmTitle: pendingRemove ? `Удалить «${pendingRemove.title}»?` : '',
+      cancelRemove: () => this.setState({ confirmRemove: null }),
+      confirmActions: NS.Button ? [
+        React.createElement(NS.Button, { key: 'c', variant: 'text', size: 's', onClick: () => this.setState({ confirmRemove: null }) }, 'Отмена'),
+        React.createElement(NS.Button, { key: 'd', variant: 'text', size: 's', onClick: () => this.setState({
+          removed: removed.concat([s.confirmRemove]),
+          extras: { ...s.extras, [s.confirmRemove]: false },
+          confirmRemove: null,
+        }) }, 'Удалить'),
+      ] : null,
+      doRemove: () => this.setState({
+        removed: removed.concat([s.confirmRemove]),
+        extras: { ...s.extras, [s.confirmRemove]: false },
+        confirmRemove: null,
+      }),
+      extrasPlan: `${extrasOn} доп. ${plural(extrasOn, 'урок встанет', 'урока встанут', 'уроков встанут')} между основными темами — программа удлинится на ${extrasOn} ${plural(extrasOn, 'занятие', 'занятия', 'занятий')}.`,
+
+      goDeck: () => this.setState({ screen: 'deck', deck: 0, flipped: false, dx: 0, dy: 0, verdicts: {} }),
+      cur, behind, flipped: s.flipped, notFlipped: !s.flipped,
+      flip: () => this.setState({ flipped: !s.flipped }),
+      cardTransform: `translate(${dx}px, ${dy}px) rotate(${dx / 26}deg)`,
+      cardTransition: s.dragging ? 'none' : 'transform .34s cubic-bezier(.2,0,0,1)',
+      opKnow: String(opKnow), opDont: String(opDont), opSave: String(opSave), opBury: String(opBury),
+      tintColor, tintOpacity: String(maxOp * 0.14),
+      onDown, onMove, onUp,
+      swipeKnow: () => this.resolve('know'), swipeDont: () => this.resolve('dont'),
+      swipeSave: () => this.resolve('save'), swipeBury: () => this.resolve('bury'),
+      undoCard: () => { if (s.deck > 0) this.setState({ deck: s.deck - 1, flipped: false, dx: 0, dy: 0 }); },
+      deckCounter: `${Math.min(s.deck + 1, CARDS.length)} / ${CARDS.length} · чанки темы`,
+      deckValue: s.deck / CARDS.length,
+      deckTally: [
+        { label: 'Знаю', n: tally('know'), bg: V('primary-container'), fg: V('on-primary-container') },
+        { label: 'Не знаю', n: tally('dont'), bg: V('error-container'), fg: V('on-error-container') },
+        { label: 'В коллекции', n: tally('save'), bg: V('tertiary-container'), fg: V('on-tertiary-container') },
+      ],
+      icClose: ic('Close'), icCheck: ic('Check'), icBookmark: ic('Bookmark'), icSnooze: ic('Snooze'),
+      icUndo: ic('Undo'), icPlay: ic('PlayArrowFilled'), icAdd: ic('AddCircle'), icChevron: ic('ChevronForward'),
+      icAlarm: ic('Alarm'), icDelete: ic('Delete'),
+    };
+  }
+}
+</script>
+</body>
+</html>

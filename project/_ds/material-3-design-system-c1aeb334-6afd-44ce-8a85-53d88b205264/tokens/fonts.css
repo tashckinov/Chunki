@@ -1,0 +1,10 @@
+/* Type families used by the kit.
+   The Figma "Font theme" collection sets Brand = Plain = "Roboto"; the kit's own
+   annotation/spec layers use Google Sans Text + Roboto Mono, which are not publicly
+   distributable, so UI type is Roboto throughout (see readme.md → Typography). */
+@import url('https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&family=Roboto+Mono:wght@400;700&display=swap');
+/* Flow Circular — the kit's "Wireframe" mode font theme (data-mode="wireframe"). */
+@import url('https://fonts.googleapis.com/css2?family=Flow+Circular&display=swap');
+/* Material Symbols Outlined — the kit's Icons page is a subset of this family.
+   Local SVG glyphs live in assets/icons; this face covers everything outside the subset. */
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0..1,0&display=block');

@@ -1,0 +1,157 @@
+/* ── md.sys semantic layer ──────────────────────────────────────────────
+   Public API of this design system. Every value aliases a token extracted
+   from the Material 3 Design Kit .fig (tokens/fig-tokens.css); nothing here
+   is invented. FLOAT variables in fig-tokens.css are unitless — this file is
+   where they become px. Colour roles follow the light scheme by default;
+   add class="dark" (or data-theme="dark") on any ancestor to flip, and
+   data-mode="blue-lt" … "purple-dt" for the kit's 26 preset schemes. */
+
+:root {
+  /* Colour roles */
+  --md-sys-color-primary: var(--schemes-primary);
+  --md-sys-color-on-primary: var(--schemes-on-primary);
+  --md-sys-color-primary-container: var(--schemes-primary-container);
+  --md-sys-color-on-primary-container: var(--schemes-on-primary-container);
+  --md-sys-color-primary-fixed: var(--schemes-primary-fixed);
+  --md-sys-color-primary-fixed-dim: var(--schemes-primary-fixed-dim);
+  --md-sys-color-on-primary-fixed: var(--schemes-on-primary-fixed);
+  --md-sys-color-on-primary-fixed-variant: var(--schemes-on-primary-fixed-variant);
+  --md-sys-color-secondary: var(--schemes-secondary);
+  --md-sys-color-on-secondary: var(--schemes-on-secondary);
+  --md-sys-color-secondary-container: var(--schemes-secondary-container);
+  --md-sys-color-on-secondary-container: var(--schemes-on-secondary-container);
+  --md-sys-color-secondary-fixed: var(--schemes-secondary-fixed);
+  --md-sys-color-secondary-fixed-dim: var(--schemes-secondary-fixed-dim);
+  --md-sys-color-on-secondary-fixed: var(--schemes-on-secondary-fixed);
+  --md-sys-color-on-secondary-fixed-variant: var(--schemes-on-secondary-fixed-variant);
+  --md-sys-color-tertiary: var(--schemes-tertiary);
+  --md-sys-color-on-tertiary: var(--schemes-on-tertiary);
+  --md-sys-color-tertiary-container: var(--schemes-tertiary-container);
+  --md-sys-color-on-tertiary-container: var(--schemes-on-tertiary-container);
+  --md-sys-color-tertiary-fixed: var(--schemes-tertiary-fixed);
+  --md-sys-color-tertiary-fixed-dim: var(--schemes-tertiary-fixed-dim);
+  --md-sys-color-on-tertiary-fixed: var(--schemes-on-tertiary-fixed);
+  --md-sys-color-on-tertiary-fixed-variant: var(--schemes-on-tertiary-fixed-variant);
+  --md-sys-color-error: var(--schemes-error);
+  --md-sys-color-on-error: var(--schemes-on-error);
+  --md-sys-color-error-container: var(--schemes-error-container);
+  --md-sys-color-on-error-container: var(--schemes-on-error-container);
+  --md-sys-color-background: var(--schemes-background);
+  --md-sys-color-on-background: var(--schemes-on-background);
+  --md-sys-color-surface: var(--schemes-surface);
+  --md-sys-color-on-surface: var(--schemes-on-surface);
+  --md-sys-color-surface-variant: var(--schemes-surface-variant);
+  --md-sys-color-on-surface-variant: var(--schemes-on-surface-variant);
+  --md-sys-color-surface-dim: var(--schemes-surface-dim);
+  --md-sys-color-surface-bright: var(--schemes-surface-bright);
+  --md-sys-color-surface-container-lowest: var(--schemes-surface-container-lowest);
+  --md-sys-color-surface-container-low: var(--schemes-surface-container-low);
+  --md-sys-color-surface-container: var(--schemes-surface-container);
+  --md-sys-color-surface-container-high: var(--schemes-surface-container-high);
+  --md-sys-color-surface-container-highest: var(--schemes-surface-container-highest);
+  --md-sys-color-surface-tint: var(--schemes-surface-tint);
+  --md-sys-color-inverse-surface: var(--schemes-inverse-surface);
+  --md-sys-color-inverse-on-surface: var(--schemes-inverse-on-surface);
+  --md-sys-color-inverse-primary: var(--schemes-inverse-primary);
+  --md-sys-color-outline: var(--schemes-outline);
+  --md-sys-color-outline-variant: var(--schemes-outline-variant);
+  --md-sys-color-shadow: var(--schemes-shadow);
+  --md-sys-color-scrim: var(--schemes-scrim);
+
+  /* Shape — Figma "Shape" collection, unitless dp → px */
+  --md-sys-shape-corner-none: calc(var(--corner-none) * 1px);
+  --md-sys-shape-corner-extra-small: calc(var(--corner-extra-small) * 1px);
+  --md-sys-shape-corner-small: calc(var(--corner-small) * 1px);
+  --md-sys-shape-corner-medium: calc(var(--corner-medium) * 1px);
+  --md-sys-shape-corner-large: calc(var(--corner-large) * 1px);
+  --md-sys-shape-corner-large-increased: calc(var(--corner-large-increased) * 1px);
+  --md-sys-shape-corner-extra-large: calc(var(--corner-extra-large) * 1px);
+  --md-sys-shape-corner-extra-large-increased: calc(var(--corner-extra-large-increased) * 1px);
+  --md-sys-shape-corner-extra-extra-large: calc(var(--corner-extra-extra-large) * 1px);
+  --md-sys-shape-corner-full: calc(var(--corner-full) * 1px);
+
+  /* Type families — Figma "Font theme" collection */
+  --md-sys-typescale-brand-font: var(--static-font-brand), system-ui, sans-serif;
+  --md-sys-typescale-plain-font: var(--static-font-plain), system-ui, sans-serif;
+  --md-ref-typeface-mono: 'Roboto Mono', ui-monospace, monospace;
+  --md-sys-typescale-weight-regular: 400;
+  --md-sys-typescale-weight-medium: 500;
+  --md-sys-typescale-weight-bold: 600; /* the collection names this "SemiBold" */
+
+  /* Type scale — Figma "Typescale" collection (size / line-height / tracking in dp) */
+  --md-sys-typescale-display-large: var(--md-sys-typescale-weight-regular) calc(var(--static-display-large-size) * 1px)/calc(var(--static-display-large-line-height) * 1px) var(--md-sys-typescale-brand-font);
+  --md-sys-typescale-display-large-tracking: calc(var(--static-display-large-tracking) * 1px);
+  --md-sys-typescale-display-medium: var(--md-sys-typescale-weight-regular) calc(var(--static-display-medium-size) * 1px)/calc(var(--static-display-medium-line-height) * 1px) var(--md-sys-typescale-brand-font);
+  --md-sys-typescale-display-medium-tracking: calc(var(--static-display-medium-tracking) * 1px);
+  --md-sys-typescale-display-small: var(--md-sys-typescale-weight-regular) calc(var(--static-display-small-size) * 1px)/calc(var(--static-display-small-line-height) * 1px) var(--md-sys-typescale-brand-font);
+  --md-sys-typescale-display-small-tracking: calc(var(--static-display-small-tracking) * 1px);
+  --md-sys-typescale-headline-large: var(--md-sys-typescale-weight-regular) calc(var(--static-headline-large-size) * 1px)/calc(var(--static-headline-large-line-height) * 1px) var(--md-sys-typescale-brand-font);
+  --md-sys-typescale-headline-large-tracking: calc(var(--static-headline-large-tracking) * 1px);
+  --md-sys-typescale-headline-medium: var(--md-sys-typescale-weight-regular) calc(var(--static-headline-medium-size) * 1px)/calc(var(--static-headline-medium-line-height) * 1px) var(--md-sys-typescale-brand-font);
+  --md-sys-typescale-headline-medium-tracking: calc(var(--static-headline-medium-tracking) * 1px);
+  --md-sys-typescale-headline-small: var(--md-sys-typescale-weight-regular) calc(var(--static-headline-small-size) * 1px)/calc(var(--static-headline-small-line-height) * 1px) var(--md-sys-typescale-brand-font);
+  --md-sys-typescale-headline-small-tracking: calc(var(--static-headline-small-tracking) * 1px);
+  --md-sys-typescale-title-large: var(--md-sys-typescale-weight-regular) calc(var(--static-title-large-size) * 1px)/calc(var(--static-title-large-line-height) * 1px) var(--md-sys-typescale-brand-font);
+  --md-sys-typescale-title-large-tracking: calc(var(--static-title-large-tracking) * 1px);
+  --md-sys-typescale-title-medium: var(--md-sys-typescale-weight-medium) calc(var(--static-title-medium-size) * 1px)/calc(var(--static-title-medium-line-height) * 1px) var(--md-sys-typescale-plain-font);
+  --md-sys-typescale-title-medium-tracking: calc(var(--static-title-medium-tracking) * 1px);
+  --md-sys-typescale-title-small: var(--md-sys-typescale-weight-medium) calc(var(--static-title-small-size) * 1px)/calc(var(--static-title-small-line-height) * 1px) var(--md-sys-typescale-plain-font);
+  --md-sys-typescale-title-small-tracking: calc(var(--static-title-small-tracking) * 1px);
+  --md-sys-typescale-body-large: var(--md-sys-typescale-weight-regular) calc(var(--static-body-large-size) * 1px)/calc(var(--static-body-large-line-height) * 1px) var(--md-sys-typescale-plain-font);
+  --md-sys-typescale-body-large-tracking: calc(var(--static-body-large-tracking) * 1px);
+  --md-sys-typescale-body-medium: var(--md-sys-typescale-weight-regular) calc(var(--static-body-medium-size) * 1px)/calc(var(--static-body-medium-line-height) * 1px) var(--md-sys-typescale-plain-font);
+  --md-sys-typescale-body-medium-tracking: calc(var(--static-body-medium-tracking) * 1px);
+  --md-sys-typescale-body-small: var(--md-sys-typescale-weight-regular) calc(var(--static-body-small-size) * 1px)/calc(var(--static-body-small-line-height) * 1px) var(--md-sys-typescale-plain-font);
+  --md-sys-typescale-body-small-tracking: calc(var(--static-body-small-tracking) * 1px);
+  --md-sys-typescale-label-large: var(--md-sys-typescale-weight-medium) calc(var(--static-label-large-size) * 1px)/calc(var(--static-label-large-line-height) * 1px) var(--md-sys-typescale-plain-font);
+  --md-sys-typescale-label-large-tracking: calc(var(--static-label-large-tracking) * 1px);
+  --md-sys-typescale-label-medium: var(--md-sys-typescale-weight-medium) calc(var(--static-label-medium-size) * 1px)/calc(var(--static-label-medium-line-height) * 1px) var(--md-sys-typescale-plain-font);
+  --md-sys-typescale-label-medium-tracking: calc(var(--static-label-medium-tracking) * 1px);
+  --md-sys-typescale-label-small: var(--md-sys-typescale-weight-medium) calc(var(--static-label-small-size) * 1px)/calc(var(--static-label-small-line-height) * 1px) var(--md-sys-typescale-plain-font);
+  --md-sys-typescale-label-small-tracking: calc(var(--static-label-small-tracking) * 1px);
+
+  /* Elevation — tonal first; these shadows are the kit's rgba(0,0,0,.3)/.15 pair,
+     used only where a surface needs separation from busy content. */
+  --md-sys-elevation-level0: none;
+  --md-sys-elevation-level1: 0 1px 2px 0 rgba(0,0,0,0.3), 0 1px 3px 1px rgba(0,0,0,0.15);
+  --md-sys-elevation-level2: 0 1px 2px 0 rgba(0,0,0,0.3), 0 2px 6px 2px rgba(0,0,0,0.15);
+  --md-sys-elevation-level3: 0 4px 8px 3px rgba(0,0,0,0.15), 0 1px 3px 0 rgba(0,0,0,0.3);
+  --md-sys-elevation-level4: 0 6px 10px 4px rgba(0,0,0,0.15), 0 2px 3px 0 rgba(0,0,0,0.3);
+  --md-sys-elevation-level5: 0 8px 12px 6px rgba(0,0,0,0.15), 0 4px 4px 0 rgba(0,0,0,0.3);
+
+  /* State layer opacities — the kit ships 08 / 10 / 16 ramps per colour role */
+  --md-sys-state-hover-opacity: 0.08; /* @kind other */
+  --md-sys-state-focus-opacity: 0.10; /* @kind other */
+  --md-sys-state-pressed-opacity: 0.10; /* @kind other */
+  --md-sys-state-dragged-opacity: 0.16; /* @kind other */
+  --md-sys-state-disabled-container-opacity: 0.12; /* @kind other */
+  --md-sys-state-disabled-content-opacity: 0.38; /* @kind other */
+
+  /* Motion */
+  --md-sys-motion-easing-emphasized: cubic-bezier(0.2, 0, 0, 1); /* @kind other */
+  --md-sys-motion-easing-emphasized-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1); /* @kind other */
+  --md-sys-motion-easing-emphasized-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15); /* @kind other */
+  --md-sys-motion-easing-standard: cubic-bezier(0.2, 0, 0, 1); /* @kind other */
+  --md-sys-motion-easing-standard-decelerate: cubic-bezier(0, 0, 0, 1); /* @kind other */
+  --md-sys-motion-easing-standard-accelerate: cubic-bezier(0.3, 0, 1, 1); /* @kind other */
+  --md-sys-motion-duration-short: 200ms; /* @kind other */
+  --md-sys-motion-duration-medium: 300ms; /* @kind other */
+  --md-sys-motion-duration-long: 400ms; /* @kind other */
+  --md-sys-motion-duration-emphasized: 500ms; /* @kind other */
+
+  /* Spacing — 4dp base, 8dp rhythm */
+  --md-sys-spacing-1: 4px;
+  --md-sys-spacing-2: 8px;
+  --md-sys-spacing-3: 12px;
+  --md-sys-spacing-4: 16px;
+  --md-sys-spacing-6: 24px;
+  --md-sys-spacing-8: 32px;
+  --md-sys-spacing-12: 48px;
+  --md-sys-touch-target-min: 48px; /* @kind spacing */
+
+  /* Window size classes */
+  --md-sys-breakpoint-compact: 600px; /* @kind other */
+  --md-sys-breakpoint-medium: 840px; /* @kind other */
+  --md-sys-breakpoint-expanded: 1200px; /* @kind other */
+  --md-sys-breakpoint-large: 1600px; /* @kind other */
+}
