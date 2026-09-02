@@ -15,6 +15,7 @@ import { TopicScreen } from './screens/TopicScreen';
 import { ExercisesScreen } from './screens/ExercisesScreen';
 import { TopicResultScreen } from './screens/TopicResultScreen';
 import { ExtrasScreen } from './screens/ExtrasScreen';
+import { CardsScreen } from './screens/CardsScreen';
 import { DeckScreen } from './screens/DeckScreen';
 import { DeckDoneScreen } from './screens/DeckDoneScreen';
 
@@ -26,12 +27,14 @@ const SIDEBAR_ITEMS: { label: string; icon: IconName }[] = [
 ];
 
 // Mobile tab bar carries the brand mark on the flashcards tab instead of a
-// separate logo header (there's no room for both on a small screen).
+// separate logo header (there's no room for both on a small screen), and
+// gets its own "Профиль" tab instead of a row at the top of Home.
 const MOBILE_NAV_ITEMS: NavItem[] = [
   { label: 'Главная', icon: 'Today' },
   { label: 'Программа', icon: 'CheckBox' },
   { label: 'Chunki', logo: true },
   { label: 'Доп. уроки', icon: 'Add' },
+  { label: 'Профиль', account: true },
 ];
 
 function CheckingScreenForContext() {
@@ -67,6 +70,8 @@ function CurrentScreen() {
       return <TopicResultScreen />;
     case 'extras':
       return <ExtrasScreen />;
+    case 'cardslib':
+      return <CardsScreen />;
     case 'deck':
       return <DeckScreen />;
     case 'deckdone':
@@ -80,7 +85,7 @@ function CurrentScreen() {
 function SidebarNav({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   const goHome = useAppStore((s) => s.goHome);
   return (
-    <nav className="hidden min-[1200px]:flex flex-col w-[248px] flex-none border-r border-border bg-surface px-3 py-8 gap-1">
+    <nav className="hidden min-[1200px]:flex flex-col w-[248px] flex-none overflow-y-auto border-r border-border bg-surface px-3 py-8 gap-1">
       <button type="button" onClick={goHome} className="pressable flex items-center gap-2 px-3 pb-6 text-left">
         <Logo size={26} />
         <span className="text-[17px] font-semibold">Chunki</span>
@@ -103,7 +108,7 @@ function SidebarNav({ value, onChange }: { value: number; onChange: (v: number) 
       })}
       <div className="flex-1" />
       <div className="border-t border-border pt-3">
-        <AccountRow variant="sidebar" />
+        <AccountRow />
       </div>
     </nav>
   );
@@ -113,6 +118,7 @@ function navTabForScreen(screen: string): number {
   switch (screen) {
     case 'program':
       return 1;
+    case 'cardslib':
     case 'deck':
     case 'deckdone':
       return 2;
@@ -128,11 +134,11 @@ export default function App() {
   const setNavTab = useAppStore((s) => s.setNavTab);
 
   return (
-    <div className="min-h-dvh w-full flex justify-center bg-bg">
+    <div className="h-dvh w-full flex justify-center bg-bg overflow-hidden">
       <SidebarNav value={navTab} onChange={setNavTab} />
-      <div className="w-full min-[768px]:max-w-[720px] min-[1200px]:max-w-[860px] min-h-dvh flex flex-col">
+      <div className="w-full min-[768px]:max-w-[720px] min-[1200px]:max-w-[860px] h-dvh overflow-hidden flex flex-col">
         <CurrentScreen />
-        <div className="min-[1200px]:hidden">
+        <div className="flex-none min-[1200px]:hidden">
           <BottomNavigation items={MOBILE_NAV_ITEMS} value={navTab} onChange={setNavTab} />
         </div>
       </div>

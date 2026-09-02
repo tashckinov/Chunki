@@ -38,6 +38,17 @@ export interface ChunkCard {
   kind: string;
   ex: string;
   topic: string;
+  level: CEFRLevel;
+  /** How this chunk differs from a similar/confusable phrase, and when to reach for it instead. */
+  contrast: { phrase: string; note: string };
+}
+
+export interface ChunkDeckDef {
+  id: string;
+  title: string;
+  level: CEFRLevel;
+  category: string;
+  cardIds: string[];
 }
 
 export interface ExtraTopicDef {

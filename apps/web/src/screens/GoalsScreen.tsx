@@ -10,7 +10,7 @@ export function GoalsScreen() {
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      <NavigationBar onBack={back} />
+      <NavigationBar onBack={back} hideBackOnDesktop />
       <div className="scroll-clean flex-1 min-h-0 px-5 pb-8 flex flex-col gap-8">
         <div>
           <div className="text-page-title">С чего начнём</div>

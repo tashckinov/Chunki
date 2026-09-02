@@ -1,10 +1,11 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
 @import 'tailwindcss';
 @import './styles/tokens.css';
 @import './styles/components.css';
 
 @theme {
   --font-sans:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 
   --color-bg: var(--tok-bg);
   --color-surface: var(--tok-surface);
@@ -19,6 +20,11 @@
   --color-accent-strong: var(--tok-accent-strong);
   --color-accent-subtle: var(--tok-accent-subtle);
   --color-on-accent: var(--tok-on-accent);
+
+  --color-accent-2: var(--tok-accent-2);
+  --color-accent-2-strong: var(--tok-accent-2-strong);
+  --color-accent-2-subtle: var(--tok-accent-2-subtle);
+  --color-on-accent-2: var(--tok-on-accent-2);
 
   --color-positive: var(--tok-positive);
   --color-positive-subtle: var(--tok-positive-subtle);
@@ -68,12 +74,27 @@ input {
   font-family: inherit;
 }
 
+/* Thin, on-brand scrollbar. scrollbar-gutter reserves the track space up
+   front so a region flipping between scrollable/not never shifts its
+   content width (the bug that made the desktop Program tab "jump"). */
 .scroll-clean {
   overflow-y: auto;
-  scrollbar-width: none;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
 }
 .scroll-clean::-webkit-scrollbar {
-  display: none;
+  width: 6px;
+}
+.scroll-clean::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-clean::-webkit-scrollbar-thumb {
+  background-color: var(--color-border-strong);
+  border-radius: var(--radius-full);
+}
+.scroll-clean::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-text-tertiary);
 }
 .xscroll-clean {
   overflow-x: auto;

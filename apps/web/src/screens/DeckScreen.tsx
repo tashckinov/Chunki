@@ -27,7 +27,7 @@ export function DeckScreen() {
   return (
     <div className="flex-1 min-h-0 flex flex-col bg-bg">
       <div className="flex items-center gap-2 px-3 pt-2">
-        <IconButton icon="Close" label="Закрыть" onClick={s.goHome} />
+        <IconButton icon="Close" label="Закрыть" onClick={s.back} />
         <div className="flex-1 flex flex-col gap-1.5">
           <div className="text-meta">{v.deckCounter}</div>
           <LinearProgress value={v.deckValue} />
@@ -35,7 +35,7 @@ export function DeckScreen() {
         <IconButton icon="Undo" label="Отменить" onClick={s.undoCard} />
       </div>
 
-      <div className="flex-1 min-h-0 relative mx-4 mt-3">
+      <div className="flex-1 min-h-0 relative mx-4 mt-3 overflow-hidden">
         {v.behind.map((b, i) => (
           <div key={i} className="absolute inset-0 rounded-[var(--radius-lg)] bg-surface-subtle" style={{ transform: b.transform, opacity: b.opacity }} />
         ))}
@@ -49,7 +49,7 @@ export function DeckScreen() {
             className="absolute top-4 left-4 px-3 py-1.5 rounded-full text-[13px] font-medium bg-negative-subtle text-negative pointer-events-none"
             style={{ opacity: v.opDont }}
           >
-            Не знаю
+            Учить
           </div>
           <div
             className="absolute top-4 right-4 px-3 py-1.5 rounded-full text-[13px] font-medium bg-accent-subtle text-accent pointer-events-none"
@@ -58,44 +58,40 @@ export function DeckScreen() {
             Знаю
           </div>
           <div
-            className="absolute left-1/2 top-4 -translate-x-1/2 px-3 py-1.5 rounded-full text-[13px] font-medium bg-info-subtle text-info pointer-events-none"
-            style={{ opacity: v.opSave }}
-          >
-            В коллекцию
-          </div>
-          <div
             className="absolute left-1/2 top-4 -translate-x-1/2 px-3 py-1.5 rounded-full text-[13px] font-medium bg-surface-subtle text-text-secondary pointer-events-none"
             style={{ opacity: v.opBury }}
           >
             Отложить
           </div>
-          <div onClick={s.flipCard} className="flex-1 min-h-0 flex flex-col justify-center gap-3.5 px-8 py-8 text-center">
-            <div className="text-meta">{v.cur.kind}</div>
-            <div className="text-[32px] leading-[40px] font-medium">{v.cur.en}</div>
-            <div className="text-[14px] text-text-secondary">{v.cur.ipa}</div>
-            {s.flipped ? (
-              <div className="flex flex-col gap-3 anim-rise">
+          <div onClick={s.flipCard} className="scroll-clean flex-1 min-h-0 flex flex-col justify-center gap-3.5 px-8 py-8 text-center">
+            <div className="flex flex-col gap-3.5 flex-none">
+              <div className="text-meta">{v.cur.kind}</div>
+              <div className="text-[32px] leading-[40px] font-medium">{v.cur.en}</div>
+              <div className="text-[14px] text-text-secondary">{v.cur.ipa}</div>
+              {!s.flipped && <div className="text-body-secondary anim-pulse">Нажмите, чтобы увидеть перевод</div>}
+            </div>
+            {s.flipped && (
+              <div className="flex flex-col gap-3 anim-rise flex-none">
                 <div className="h-px bg-border" />
-                <div className="text-[21px] leading-7 text-accent">{v.cur.ru}</div>
+                {s.interfaceMode === 'ru-en' && <div className="text-[21px] leading-7 text-accent">{v.cur.ru}</div>}
                 <div className="text-[15px] leading-6 text-text-secondary italic">{v.cur.ex}</div>
+                <div className="rounded-[var(--radius-md)] bg-accent-2-subtle px-4 py-3 text-left">
+                  <div className="text-[12.5px] font-semibold text-accent-2-strong mb-1">Не путать с «{v.cur.contrast.phrase}»</div>
+                  <div className="text-[13.5px] leading-[19px] text-text-secondary">{v.cur.contrast.note}</div>
+                </div>
                 <div className="text-meta">Из темы: {v.cur.topic}</div>
               </div>
-            ) : (
-              <div className="text-body-secondary anim-pulse">Нажмите, чтобы увидеть перевод</div>
             )}
           </div>
         </div>
       </div>
 
-      <div className="flex-none px-6 pt-4 pb-7 flex items-center justify-center gap-4">
+      <div className="flex-none px-6 pt-4 pb-7 flex items-center justify-center gap-6">
         <button onClick={() => s.swipe('dont')} className="pressable w-14 h-14 rounded-full flex items-center justify-center border border-border text-negative">
           <Icon name="Close" size={22} />
         </button>
         <button onClick={() => s.swipe('bury')} className="pressable w-11 h-11 rounded-full flex items-center justify-center border border-border text-text-secondary">
           <Icon name="Snooze" size={19} />
-        </button>
-        <button onClick={() => s.swipe('save')} className="pressable w-11 h-11 rounded-full flex items-center justify-center bg-info-subtle text-info">
-          <Icon name="Bookmark" size={19} />
         </button>
         <button onClick={() => s.swipe('know')} className="pressable w-14 h-14 rounded-full flex items-center justify-center bg-accent text-on-accent">
           <Icon name="Check" size={22} />

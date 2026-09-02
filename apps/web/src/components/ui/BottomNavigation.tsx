@@ -1,7 +1,8 @@
 import { Icon, type IconName } from './Icon';
 import { Logo } from '../brand/Logo';
+import { AccountNavButton } from './AccountRow';
 
-export type NavItem = { label: string; icon: IconName } | { label: string; logo: true };
+export type NavItem = { label: string; icon: IconName } | { label: string; logo: true } | { label: string; account: true };
 
 export function BottomNavigation({
   items,
@@ -16,6 +17,7 @@ export function BottomNavigation({
     <div className="flex-none flex items-stretch border-t border-border bg-surface pb-[env(safe-area-inset-bottom)]">
       {items.map((item, i) => {
         const active = i === value;
+        if ('account' in item) return <AccountNavButton key={item.label} active={active} />;
         return (
           <button
             key={item.label}

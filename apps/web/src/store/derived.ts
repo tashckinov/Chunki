@@ -3,6 +3,7 @@ import type { CEFRLevel } from '@app/shared';
 import { useAppStore } from './appStore';
 import { plural } from '../lib/plural';
 import { buildSessions, DAY_LABELS, formatDayMonth, startOfDay, weekdayMon0 } from '../lib/schedule';
+import { activeCards } from '../lib/deck';
 
 const LEVELS_FROM: CEFRLevel[] = ['A1', 'A2', 'A2+', 'B1', 'B1+', 'B2'];
 const LEVELS_TO: CEFRLevel[] = ['B1', 'B1+', 'B2', 'C1'];
@@ -149,8 +150,7 @@ export function deckTallyView(verdicts: Record<string, string>) {
   const tally = (dir: string) => String(Object.values(verdicts).filter((v) => v === dir).length);
   return [
     { label: 'Знаю', n: tally('know'), bg: 'var(--color-accent-subtle)', fg: 'var(--color-accent)' },
-    { label: 'Не знаю', n: tally('dont'), bg: 'var(--color-negative-subtle)', fg: 'var(--color-negative)' },
-    { label: 'В коллекции', n: tally('save'), bg: 'var(--color-info-subtle)', fg: 'var(--color-info)' },
+    { label: 'Учить', n: tally('dont'), bg: 'var(--color-negative-subtle)', fg: 'var(--color-negative)' },
   ];
 }
 
@@ -164,10 +164,10 @@ function clamp01(v: number) {
 
 export function useDeckView() {
   const s = useAppStore();
+  const deck = activeCards(s.activeDeckCardIds);
   const flyOffsets: Record<string, [number, number]> = {
     know: [520, -60],
     dont: [-520, -60],
-    save: [0, -760],
     bury: [0, 760],
   };
   let dx = s.dx;
@@ -177,18 +177,16 @@ export function useDeckView() {
   const opKnow = clamp01(dx / 36);
   const opDont = clamp01(-dx / 36);
   const vert = Math.abs(dy) > Math.abs(dx) ? 1 : 0;
-  const opSave = clamp01(-dy / 36) * vert;
   const opBury = clamp01(dy / 36) * vert;
-  const maxOp = Math.max(opKnow, opDont, opSave, opBury);
+  const maxOp = Math.max(opKnow, opDont, opBury);
 
   let tintColor = 'var(--color-accent)';
-  if (opDont >= Math.max(opKnow, opSave, opBury)) tintColor = 'var(--color-negative)';
-  if (opSave > Math.max(opKnow, opDont, opBury)) tintColor = 'var(--color-info)';
-  if (opBury > Math.max(opKnow, opDont, opSave)) tintColor = 'var(--color-text-secondary)';
+  if (opDont >= Math.max(opKnow, opBury)) tintColor = 'var(--color-negative)';
+  if (opBury > Math.max(opKnow, opDont)) tintColor = 'var(--color-text-secondary)';
 
-  const cur = CARDS[s.deckIndex] || CARDS[CARDS.length - 1];
+  const cur = deck[s.deckIndex] || deck[deck.length - 1];
   const behind = [1, 2]
-    .map((i) => CARDS[s.deckIndex + i])
+    .map((i) => deck[s.deckIndex + i])
     .filter(Boolean)
     .map((_, i) => ({
       transform: `scale(${1 - (i + 1) * 0.04}) translateY(${(i + 1) * 12}px)`,
@@ -203,11 +201,10 @@ export function useDeckView() {
     cardTransition: s.dragging ? 'none' : 'transform .34s cubic-bezier(.2,0,0,1)',
     opKnow,
     opDont,
-    opSave,
     opBury,
     tintColor,
     tintOpacity: maxOp * 0.14,
-    deckCounter: `${Math.min(s.deckIndex + 1, CARDS.length)} / ${CARDS.length} · чанки темы`,
-    deckValue: s.deckIndex / CARDS.length,
+    deckCounter: `${Math.min(s.deckIndex + 1, deck.length)} / ${deck.length} · чанки темы`,
+    deckValue: s.deckIndex / deck.length,
   };
 }

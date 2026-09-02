@@ -17,6 +17,7 @@ import {
   ListChecks,
   Sparkles,
   Plus,
+  User,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -39,6 +40,7 @@ const ICONS: Record<string, LucideIcon> = {
   CheckBox: ListChecks,
   Stars: Sparkles,
   Add: Plus,
+  Account: User,
 };
 
 export type IconName = keyof typeof ICONS;

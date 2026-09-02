@@ -1,8 +1,9 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { CARDS, EX_BLOCKS, EXTRA_TOPIC_DEFS, PROGRAM_TOPICS } from '@app/shared';
+import { EX_BLOCKS, EXTRA_TOPIC_DEFS, PROGRAM_TOPICS } from '@app/shared';
 import type { CEFRLevel, ExercisesGradeResult, PlacementGradeResult } from '@app/shared';
 import { gradeExercises, gradePlacementTest } from '../lib/api';
+import { activeCards } from '../lib/deck';
 
 export type Screen =
   | 'goals'
@@ -17,10 +18,11 @@ export type Screen =
   | 'exercises'
   | 'topicresult'
   | 'extras'
+  | 'cardslib'
   | 'deck'
   | 'deckdone';
 
-export type DeckVerdict = 'know' | 'dont' | 'save' | 'bury';
+export type DeckVerdict = 'know' | 'dont' | 'bury';
 
 const BACK_MAP: Partial<Record<Screen, Screen>> = {
   goals: 'home',
@@ -33,6 +35,8 @@ const BACK_MAP: Partial<Record<Screen, Screen>> = {
   exercises: 'topic',
   extras: 'home',
   topicresult: 'exercises',
+  deck: 'cardslib',
+  deckdone: 'cardslib',
 };
 
 export interface UserProfile {
@@ -43,6 +47,7 @@ export interface UserProfile {
 interface AppState {
   screen: Screen;
   user: UserProfile | null;
+  interfaceMode: 'ru-en' | 'en-en';
   hasProgram: boolean;
   plan: 'monthly' | 'yearly';
   subscribed: boolean;
@@ -83,6 +88,8 @@ interface AppState {
   confirmRemoveKey: string | null;
 
   deckIndex: number;
+  activeDeckCardIds: string[] | null;
+  masteredCardIds: string[];
   flipped: boolean;
   dx: number;
   dy: number;
@@ -94,6 +101,7 @@ interface AppState {
   back: () => void;
   signIn: (profile: UserProfile) => void;
   signOut: () => void;
+  setInterfaceMode: (mode: 'ru-en' | 'en-en') => void;
 
   pickFrom: (level: CEFRLevel) => void;
   pickTo: (level: CEFRLevel) => void;
@@ -125,7 +133,8 @@ interface AppState {
   goHome: () => void;
   goProgram: () => void;
   goExtras: () => void;
-  goDeck: () => void;
+  goCardsLib: () => void;
+  goDeck: (cardIds?: string[]) => void;
   openCurrentTopic: () => void;
   setNavTab: (v: number) => void;
 
@@ -155,6 +164,7 @@ export const useAppStore = create<AppState>()(
     (set, get) => ({
       screen: 'home',
       user: null,
+      interfaceMode: 'ru-en',
       hasProgram: false,
       plan: 'monthly',
       subscribed: false,
@@ -195,6 +205,8 @@ export const useAppStore = create<AppState>()(
       confirmRemoveKey: null,
 
       deckIndex: 0,
+      activeDeckCardIds: null,
+      masteredCardIds: [],
       flipped: false,
       dx: 0,
       dy: 0,
@@ -206,6 +218,7 @@ export const useAppStore = create<AppState>()(
       back: () => set((s) => ({ screen: BACK_MAP[s.screen] ?? 'home' })),
       signIn: (profile) => set({ user: profile }),
       signOut: () => set({ user: null }),
+      setInterfaceMode: (mode) => set({ interfaceMode: mode }),
 
       pickFrom: (level) => set({ from: level }),
       pickTo: (level) => set({ to: level }),
@@ -253,13 +266,15 @@ export const useAppStore = create<AppState>()(
       goHome: () => set({ screen: 'home' }),
       goProgram: () => set({ screen: 'program' }),
       goExtras: () => set({ screen: 'extras' }),
-      goDeck: () => set({ screen: 'deck', deckIndex: 0, flipped: false, dx: 0, dy: 0, verdicts: {} }),
+      goCardsLib: () => set({ screen: 'cardslib' }),
+      goDeck: (cardIds) =>
+        set({ screen: 'deck', activeDeckCardIds: cardIds ?? null, deckIndex: 0, flipped: false, dx: 0, dy: 0, verdicts: {} }),
       openCurrentTopic: () => set({ screen: 'topic' }),
       setNavTab: (v) => {
         const s = get();
-        if (v === 2) return set({ screen: 'deck', deckIndex: 0, flipped: false, dx: 0, dy: 0, verdicts: {} });
+        if (v === 2) return set({ screen: 'cardslib' });
         if ((v === 1 || v === 3) && !s.hasProgram) return set({ screen: 'goals' });
-        set({ screen: (['home', 'program', 'deck', 'extras'] as Screen[])[v] ?? 'home' });
+        set({ screen: (['home', 'program', 'cardslib', 'extras'] as Screen[])[v] ?? 'home' });
       },
 
       goExercises: () => set({ screen: 'exercises', exTab: 0, exChoiceAnswers: {}, exWriteAnswers: {}, exerciseResult: null }),
@@ -334,13 +349,14 @@ export const useAppStore = create<AppState>()(
         dragStart = null;
         const { dx, dy, swipe } = get();
         if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 90) swipe(dx > 0 ? 'know' : 'dont');
-        else if (Math.abs(dy) > 90) swipe(dy < 0 ? 'save' : 'bury');
+        else if (dy > 90) swipe('bury');
         else set({ dx: 0, dy: 0, dragging: false });
       },
       flipCard: () => set((s) => ({ flipped: !s.flipped })),
       swipe: (dir) => {
         const s = get();
-        const cur = CARDS[s.deckIndex];
+        const deck = activeCards(s.activeDeckCardIds);
+        const cur = deck[s.deckIndex];
         if (!cur) return;
         set({ flying: dir, dragging: false });
         setTimeout(() => {
@@ -352,7 +368,8 @@ export const useAppStore = create<AppState>()(
             dy: 0,
             flying: null,
             verdicts: { ...st.verdicts, [cur.id]: dir },
-            screen: next >= CARDS.length ? 'deckdone' : 'deck',
+            masteredCardIds: dir === 'know' && !st.masteredCardIds.includes(cur.id) ? [...st.masteredCardIds, cur.id] : st.masteredCardIds,
+            screen: next >= deck.length ? 'deckdone' : 'deck',
           }));
         }, 230);
       },

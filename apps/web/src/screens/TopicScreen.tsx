@@ -17,7 +17,7 @@ export function TopicScreen() {
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      <NavigationBar title={`Тема ${s.currentTopicIndex + 1} из ${PROGRAM_TOPICS.length}`} onBack={s.back} />
+      <NavigationBar title={`Тема ${s.currentTopicIndex + 1} из ${PROGRAM_TOPICS.length}`} onBack={s.back} hideBackOnDesktop />
       <div className="scroll-clean flex-1 min-h-0 px-5 pb-8 flex flex-col gap-7">
         <div>
           <div className="text-page-title">{topic.title}</div>

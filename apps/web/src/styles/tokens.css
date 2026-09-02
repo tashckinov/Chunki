@@ -17,11 +17,17 @@
   --tok-border-strong: rgba(20, 20, 30, 0.14);
   --tok-scrim: rgba(15, 15, 20, 0.36);
 
-  /* Brand accent */
+  /* Brand accent — violet is primary; the cyan pairing is used sparingly
+     (one or two accents per screen), never as a second co-equal accent. */
   --tok-accent: #6650b8;
   --tok-accent-strong: #55429b;
   --tok-accent-subtle: #f1eefb;
   --tok-on-accent: #ffffff;
+
+  --tok-accent-2: #2196c9;
+  --tok-accent-2-strong: #17789f;
+  --tok-accent-2-subtle: #e8f5fb;
+  --tok-on-accent-2: #ffffff;
 
   /* Semantic status colors — used sparingly (scores, swipe verdicts, callouts) */
   --tok-positive: #2f9161;

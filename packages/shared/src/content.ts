@@ -1,5 +1,6 @@
 import type {
   ChunkCard,
+  ChunkDeckDef,
   ExerciseBlock,
   ExtraTopicDef,
   McqQuestion,
@@ -115,10 +116,95 @@ export const EXTRA_TOPIC_DEFS: ExtraTopicDef[] = [
 ];
 
 export const CARDS: ChunkCard[] = [
-  { id: 'never-been', en: "I've never been to…", ru: 'я никогда не был в…', ipa: '/aɪv ˈnevə biːn tuː/', kind: 'чанк · опыт', ex: "I've never been to Canada, but I'd like to go.", topic: 'Present Perfect' },
-  { id: 'by-the-time', en: 'by the time I arrived', ru: 'к тому моменту, как я приехал', ipa: '/baɪ ðə taɪm aɪ əˈraɪvd/', kind: 'чанк · время', ex: 'By the time I arrived, they had finished dinner.', topic: 'Past Perfect' },
-  { id: 'end-up', en: 'end up doing sth', ru: 'в итоге сделать что-то', ipa: '/end ʌp ˈduːɪŋ/', kind: 'чанк · результат', ex: 'I ended up staying there for a week.', topic: 'Chunks: рассказ о прошлом' },
-  { id: 'put-off', en: 'put sth off', ru: 'откладывать', ipa: '/pʊt ɪt ɒf/', kind: 'фразовый глагол', ex: 'He kept putting it off because he was worried.', topic: 'Chunks: работа и переезд' },
-  { id: 'so-far', en: 'so far', ru: 'пока что, до сих пор', ipa: '/səʊ fɑː/', kind: 'маркер времени', ex: 'So far it has gone well.', topic: 'Present Perfect' },
-  { id: 'hang-of', en: 'get the hang of', ru: 'освоиться', ipa: '/ɡet ðə hæŋ ɒv/', kind: 'чанк · навык', ex: 'It took me a week to get the hang of it.', topic: 'Chunks: работа и переезд' },
+  {
+    id: 'never-been',
+    en: "I've never been to…",
+    ru: 'я никогда не был в…',
+    ipa: '/aɪv ˈnevə biːn tuː/',
+    kind: 'чанк · опыт',
+    ex: "I've never been to Canada, but I'd like to go.",
+    topic: 'Present Perfect',
+    level: 'B1',
+    contrast: {
+      phrase: "I've never been in…",
+      note: '"been to" — для поездки/визита, place как пункт назначения. "been in" звучит неестественно для путешествий — так говорят скорее про нахождение внутри чего-то (in the room, in prison).',
+    },
+  },
+  {
+    id: 'by-the-time',
+    en: 'by the time I arrived',
+    ru: 'к тому моменту, как я приехал',
+    ipa: '/baɪ ðə taɪm aɪ əˈraɪvd/',
+    kind: 'чанк · время',
+    ex: 'By the time I arrived, they had finished dinner.',
+    topic: 'Past Perfect',
+    level: 'B1+',
+    contrast: {
+      phrase: 'when I arrived',
+      note: '"by the time" подчёркивает, что что-то ДРУГОЕ уже произошло к этому моменту — и почти всегда тянет за собой Past Perfect. "when" просто называет момент, без этого оттенка.',
+    },
+  },
+  {
+    id: 'end-up',
+    en: 'end up doing sth',
+    ru: 'в итоге сделать что-то',
+    ipa: '/end ʌp ˈduːɪŋ/',
+    kind: 'чанк · результат',
+    ex: 'I ended up staying there for a week.',
+    topic: 'Chunks: рассказ о прошлом',
+    level: 'A2+',
+    contrast: {
+      phrase: 'finish doing sth',
+      note: '"end up" — незапланированный итог, который получился сам собой. "finish" — просто закончить то, что и планировали сделать.',
+    },
+  },
+  {
+    id: 'put-off',
+    en: 'put sth off',
+    ru: 'откладывать',
+    ipa: '/pʊt ɪt ɒf/',
+    kind: 'фразовый глагол',
+    ex: 'He kept putting it off because he was worried.',
+    topic: 'Chunks: работа и переезд',
+    level: 'B1',
+    contrast: {
+      phrase: 'cancel sth',
+      note: '"put off" — перенести на другое время, дело остаётся в планах. "cancel" — отменить совсем, дела не будет.',
+    },
+  },
+  {
+    id: 'so-far',
+    en: 'so far',
+    ru: 'пока что, до сих пор',
+    ipa: '/səʊ fɑː/',
+    kind: 'маркер времени',
+    ex: 'So far it has gone well.',
+    topic: 'Present Perfect',
+    level: 'A2+',
+    contrast: {
+      phrase: 'up to now',
+      note: 'Значение то же, но "so far" — разговорный, обычный выбор в речи; "up to now" звучит более официально и чаще встречается на письме.',
+    },
+  },
+  {
+    id: 'hang-of',
+    en: 'get the hang of',
+    ru: 'освоиться',
+    ipa: '/ɡet ðə hæŋ ɒv/',
+    kind: 'чанк · навык',
+    ex: 'It took me a week to get the hang of it.',
+    topic: 'Chunks: работа и переезд',
+    level: 'B1',
+    contrast: {
+      phrase: 'get used to sth',
+      note: '"get the hang of" — научиться конкретному навыку/приёму. "get used to" — просто привыкнуть к ситуации, это не про умение.',
+    },
+  },
+];
+
+export const CARD_DECKS: ChunkDeckDef[] = [
+  { id: 'present-perfect', title: 'Present Perfect', level: 'B1', category: 'Грамматика', cardIds: ['never-been', 'so-far'] },
+  { id: 'past-perfect', title: 'Past Perfect', level: 'B1+', category: 'Грамматика', cardIds: ['by-the-time'] },
+  { id: 'work-move', title: 'Работа и переезд', level: 'B1', category: 'Лексика', cardIds: ['put-off', 'hang-of'] },
+  { id: 'past-story', title: 'Рассказ о прошлом', level: 'A2+', category: 'Лексика', cardIds: ['end-up'] },
 ];
