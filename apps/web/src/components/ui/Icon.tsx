@@ -1,35 +1,49 @@
-const LIGATURES = {
-  ArrowBack: 'arrow_back',
-  Check: 'check',
-  MoreHoriz: 'more_horiz',
-  KeyboardArrowUp: 'keyboard_arrow_up',
-  KeyboardArrowDown: 'keyboard_arrow_down',
-  Close: 'close',
-  Bookmark: 'bookmark',
-  Snooze: 'snooze',
-  Undo: 'undo',
-  PlayArrowFilled: 'play_arrow',
-  AddCircle: 'add_circle',
-  ChevronForward: 'chevron_right',
-  Alarm: 'alarm',
-  Delete: 'delete',
-  Today: 'today',
-  CheckBox: 'check_box',
-  Stars: 'stars',
-  Add: 'add',
-} as const;
+import {
+  ArrowLeft,
+  Check,
+  MoreHorizontal,
+  ChevronUp,
+  ChevronDown,
+  X,
+  Bookmark,
+  Clock,
+  Undo2,
+  Play,
+  PlusCircle,
+  ChevronRight,
+  AlarmClock,
+  Trash2,
+  Home,
+  ListChecks,
+  Sparkles,
+  Plus,
+  type LucideIcon,
+} from 'lucide-react';
 
-export type IconName = keyof typeof LIGATURES;
+const ICONS: Record<string, LucideIcon> = {
+  ArrowBack: ArrowLeft,
+  Check,
+  MoreHoriz: MoreHorizontal,
+  KeyboardArrowUp: ChevronUp,
+  KeyboardArrowDown: ChevronDown,
+  Close: X,
+  Bookmark,
+  Snooze: Clock,
+  Undo: Undo2,
+  PlayArrowFilled: Play,
+  AddCircle: PlusCircle,
+  ChevronForward: ChevronRight,
+  Alarm: AlarmClock,
+  Delete: Trash2,
+  Today: Home,
+  CheckBox: ListChecks,
+  Stars: Sparkles,
+  Add: Plus,
+};
 
-export function Icon({ name, size = 24, className = '' }: { name: IconName; size?: number; className?: string }) {
-  const filled = name === 'PlayArrowFilled';
-  return (
-    <span
-      className={`icon ${className}`}
-      style={{ fontSize: size, fontVariationSettings: `'FILL' ${filled ? 1 : 0}` }}
-      aria-hidden="true"
-    >
-      {LIGATURES[name]}
-    </span>
-  );
+export type IconName = keyof typeof ICONS;
+
+export function Icon({ name, size = 22, className = '', strokeWidth = 1.75 }: { name: IconName; size?: number; className?: string; strokeWidth?: number }) {
+  const Cmp = ICONS[name];
+  return <Cmp size={size} strokeWidth={strokeWidth} className={className} aria-hidden="true" />;
 }

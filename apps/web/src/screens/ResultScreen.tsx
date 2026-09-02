@@ -7,9 +7,9 @@ export function ResultScreen() {
   if (!placementResult) {
     return (
       <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-4 p-8 text-center">
-        <div className="text-lg">Не получилось проверить тест</div>
-        <div className="text-sm text-on-surface-variant">{gradingError || 'Попробуйте ещё раз.'}</div>
-        <Button variant="filled" size="s" onClick={startTest}>
+        <div className="text-[19px] font-medium">Не получилось проверить тест</div>
+        <div className="text-body-secondary">{gradingError || 'Попробуйте ещё раз.'}</div>
+        <Button size="sm" onClick={startTest}>
           Пройти тест заново
         </Button>
       </div>
@@ -17,27 +17,27 @@ export function ResultScreen() {
   }
 
   return (
-    <div className="scroll-clean flex-1 min-h-0 px-6 pt-4 pb-8 flex flex-col gap-6 anim-rise">
+    <div className="scroll-clean flex-1 min-h-0 px-5 pt-2 pb-8 flex flex-col gap-8 anim-rise">
       <div>
-        <div className="text-xs font-medium tracking-[0.5px] text-on-surface-variant">РЕЗУЛЬТАТ ТЕСТА</div>
-        <div className="text-[57px] leading-[64px] tracking-[-0.25px] mt-2">{placementResult.overallLevel}</div>
-        <div className="text-base leading-6 tracking-[0.5px] text-on-surface-variant">
+        <div className="text-meta">Результат теста</div>
+        <div className="text-[56px] leading-[60px] font-semibold tracking-tight mt-1">{placementResult.overallLevel}</div>
+        <div className="text-body-secondary mt-1">
           Цель: {to} · {placementResult.mcqScore.correct}/{placementResult.mcqScore.total} по грамматике
         </div>
       </div>
 
-      <div className="flex flex-col gap-3.5">
+      <div className="flex flex-col gap-4">
         {placementResult.skills.map((skill) => {
-          const fg = skill.score >= 0.7 ? 'var(--md-primary)' : skill.score >= 0.5 ? 'var(--md-tertiary)' : 'var(--md-error)';
+          const fg = skill.score >= 0.7 ? 'var(--color-positive)' : skill.score >= 0.5 ? 'var(--color-warning)' : 'var(--color-negative)';
           return (
             <div key={skill.label} className="flex flex-col gap-1.5">
               <div className="flex items-baseline gap-2">
-                <div className="flex-1 text-[15px] leading-5">{skill.label}</div>
+                <div className="flex-1 text-[15px]">{skill.label}</div>
                 <div className="text-[13px] font-medium" style={{ color: fg }}>
                   {skill.tag}
                 </div>
               </div>
-              <div className="h-1.5 rounded-full bg-surface-container-highest overflow-hidden">
+              <div className="h-1 rounded-full bg-surface-subtle overflow-hidden">
                 <div className="h-full rounded-full" style={{ background: fg, width: `${skill.score * 100}%` }} />
               </div>
             </div>
@@ -45,19 +45,25 @@ export function ResultScreen() {
         })}
       </div>
 
-      <div className="p-4 rounded-xl bg-primary-container text-on-primary-container">
-        <div className="text-sm font-medium tracking-[0.1px] mb-2">Уже выше уровня</div>
-        <div className="text-sm leading-[22px] tracking-[0.25px]">{placementResult.aboveLevel}</div>
-      </div>
-      <div className="p-4 rounded-xl bg-error-container text-on-error-container">
-        <div className="text-sm font-medium tracking-[0.1px] mb-2">Тянет уровень вниз</div>
-        <div className="text-sm leading-[22px] tracking-[0.25px]">{placementResult.belowLevel}</div>
+      <div className="flex flex-col gap-4 border-t border-border pt-6">
+        <div className="flex gap-3">
+          <span className="mt-1.5 w-1.5 h-1.5 rounded-full flex-none bg-positive" />
+          <div>
+            <div className="text-[14px] font-medium mb-0.5">Уже выше уровня</div>
+            <div className="text-body-secondary">{placementResult.aboveLevel}</div>
+          </div>
+        </div>
+        <div className="flex gap-3">
+          <span className="mt-1.5 w-1.5 h-1.5 rounded-full flex-none bg-negative" />
+          <div>
+            <div className="text-[14px] font-medium mb-0.5">Тянет уровень вниз</div>
+            <div className="text-body-secondary">{placementResult.belowLevel}</div>
+          </div>
+        </div>
       </div>
 
-      <div className="text-sm leading-5 tracking-[0.25px] text-on-surface-variant">
-        Программа собрана из этих слабых мест: 14 тем до {to}, первые четыре — грамматический фундамент.
-      </div>
-      <Button variant="filled" size="m" onClick={goSchedule} className="w-full h-14">
+      <div className="text-body-secondary">Программа собрана из этих слабых мест: 14 тем до {to}, первые четыре — грамматический фундамент.</div>
+      <Button size="lg" onClick={goSchedule} className="w-full">
         Настроить расписание
       </Button>
     </div>

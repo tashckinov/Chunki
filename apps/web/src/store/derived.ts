@@ -4,20 +4,6 @@ import { useAppStore } from './appStore';
 import { plural } from '../lib/plural';
 import { buildSessions, DAY_LABELS, formatDayMonth, startOfDay, weekdayMon0 } from '../lib/schedule';
 
-export interface ChipStyle {
-  bg: string;
-  fg: string;
-  border: string;
-}
-
-export function chip(active: boolean): ChipStyle {
-  return {
-    bg: active ? 'var(--md-primary-container)' : 'transparent',
-    fg: active ? 'var(--md-on-primary-container)' : 'var(--md-on-surface)',
-    border: active ? 'transparent' : 'var(--md-outline)',
-  };
-}
-
 const LEVELS_FROM: CEFRLevel[] = ['A1', 'A2', 'A2+', 'B1', 'B1+', 'B2'];
 const LEVELS_TO: CEFRLevel[] = ['B1', 'B1+', 'B2', 'C1'];
 const PURPOSES = ['Работа', 'Переезд', 'Учёба', 'IELTS', 'Общение'];
@@ -25,9 +11,9 @@ const PURPOSES = ['Работа', 'Переезд', 'Учёба', 'IELTS', 'Об
 export function useGoalsView() {
   const { from, to, purpose, pickFrom, pickTo, togglePurpose } = useAppStore();
   return {
-    levelsFrom: LEVELS_FROM.map((l) => ({ label: l, ...chip(from === l), pick: () => pickFrom(l) })),
-    levelsTo: LEVELS_TO.map((l) => ({ label: l, ...chip(to === l), pick: () => pickTo(l) })),
-    purposes: PURPOSES.map((p) => ({ label: p, ...chip(purpose.includes(p)), pick: () => togglePurpose(p) })),
+    levelsFrom: LEVELS_FROM.map((l) => ({ label: l, selected: from === l, pick: () => pickFrom(l) })),
+    levelsTo: LEVELS_TO.map((l) => ({ label: l, selected: to === l, pick: () => pickTo(l) })),
+    purposes: PURPOSES.map((p) => ({ label: p, selected: purpose.includes(p), pick: () => togglePurpose(p) })),
   };
 }
 
@@ -39,7 +25,7 @@ export function useTestView() {
   const mqOptions = mq.options.map((label, i) => ({
     letter: letters[i],
     label,
-    ...chip(picked === letters[i]),
+    selected: picked === letters[i],
     pick: () => s.pickMcq(letters[i]),
   }));
   const unknown = picked === '—';
@@ -70,32 +56,27 @@ export function programListView(currentTopicIndex: number, completedTopics: Reco
       score,
       state,
       dotLabel: state === 'done' ? '✓' : String(i + 1),
-      dotBg: state === 'done' ? 'var(--md-primary)' : state === 'current' ? 'var(--md-secondary-container)' : 'var(--md-surface-container-highest)',
-      dotFg: state === 'done' ? 'var(--md-on-primary)' : state === 'current' ? 'var(--md-on-secondary-container)' : 'var(--md-on-surface-variant)',
-      titleFg: state === 'next' ? 'var(--md-on-surface-variant)' : 'var(--md-on-surface)',
-      scoreFg: state === 'current' ? 'var(--md-primary)' : 'var(--md-on-surface-variant)',
+      dotBg: state === 'done' ? 'var(--color-accent)' : state === 'current' ? 'var(--color-accent-subtle)' : 'var(--color-surface-subtle)',
+      dotFg: state === 'done' ? 'var(--color-on-accent)' : state === 'current' ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
+      titleFg: state === 'next' ? 'var(--color-text-secondary)' : 'var(--color-text)',
+      scoreFg: state === 'current' ? 'var(--color-accent)' : 'var(--color-text-secondary)',
       cursor: state === 'current' ? 'pointer' : 'default',
     };
   });
 }
 
 export function extraListView(extrasEnabled: Record<string, boolean>, extrasRemoved: string[]) {
-  return EXTRA_TOPIC_DEFS.filter((e) => !extrasRemoved.includes(e.key)).map((e) => {
-    const on = !!extrasEnabled[e.key];
-    return {
-      key: e.key,
-      title: e.title,
-      on,
-      bg: on ? 'var(--md-surface-container-low)' : 'transparent',
-      border: on ? 'transparent' : 'var(--md-outline-variant)',
-    };
-  });
+  return EXTRA_TOPIC_DEFS.filter((e) => !extrasRemoved.includes(e.key)).map((e) => ({
+    key: e.key,
+    title: e.title,
+    on: !!extrasEnabled[e.key],
+  }));
 }
 
 export function useScheduleView() {
   const s = useAppStore();
-  const dayPicks = DAY_LABELS.map((label, i) => ({ label, ...chip(s.days.includes(i)), pick: () => s.toggleDay(i) }));
-  const timePicks = ['08:00', '13:00', '19:00', '21:30'].map((t) => ({ label: t, ...chip(s.time === t), pick: () => s.setTime(t) }));
+  const dayPicks = DAY_LABELS.map((label, i) => ({ label, selected: s.days.includes(i), pick: () => s.toggleDay(i) }));
+  const timePicks = ['08:00', '13:00', '19:00', '21:30'].map((t) => ({ label: t, selected: s.time === t, pick: () => s.setTime(t) }));
   const perWeek = s.days.length * s.minutes;
   const weeks = Math.max(4, Math.round((14 * 45) / Math.max(30, perWeek)));
   const scheduleSummary = `${s.days.length} ${plural(s.days.length, 'занятие', 'занятия', 'занятий')} в неделю по ${s.minutes} минут — программа до ${s.to} закроется примерно за ${weeks} ${plural(weeks, 'неделю', 'недели', 'недель')}. Напоминание в ${s.time}.`;
@@ -120,10 +101,9 @@ export function useCalendarView() {
       dayIndex: i,
       day: DAY_LABELS[wd],
       num: String(date.getDate()),
-      bg: isToday ? 'var(--md-primary)' : isLesson ? 'var(--md-primary-container)' : 'transparent',
-      fg: isToday ? 'var(--md-on-primary)' : isLesson ? 'var(--md-on-primary-container)' : isPast ? 'var(--md-on-surface-variant)' : 'var(--md-on-surface)',
-      border: isToday || isLesson ? 'transparent' : 'var(--md-outline-variant)',
-      dot: isLesson ? 'var(--md-tertiary)' : 'transparent',
+      bg: isToday ? 'var(--color-accent)' : isLesson ? 'var(--color-accent-subtle)' : 'transparent',
+      fg: isToday ? 'var(--color-on-accent)' : isLesson ? 'var(--color-accent)' : isPast ? 'var(--color-text-tertiary)' : 'var(--color-text)',
+      dot: isLesson && !isToday ? 'var(--color-accent)' : 'transparent',
     };
   });
 
@@ -139,9 +119,9 @@ export function useCalendarView() {
       title: topic.title,
       meta: topic.category,
       tag: scoreLabel,
-      dateFg: current ? 'var(--md-primary)' : past ? 'var(--md-on-surface-variant)' : 'var(--md-on-surface)',
-      titleFg: past ? 'var(--md-on-surface-variant)' : 'var(--md-on-surface)',
-      tagFg: current || past ? 'var(--md-primary)' : 'var(--md-on-surface-variant)',
+      dateFg: current ? 'var(--color-accent)' : past ? 'var(--color-text-tertiary)' : 'var(--color-text)',
+      titleFg: past ? 'var(--color-text-secondary)' : 'var(--color-text)',
+      tagFg: current || past ? 'var(--color-accent)' : 'var(--color-text-secondary)',
       cursor: current ? 'pointer' : 'default',
       highlight: s.calFocusIndex === ses.dayIndex,
       go: current ? () => s.openCurrentTopic() : undefined,
@@ -150,7 +130,7 @@ export function useCalendarView() {
 
   const nextSes = sessions[s.currentTopicIndex];
   const deltaDays = nextSes ? Math.round((nextSes.date.getTime() - today.getTime()) / 86400000) : 0;
-  const deltaLabel = deltaDays <= 0 ? 'СЕГОДНЯ' : `ЧЕРЕЗ ${deltaDays} ${plural(deltaDays, 'ДЕНЬ', 'ДНЯ', 'ДНЕЙ')}`;
+  const deltaLabel = deltaDays <= 0 ? 'сегодня' : `через ${deltaDays} ${plural(deltaDays, 'день', 'дня', 'дней')}`;
   const nextWhen = nextSes ? `${DAY_LABELS[nextSes.weekday]}, ${formatDayMonth(nextSes.date)}, ${s.time} · ${deltaLabel}` : s.time;
 
   const lastSes = sessions[sessions.length - 1];
@@ -168,9 +148,9 @@ export function useCalendarView() {
 export function deckTallyView(verdicts: Record<string, string>) {
   const tally = (dir: string) => String(Object.values(verdicts).filter((v) => v === dir).length);
   return [
-    { label: 'Знаю', n: tally('know'), bg: 'var(--md-primary-container)', fg: 'var(--md-on-primary-container)' },
-    { label: 'Не знаю', n: tally('dont'), bg: 'var(--md-error-container)', fg: 'var(--md-on-error-container)' },
-    { label: 'В коллекции', n: tally('save'), bg: 'var(--md-tertiary-container)', fg: 'var(--md-on-tertiary-container)' },
+    { label: 'Знаю', n: tally('know'), bg: 'var(--color-accent-subtle)', fg: 'var(--color-accent)' },
+    { label: 'Не знаю', n: tally('dont'), bg: 'var(--color-negative-subtle)', fg: 'var(--color-negative)' },
+    { label: 'В коллекции', n: tally('save'), bg: 'var(--color-info-subtle)', fg: 'var(--color-info)' },
   ];
 }
 
@@ -201,10 +181,10 @@ export function useDeckView() {
   const opBury = clamp01(dy / 36) * vert;
   const maxOp = Math.max(opKnow, opDont, opSave, opBury);
 
-  let tintColor = 'var(--md-primary)';
-  if (opDont >= Math.max(opKnow, opSave, opBury)) tintColor = 'var(--md-error)';
-  if (opSave > Math.max(opKnow, opDont, opBury)) tintColor = 'var(--md-tertiary)';
-  if (opBury > Math.max(opKnow, opDont, opSave)) tintColor = 'var(--md-on-surface-variant)';
+  let tintColor = 'var(--color-accent)';
+  if (opDont >= Math.max(opKnow, opSave, opBury)) tintColor = 'var(--color-negative)';
+  if (opSave > Math.max(opKnow, opDont, opBury)) tintColor = 'var(--color-info)';
+  if (opBury > Math.max(opKnow, opDont, opSave)) tintColor = 'var(--color-text-secondary)';
 
   const cur = CARDS[s.deckIndex] || CARDS[CARDS.length - 1];
   const behind = [1, 2]

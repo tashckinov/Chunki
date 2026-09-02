@@ -1,5 +1,6 @@
 import { useAppStore } from './store/appStore';
-import { NavigationBar } from './components/ui/NavigationBar';
+import { BottomNavigation } from './components/ui/BottomNavigation';
+import { Icon, type IconName } from './components/ui/Icon';
 import { GoalsScreen } from './screens/GoalsScreen';
 import { TestScreen } from './screens/TestScreen';
 import { CheckingScreen } from './screens/CheckingScreen';
@@ -15,11 +16,11 @@ import { ExtrasScreen } from './screens/ExtrasScreen';
 import { DeckScreen } from './screens/DeckScreen';
 import { DeckDoneScreen } from './screens/DeckDoneScreen';
 
-const NAV_ITEMS = [
-  { label: 'Главная', icon: 'Today' as const },
-  { label: 'Программа', icon: 'CheckBox' as const },
-  { label: 'Карточки', icon: 'Stars' as const },
-  { label: 'Доп. уроки', icon: 'Add' as const },
+const NAV_ITEMS: { label: string; icon: IconName }[] = [
+  { label: 'Главная', icon: 'Today' },
+  { label: 'Программа', icon: 'CheckBox' },
+  { label: 'Карточки', icon: 'Stars' },
+  { label: 'Доп. уроки', icon: 'Add' },
 ];
 
 function CheckingScreenForContext() {
@@ -64,6 +65,31 @@ function CurrentScreen() {
   }
 }
 
+/** Persistent left rail — desktop only (>=1200px), replaces the bottom tab bar. */
+function SidebarNav({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  return (
+    <nav className="hidden min-[1200px]:flex flex-col w-[248px] flex-none border-r border-border bg-surface px-3 py-8 gap-1">
+      <div className="px-3 pb-6 text-[17px] font-semibold">Learning Plan</div>
+      {NAV_ITEMS.map((item, i) => {
+        const active = i === value;
+        return (
+          <button
+            key={item.label}
+            type="button"
+            onClick={() => onChange(i)}
+            className={`pressable flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5 text-[14.5px] font-medium text-left ${
+              active ? 'bg-accent-subtle text-accent' : 'text-text-secondary'
+            }`}
+          >
+            <Icon name={item.icon} size={19} />
+            {item.label}
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
 export default function App() {
   const screen = useAppStore((s) => s.screen);
   const navTab = useAppStore((s) => (s.screen === 'program' ? 1 : s.screen === 'extras' ? 3 : 0));
@@ -71,10 +97,15 @@ export default function App() {
   const showNav = screen === 'home' || screen === 'program' || screen === 'extras';
 
   return (
-    <div className="min-h-dvh w-full flex justify-center bg-surface-dim">
-      <div className="w-full max-w-[480px] min-h-dvh bg-surface flex flex-col md:my-6 md:min-h-[calc(100dvh-48px)] md:rounded-3xl md:shadow-xl overflow-hidden">
+    <div className="min-h-dvh w-full flex justify-center bg-bg">
+      <SidebarNav value={navTab} onChange={setNavTab} />
+      <div className="w-full min-[768px]:max-w-[720px] min-[1200px]:max-w-[860px] min-h-dvh flex flex-col">
         <CurrentScreen />
-        {showNav && <NavigationBar items={NAV_ITEMS} value={navTab} onChange={setNavTab} />}
+        {showNav && (
+          <div className="min-[1200px]:hidden">
+            <BottomNavigation items={NAV_ITEMS} value={navTab} onChange={setNavTab} />
+          </div>
+        )}
       </div>
     </div>
   );

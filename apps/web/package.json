@@ -13,6 +13,8 @@
   },
   "dependencies": {
     "@app/shared": "*",
+    "@base-ui/react": "^1.7.0",
+    "lucide-react": "^1.39.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "zustand": "^5.0.1"

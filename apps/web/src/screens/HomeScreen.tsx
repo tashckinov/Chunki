@@ -1,10 +1,10 @@
 import { PROGRAM_TOPICS } from '@app/shared';
+import { ChevronRight, PlusCircle, Play, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { useCalendarView, deckSizeLabel, extraListView } from '../store/derived';
 import { plural } from '../lib/plural';
-import { Icon } from '../components/ui/Icon';
-import { List, ListItem } from '../components/ui/ListItem';
-import { Button } from '../components/ui/Button';
+import { Card } from '../components/ui/Card';
+import { ListRow } from '../components/ui/ListRow';
 
 export function HomeScreen() {
   const s = useAppStore();
@@ -17,170 +17,139 @@ export function HomeScreen() {
   const upcomingTopics = PROGRAM_TOPICS.slice(s.currentTopicIndex, s.currentTopicIndex + 3);
 
   return (
-    <div className="scroll-clean flex-1 min-h-0 pt-2 pb-6 flex flex-col gap-5">
+    <div className="scroll-clean flex-1 min-h-0 pt-2 pb-8 flex flex-col gap-9">
       {!s.hasProgram && (
-        <div className="flex flex-col gap-5">
-          <div className="px-6">
-            <div className="text-xs font-medium tracking-[0.5px] text-on-surface-variant">ПРИВЕТ</div>
-            <div className="text-[28px] leading-9 mt-0.5">Пока учимся без плана</div>
+        <div className="flex flex-col gap-5 px-5">
+          <div>
+            <div className="text-meta">Привет</div>
+            <div className="text-page-title mt-0.5">Пока учимся без плана</div>
           </div>
-          <div className="px-6">
-            <div
-              onClick={() => s.go('goals')}
-              className="cursor-pointer rounded-[28px] bg-primary-container text-on-primary-container p-6 flex flex-col gap-4"
-            >
-              <div className="text-[22px] leading-[30px]">Проверить уровень и составить программу</div>
-              <div className="text-sm leading-5 tracking-[0.25px] opacity-85">
-                11 заданий, около 15 минут. Не обязательно — карточки работают и без этого.
-              </div>
-              <div className="flex items-center gap-2 text-sm font-medium tracking-[0.1px]">
-                Начать проверку <Icon name="ChevronForward" />
-              </div>
+          <Card variant="accent" onClick={() => s.go('goals')} className="p-6 flex flex-col gap-4">
+            <div className="text-[20px] font-semibold leading-[27px]">Проверить уровень и составить программу</div>
+            <div className="text-body-secondary">11 заданий, около 15 минут. Не обязательно — карточки работают и без этого.</div>
+            <div className="flex items-center gap-1.5 text-[14px] font-medium text-accent">
+              Начать проверку <ChevronRight size={16} />
             </div>
-          </div>
+          </Card>
         </div>
       )}
 
       {s.hasProgram && currentTopic && (
-        <div className="flex flex-col gap-5">
-          <div className="px-6">
-            <div className="text-xs font-medium tracking-[0.5px] text-on-surface-variant">
+        <div className="flex flex-col gap-5 px-5">
+          <div>
+            <div className="text-meta">
               {s.placementResult?.overallLevel ?? s.from} → {s.to}
             </div>
-            <div className="text-[28px] leading-9 mt-0.5">Следующий урок</div>
+            <div className="text-page-title mt-0.5">Следующий урок</div>
           </div>
 
-          <div className="px-6">
-            <div onClick={() => s.go('topic')} className="cursor-pointer rounded-[28px] overflow-hidden bg-surface-container-low">
-              <div className="px-6 py-[22px] bg-primary-container text-on-primary-container">
-                <div className="flex items-center gap-2 text-xs font-medium tracking-[0.5px]">{nextWhen}</div>
-                <div className="text-[26px] leading-[34px] mt-2.5">{currentTopic.title}</div>
-                <div className="text-sm leading-5 tracking-[0.25px] opacity-85 mt-1.5">Материал 6 мин · 8 упражнений · с проверкой</div>
+          <Card onClick={() => s.go('topic')} className="p-5 border border-border flex flex-col gap-3">
+            <div className="text-meta">{nextWhen}</div>
+            <div className="text-[21px] font-semibold leading-[28px]">{currentTopic.title}</div>
+            <div className="text-body-secondary">Материал 6 мин · 8 упражнений · с проверкой</div>
+            <div className="flex items-center gap-3 pt-1">
+              <div className="flex-1 flex gap-1.5">
+                {[0, 1, 2, 3].map((i) => (
+                  <div key={i} className="flex-1 h-1 rounded-full bg-surface-subtle" />
+                ))}
               </div>
-              <div className="px-6 py-3.5 flex items-center gap-3">
-                <div className="flex-1 flex gap-1.5">
-                  {[0, 1, 2, 3].map((i) => (
-                    <div key={i} className="flex-1 h-1.5 rounded-full bg-surface-container-highest" />
-                  ))}
-                </div>
-                <div className="text-xs font-medium text-on-surface-variant">{s.minutes} мин</div>
-              </div>
+              <div className="text-meta">{s.minutes} мин</div>
             </div>
-          </div>
+          </Card>
 
-          <div className="flex flex-col gap-2.5">
-            <div onClick={() => s.toggleCalendar()} className="cursor-pointer px-6 flex items-center gap-2">
-              <div className="flex-1 text-sm font-medium tracking-[0.1px] text-on-surface-variant">Календарь</div>
-              <div className="text-[13px] font-medium tracking-[0.1px] text-primary">{s.calOpen ? 'Свернуть' : 'Все даты'}</div>
-              <div className="text-primary">
-                <Icon name={s.calOpen ? 'KeyboardArrowUp' : 'KeyboardArrowDown'} />
+          <div className="flex flex-col gap-3">
+            <button onClick={s.toggleCalendar} className="flex items-center gap-2 text-left">
+              <div className="flex-1 text-[14px] font-medium text-text-secondary">Календарь</div>
+              <div className="text-[13px] font-medium text-accent flex items-center gap-0.5">
+                {s.calOpen ? 'Свернуть' : 'Все даты'}
+                {s.calOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
               </div>
-            </div>
+            </button>
 
-            <div className="xscroll-clean px-6 pb-1 flex gap-2 overflow-x-auto">
+            <div className="xscroll-clean px-5 -mx-5 pb-1 flex gap-2 overflow-x-auto">
               {calStrip.map((d) => (
-                <div
-                  key={d.dayIndex}
-                  onClick={() => s.focusCalendarDay(d.dayIndex)}
-                  className="cursor-pointer flex-none w-12 flex flex-col items-center gap-1.5"
-                >
-                  <div className="text-[11px] tracking-[0.4px] text-on-surface-variant">{d.day}</div>
-                  <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium"
-                    style={{ background: d.bg, color: d.fg, border: `1px solid ${d.border}` }}
-                  >
+                <div key={d.dayIndex} className="flex-none w-11 flex flex-col items-center gap-1.5">
+                  <div className="text-[11px] text-text-tertiary">{d.day}</div>
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center text-[14px] font-medium" style={{ background: d.bg, color: d.fg }}>
                     {d.num}
                   </div>
-                  <div className="w-1.5 h-1.5 rounded-full" style={{ background: d.dot }} />
+                  <div className="w-1 h-1 rounded-full" style={{ background: d.dot }} />
                 </div>
               ))}
             </div>
 
             {s.calOpen && (
-              <div className="px-6 flex flex-col anim-rise">
+              <div className="flex flex-col anim-rise">
                 {calList.map((l) => (
-                  <div
+                  <ListRow
                     key={l.dayIndex}
                     onClick={l.go}
-                    className="flex gap-3.5 p-3 -mx-3 rounded-lg border-b border-outline-variant"
-                    style={{ cursor: l.cursor, background: l.highlight ? 'var(--md-surface-container-low)' : 'transparent' }}
-                  >
-                    <div className="w-14 flex-none">
-                      <div className="text-[15px] font-medium" style={{ color: l.dateFg }}>
-                        {l.date}
+                    leading={
+                      <div className="w-11 text-left">
+                        <div className="text-[14px] font-medium" style={{ color: l.dateFg }}>
+                          {l.date}
+                        </div>
+                        <div className="text-[11px] text-text-tertiary">{l.day}</div>
                       </div>
-                      <div className="text-[11px] tracking-[0.4px] text-on-surface-variant">{l.day}</div>
-                    </div>
-                    <div className="flex-1">
-                      <div className="text-[15px] leading-[22px]" style={{ color: l.titleFg }}>
-                        {l.title}
-                      </div>
-                      <div className="text-xs leading-4 tracking-[0.4px] text-on-surface-variant mt-0.5">{l.meta}</div>
-                    </div>
-                    <div className="flex-none text-[13px] font-medium" style={{ color: l.tagFg }}>
-                      {l.tag}
-                    </div>
-                  </div>
+                    }
+                    title={<span style={{ color: l.titleFg }}>{l.title}</span>}
+                    subtitle={l.meta}
+                    trailing={<span style={{ color: l.tagFg }}>{l.tag}</span>}
+                  />
                 ))}
-                <div className="text-xs leading-[18px] tracking-[0.4px] text-on-surface-variant py-3">{calFooter}</div>
+                <div className="text-meta py-3">{calFooter}</div>
               </div>
             )}
           </div>
         </div>
       )}
 
-      <div className="px-6">
-        <div onClick={s.goDeck} className="cursor-pointer rounded-[28px] bg-tertiary-container text-on-tertiary-container px-6 py-5 flex items-center gap-4">
+      <div className="px-5">
+        <button
+          onClick={s.goDeck}
+          className="pressable w-full flex items-center gap-4 rounded-[var(--radius-lg)] bg-surface-subtle px-5 py-4 text-left"
+        >
           <div className="flex-1">
-            <div className="text-xs font-medium tracking-[0.5px]">КАРТОЧКИ НА СЕГОДНЯ</div>
-            <div className="text-[22px] leading-7 mt-1.5">{deckSizeLabel()}</div>
-            <div className="text-[13px] leading-[18px] tracking-[0.25px] opacity-85 mt-1">Свайпом, отдельно от программы</div>
+            <div className="text-[14px] font-medium">Карточки на сегодня</div>
+            <div className="text-body-secondary mt-0.5">{deckSizeLabel()} · свайпом, отдельно от программы</div>
           </div>
-          <div className="w-11 h-11 flex-none rounded-full bg-tertiary text-on-tertiary flex items-center justify-center">
-            <Icon name="PlayArrowFilled" />
+          <div className="w-10 h-10 flex-none rounded-full bg-accent text-on-accent flex items-center justify-center">
+            <Play size={16} fill="currentColor" />
           </div>
-        </div>
+        </button>
       </div>
 
       {s.hasProgram && (
-        <div className="flex flex-col gap-5">
-          <div className="px-6">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="flex-1 text-sm font-medium tracking-[0.1px] text-on-surface-variant">ПРОГРАММА</div>
-              <Button variant="text" size="xs" onClick={s.goProgram}>
+        <div className="flex flex-col gap-9">
+          <div className="px-5">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="flex-1 text-section-title">Программа</div>
+              <button onClick={s.goProgram} className="pressable text-[13.5px] font-medium text-accent">
                 Все темы
-              </Button>
+              </button>
             </div>
-            <List>
+            <div>
               {upcomingTopics.map((tp, i) => (
-                <ListItem
+                <ListRow
                   key={tp.id}
-                  leading={<Icon name={i === 0 ? 'PlayArrowFilled' : 'Add'} />}
-                  headline={tp.title}
-                  supporting={tp.category}
-                  trailing={i === 0 ? 'сейчас' : 'позже'}
                   onClick={i === 0 ? () => s.go('topic') : undefined}
+                  title={tp.title}
+                  subtitle={tp.category}
+                  trailing={i === 0 ? 'сейчас' : 'позже'}
                 />
               ))}
-            </List>
+            </div>
           </div>
 
-          <div className="px-6">
-            <div onClick={s.goExtras} className="cursor-pointer flex items-center gap-3 p-4 rounded-xl border border-outline-variant">
-              <div className="text-primary">
-                <Icon name="AddCircle" />
-              </div>
-              <div className="flex-1">
-                <div className="text-base leading-[22px]">Доп. уроки</div>
-                <div className="text-[13px] leading-[18px] tracking-[0.25px] text-on-surface-variant">
-                  {extrasOn} {plural(extrasOn, 'урок включён', 'урока включено', 'уроков включено')} · {extras.length}{' '}
-                  {plural(extras.length, 'слабая тема', 'слабых темы', 'слабых тем')}
-                </div>
-              </div>
-              <div className="text-on-surface-variant">
-                <Icon name="ChevronForward" />
-              </div>
-            </div>
+          <div className="px-5">
+            <ListRow
+              divider={false}
+              onClick={s.goExtras}
+              leading={<PlusCircle size={20} className="text-accent" />}
+              title="Доп. уроки"
+              subtitle={`${extrasOn} ${plural(extrasOn, 'урок включён', 'урока включено', 'уроков включено')} · ${extras.length} ${plural(extras.length, 'слабая тема', 'слабых темы', 'слабых тем')}`}
+              trailing={<ChevronRight size={18} className="text-text-tertiary" />}
+            />
           </div>
         </div>
       )}
