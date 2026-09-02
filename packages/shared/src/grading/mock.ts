@@ -1,4 +1,4 @@
-import { READING_QUESTIONS } from '@app/shared';
+import { READING_QUESTIONS } from '../content.js';
 import type {
   ExercisesGradeResult,
   ExercisesSubmission,
@@ -6,13 +6,14 @@ import type {
   GradingProvider,
   PlacementGradeResult,
   PlacementTestSubmission,
-} from '@app/shared';
+} from '../types.js';
 import { scoreExerciseChoices, scoreMcq, writeItemsOf } from './scoring.js';
 
 /**
- * Deterministic, no-network grader. Used for local dev and tests so the app is
- * fully runnable without an LLM API key. Heuristics are intentionally simple —
- * this is a stand-in for AnthropicGradingProvider, not a scoring model.
+ * Deterministic, no-network grader. Used for local dev/tests and for the static
+ * demo build (no backend, e.g. GitHub Pages) so the app is fully clickable
+ * without an LLM API key. Heuristics are intentionally simple — this is a
+ * stand-in for a real LLM grading provider, not a scoring model.
  */
 function gradeFreeText(answer: string, minWords: number): GradeDetail {
   const trimmed = answer.trim();

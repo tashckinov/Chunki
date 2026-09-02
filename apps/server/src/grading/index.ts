@@ -1,5 +1,5 @@
+import { MockGradingProvider } from '@app/shared';
 import type { GradingProvider } from '@app/shared';
-import { MockGradingProvider } from './mock.js';
 import { AnthropicGradingProvider } from './anthropic.js';
 
 let cached: GradingProvider | null = null;

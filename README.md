@@ -14,6 +14,19 @@ in production, or whenever `ANTHROPIC_API_KEY` is set) that calls Claude with a 
 structured JSON back. The frontend never talks to the LLM directly — it only calls this app's own
 `/api/grade/*` routes, so provider API keys stay server-side.
 
+## Live demo (GitHub Pages)
+
+Every push to `main` builds `apps/web` in a static "demo mode" and deploys it to GitHub Pages
+(`.github/workflows/deploy-pages.yml`) at `https://<owner>.github.io/Chunki/`. Pages has no backend to
+call, so in this mode grading runs client-side with the same deterministic `MockGradingProvider` the dev
+server uses (`VITE_DEMO_MODE=true`, see `apps/web/src/lib/api.ts`) — the whole flow is clickable, but
+scores/feedback are the simple heuristic mock, not real Claude grading. Build it yourself with
+`npm run build:pages -w apps/web`.
+
+If Pages hasn't been turned on for the repo yet, the workflow's `configure-pages` step enables it
+automatically on first run; if that's blocked by repo permissions, flip **Settings → Pages → Source →
+GitHub Actions** once by hand and re-run the workflow.
+
 ## Running locally
 
 ```bash

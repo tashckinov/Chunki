@@ -1,5 +1,5 @@
-import { EX_BLOCKS, MCQ } from '@app/shared';
-import type { ExercisesSubmission, PlacementTestSubmission } from '@app/shared';
+import { EX_BLOCKS, MCQ } from '../content.js';
+import type { ExercisesSubmission, PlacementTestSubmission } from '../types.js';
 
 export function scoreMcq(mcqAnswers: PlacementTestSubmission['mcqAnswers']): { correct: number; total: number } {
   let correct = 0;

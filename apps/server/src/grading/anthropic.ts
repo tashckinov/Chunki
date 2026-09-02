@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { READING_PASSAGE, READING_QUESTIONS } from '@app/shared';
+import { READING_PASSAGE, READING_QUESTIONS, scoreExerciseChoices, scoreMcq, writeItemsOf } from '@app/shared';
 import type {
   ExercisesGradeResult,
   ExercisesSubmission,
@@ -8,7 +8,6 @@ import type {
   PlacementGradeResult,
   PlacementTestSubmission,
 } from '@app/shared';
-import { scoreExerciseChoices, scoreMcq, writeItemsOf } from './scoring.js';
 
 const GRADE_DETAIL_SCHEMA = {
   type: 'object',
