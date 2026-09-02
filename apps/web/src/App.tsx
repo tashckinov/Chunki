@@ -1,7 +1,8 @@
 import { useAppStore } from './store/appStore';
-import { BottomNavigation } from './components/ui/BottomNavigation';
+import { BottomNavigation, type NavItem } from './components/ui/BottomNavigation';
 import { Icon, type IconName } from './components/ui/Icon';
 import { Logo } from './components/brand/Logo';
+import { AccountRow } from './components/ui/AccountRow';
 import { GoalsScreen } from './screens/GoalsScreen';
 import { TestScreen } from './screens/TestScreen';
 import { CheckingScreen } from './screens/CheckingScreen';
@@ -17,10 +18,19 @@ import { ExtrasScreen } from './screens/ExtrasScreen';
 import { DeckScreen } from './screens/DeckScreen';
 import { DeckDoneScreen } from './screens/DeckDoneScreen';
 
-const NAV_ITEMS: { label: string; icon: IconName }[] = [
+const SIDEBAR_ITEMS: { label: string; icon: IconName }[] = [
   { label: 'Главная', icon: 'Today' },
   { label: 'Программа', icon: 'CheckBox' },
   { label: 'Карточки', icon: 'Stars' },
+  { label: 'Доп. уроки', icon: 'Add' },
+];
+
+// Mobile tab bar carries the brand mark on the flashcards tab instead of a
+// separate logo header (there's no room for both on a small screen).
+const MOBILE_NAV_ITEMS: NavItem[] = [
+  { label: 'Главная', icon: 'Today' },
+  { label: 'Программа', icon: 'CheckBox' },
+  { label: 'Chunki', logo: true },
   { label: 'Доп. уроки', icon: 'Add' },
 ];
 
@@ -68,13 +78,14 @@ function CurrentScreen() {
 
 /** Persistent left rail — desktop only (>=1200px), replaces the bottom tab bar. */
 function SidebarNav({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const goHome = useAppStore((s) => s.goHome);
   return (
     <nav className="hidden min-[1200px]:flex flex-col w-[248px] flex-none border-r border-border bg-surface px-3 py-8 gap-1">
-      <div className="flex items-center gap-2 px-3 pb-6">
+      <button type="button" onClick={goHome} className="pressable flex items-center gap-2 px-3 pb-6 text-left">
         <Logo size={26} />
         <span className="text-[17px] font-semibold">Chunki</span>
-      </div>
-      {NAV_ITEMS.map((item, i) => {
+      </button>
+      {SIDEBAR_ITEMS.map((item, i) => {
         const active = i === value;
         return (
           <button
@@ -90,26 +101,40 @@ function SidebarNav({ value, onChange }: { value: number; onChange: (v: number) 
           </button>
         );
       })}
+      <div className="flex-1" />
+      <div className="border-t border-border pt-3">
+        <AccountRow variant="sidebar" />
+      </div>
     </nav>
   );
 }
 
+function navTabForScreen(screen: string): number {
+  switch (screen) {
+    case 'program':
+      return 1;
+    case 'deck':
+    case 'deckdone':
+      return 2;
+    case 'extras':
+      return 3;
+    default:
+      return 0;
+  }
+}
+
 export default function App() {
-  const screen = useAppStore((s) => s.screen);
-  const navTab = useAppStore((s) => (s.screen === 'program' ? 1 : s.screen === 'extras' ? 3 : 0));
+  const navTab = useAppStore((s) => navTabForScreen(s.screen));
   const setNavTab = useAppStore((s) => s.setNavTab);
-  const showNav = screen === 'home' || screen === 'program' || screen === 'extras';
 
   return (
     <div className="min-h-dvh w-full flex justify-center bg-bg">
       <SidebarNav value={navTab} onChange={setNavTab} />
       <div className="w-full min-[768px]:max-w-[720px] min-[1200px]:max-w-[860px] min-h-dvh flex flex-col">
         <CurrentScreen />
-        {showNav && (
-          <div className="min-[1200px]:hidden">
-            <BottomNavigation items={NAV_ITEMS} value={navTab} onChange={setNavTab} />
-          </div>
-        )}
+        <div className="min-[1200px]:hidden">
+          <BottomNavigation items={MOBILE_NAV_ITEMS} value={navTab} onChange={setNavTab} />
+        </div>
       </div>
     </div>
   );

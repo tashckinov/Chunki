@@ -35,8 +35,14 @@ const BACK_MAP: Partial<Record<Screen, Screen>> = {
   topicresult: 'exercises',
 };
 
+export interface UserProfile {
+  name: string;
+  email: string;
+}
+
 interface AppState {
   screen: Screen;
+  user: UserProfile | null;
   hasProgram: boolean;
   plan: 'monthly' | 'yearly';
   subscribed: boolean;
@@ -86,6 +92,8 @@ interface AppState {
 
   go: (screen: Screen) => void;
   back: () => void;
+  signIn: (profile: UserProfile) => void;
+  signOut: () => void;
 
   pickFrom: (level: CEFRLevel) => void;
   pickTo: (level: CEFRLevel) => void;
@@ -146,6 +154,7 @@ export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
       screen: 'home',
+      user: null,
       hasProgram: false,
       plan: 'monthly',
       subscribed: false,
@@ -195,6 +204,8 @@ export const useAppStore = create<AppState>()(
 
       go: (screen) => set({ screen }),
       back: () => set((s) => ({ screen: BACK_MAP[s.screen] ?? 'home' })),
+      signIn: (profile) => set({ user: profile }),
+      signOut: () => set({ user: null }),
 
       pickFrom: (level) => set({ from: level }),
       pickTo: (level) => set({ to: level }),
