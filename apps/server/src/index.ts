@@ -6,6 +6,8 @@ import { loadEnv } from './config/env.js';
 import { waitForDatabase } from './db/pool.js';
 import { gradeRoutes } from './routes/grade.js';
 import { authRoutes } from './modules/auth/routes.js';
+import { collectionsRoutes } from './modules/collections/routes.js';
+import { chunksRoutes } from './modules/chunks/routes.js';
 import { getGradingProvider } from './grading/index.js';
 
 async function main() {
@@ -22,6 +24,8 @@ async function main() {
 
   await app.register(gradeRoutes, { prefix: '/api/grade' });
   await app.register(authRoutes, { prefix: '/api/auth' });
+  await app.register(collectionsRoutes, { prefix: '/api/collections' });
+  await app.register(chunksRoutes, { prefix: '/api/chunks' });
 
   // 0.0.0.0 (not the Fastify default of 127.0.0.1) so the port mapping from
   // Docker Compose / a container host can actually reach it.

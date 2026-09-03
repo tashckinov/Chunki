@@ -1,8 +1,9 @@
 # `@app/server`
 
-Fastify + TypeScript + PostgreSQL backend. Current scope: grading (existing) and a first
-authentication/users foundation — Google sign-in only, backend-managed sessions, no
-passwords, no other features yet (see root README for the wider project).
+Fastify + TypeScript + PostgreSQL backend. Current scope: grading (existing), authentication/users
+(Google sign-in only, backend-managed sessions, no passwords), and a read-only learning content
+model — collections of chunks/collocations (e.g. "Travel Basics" → "check in", "miss a flight").
+No AI generation yet anywhere in the backend (see root README for the wider project).
 
 ## Stack
 
@@ -40,14 +41,16 @@ docker compose ps                 # includes health status
 docker compose restart backend
 ```
 
-Run migrations against the Compose Postgres (after `docker compose up -d postgres` and the
-backend image has been built at least once):
+Run migrations, then seed demo content, against the Compose Postgres (after
+`docker compose up -d postgres` and the backend image has been built at least once):
 
 ```bash
 docker compose exec backend npm run migrate
+docker compose exec backend npm run seed
 ```
 
-(If `backend` isn't running yet, `docker compose run --rm backend npm run migrate` works too.)
+(If `backend` isn't running yet, `docker compose run --rm backend npm run migrate` — and `... seed`
+— work too.)
 
 **Verify Postgres health:**
 
@@ -81,6 +84,7 @@ cp apps/server/.env.example apps/server/.env   # fill in Google creds etc.; DATA
 npm install
 npm run build:shared
 npm run migrate:dev -w apps/server     # applies migrations via tsx, no build step needed
+npm run seed:dev -w apps/server        # loads demo collections/chunks (safe to re-run)
 npm run dev:server                     # http://localhost:8787
 ```
 
@@ -195,14 +199,53 @@ handshake — see "Tests" below, and note that `GET /api/auth/google` itself wor
 placeholder `GOOGLE_CLIENT_ID`/`SECRET` (it only builds a redirect URL; nothing is validated
 until the callback exchanges a real code with Google).
 
+## Collections & chunks
+
+Read-only learning content: `collections` (e.g. "Travel Basics") group `chunks` — reusable
+English expressions/collocations like "check in" or "sounds good", not limited to traditional
+strict collocations. A chunk can belong to more than one collection (`collection_chunks` is a
+join table, not a column on `chunks`), and each collection controls its own chunk ordering via
+`collection_chunks.position`. No AI generation is involved anywhere here — this is a plain,
+hand-authored content model; AI-assisted authoring can be layered on top of it later.
+
+```text
+GET /api/collections            — published collections, ordered by position
+GET /api/collections/:slug      — one collection + its chunks, ordered by position
+GET /api/chunks/:id             — one chunk
+```
+
+All three require an authenticated session (same cookie as `/api/auth/me`) and return
+`{ error: 'unauthorized' }` with `401` otherwise. An unknown/unpublished slug or unknown chunk id
+returns `{ error: 'not_found' }` with `404` — malformed input (a non-UUID chunk id, a slug with
+invalid characters) is treated the same way rather than as a separate `400`, so nothing about the
+database (e.g. that ids are UUIDs) leaks through an error response.
+
+Unpublished collections (`is_published = false`) never appear in `GET /api/collections` and
+`GET /api/collections/:slug` behaves as if they don't exist — there's no separate "admin" view of
+them yet.
+
+### Seeding demo content
+
+```bash
+npm run seed:dev -w apps/server   # local, via tsx
+npm run seed -w apps/server       # after a build, e.g. inside the backend container
+```
+
+Loads ~3 demo collections (Everyday English, Travel Basics, Work & Communication) with 8-9
+chunks each — realistic content, but development/demo data, not the final learning dataset. Safe
+to run more than once: collections upsert by `slug`, chunks upsert by `text`, and collection
+memberships upsert by `(collection_id, chunk_id)`, so re-running just refreshes the same rows
+instead of duplicating them.
+
 ## Database
 
 Schema: `users`, `auth_identities` (one row per external account linked to a user — unique on
 `(provider, provider_user_id)`), `sessions` (opaque server-side sessions; the cookie carries a
-random token, Postgres stores only its SHA-256 hash). See `migrations/0001_users_auth.sql` for
-the exact DDL. Migrations are plain `.sql` files applied in filename order by
-`src/db/migrate.ts`, tracked in a `schema_migrations` table — nothing touches the schema
-outside that runner.
+random token, Postgres stores only its SHA-256 hash), `collections`, `chunks`, `collection_chunks`
+(join table; deleting a collection or a chunk cascades only to that membership row, never to the
+other side — see the comments in `migrations/0002_collections_chunks.sql`). Migrations are plain
+`.sql` files applied in filename order by `src/db/migrate.ts`, tracked in a `schema_migrations`
+table — nothing touches the schema outside that runner.
 
 ## Tests
 
@@ -212,15 +255,21 @@ npm run test:integration -w apps/server # needs a real, migrated Postgres (see b
 ```
 
 The default `npm test` mocks the database and Google verification boundaries entirely (no
-Docker needed), so it stays fast. `test:integration` exercises the real SQL — the unique
-identity constraint, the login race-condition handling, and a schema check confirming no
-image/avatar column ever gets added — against Postgres:
+Docker needed), so it stays fast. `test:integration` exercises the real SQL against Postgres —
+the unique identity constraint, the login race-condition handling, a schema check confirming no
+image/avatar column ever gets added, unpublished collections being invisible, chunks coming back
+in collection-specific position order, and the `(collection_id, chunk_id)` uniqueness constraint
+rejecting a duplicate membership:
 
 ```bash
 docker compose up -d postgres
 docker compose exec backend npm run migrate     # or: npm run migrate:dev -w apps/server, from the host
 npm run test:integration -w apps/server         # reads DATABASE_URL from apps/server/.env
 ```
+
+The integration suite inserts its own uniquely-suffixed rows and doesn't delete them afterward
+(matching the existing auth integration tests) — run it against a disposable dev database, not
+one you care about staying clean.
 
 Automated tests never make a real network call to Google — the provider-verification boundary
 (`modules/auth/google.ts`) is mocked/bypassed, and business logic is tested from an
