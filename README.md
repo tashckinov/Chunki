@@ -5,7 +5,9 @@ Implementation of the `LearningPlan.dc.html` design (see below for the original 
 ## Stack
 
 - `apps/web` — React 19 + TypeScript + Vite + Tailwind v4 SPA (PWA-ready, Capacitor-friendly).
-- `apps/server` — Express + TypeScript API that grades the placement test and topic exercises.
+- `apps/server` — Fastify + TypeScript API: grades the placement test/exercises, and a first
+  users/authentication foundation (Google sign-in, backend-managed sessions) backed by PostgreSQL.
+  See `apps/server/README.md` for everything auth/database/Docker-related.
 - `packages/shared` — types + static content (questions, topics, chunk cards) shared by both.
 
 Grading is provider-agnostic (`GradingProvider` interface in `packages/shared`): a `MockGradingProvider`
@@ -13,6 +15,9 @@ Grading is provider-agnostic (`GradingProvider` interface in `packages/shared`):
 in production, or whenever `ANTHROPIC_API_KEY` is set) that calls Claude with a forced tool call to get
 structured JSON back. The frontend never talks to the LLM directly — it only calls this app's own
 `/api/grade/*` routes, so provider API keys stay server-side.
+
+Authentication (Google OAuth, sessions, users) is likewise backend-only for now — see
+`apps/server/README.md`. The frontend doesn't integrate with it yet.
 
 ## Live demo (GitHub Pages)
 
@@ -29,13 +34,24 @@ GitHub Actions** once by hand and re-run the workflow.
 
 ## Running locally
 
+The server now needs PostgreSQL (for users/auth) alongside the usual `npm run dev:*` scripts —
+easiest via Docker Compose:
+
 ```bash
 npm install
-npm run build:shared        # compiles packages/shared once (rerun after editing its src)
+npm run build:shared         # compiles packages/shared once (rerun after editing its src)
 
-npm run dev:server          # http://localhost:8787 — mock grading by default
-npm run dev:web             # http://localhost:5173 — proxies /api to the server above
+cp .env.example .env         # repo root — Google OAuth + Postgres config, see apps/server/README.md
+docker compose up -d postgres
+docker compose exec backend npm run migrate    # after `docker compose up --build` at least once,
+                                                # or: npm run migrate:dev -w apps/server
+
+npm run dev:server           # http://localhost:8787 — mock grading by default
+npm run dev:web              # http://localhost:5173 — proxies /api to the server above
 ```
+
+Or run the whole backend in Docker too: `docker compose up --build` (see `apps/server/README.md`
+for the full set of Docker Compose commands, Google OAuth setup, and how auth/sessions work).
 
 To use real Claude grading instead of the mock adapter, copy `apps/server/.env.example` to
 `apps/server/.env` and set `ANTHROPIC_API_KEY` (`GRADING_PROVIDER=anthropic` to force it in dev).

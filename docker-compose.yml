@@ -1,0 +1,55 @@
+name: chunki
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-chunki}
+      POSTGRES_USER: ${POSTGRES_USER:-chunki}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (copy .env.example)}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # Exposed for local development (psql, a GUI client, running the backend
+    # outside Docker against it). Drop this port mapping for anything beyond
+    # local dev — service-to-service traffic never needs it, since the
+    # backend reaches Postgres by service name over the Compose network.
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-chunki} -d ${POSTGRES_DB:-chunki}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  backend:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 8787
+      CORS_ORIGIN: ${FRONTEND_URL:-http://localhost:5173}
+      # Always the Compose service name, never localhost, from inside the container.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-chunki}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (copy .env.example)}@postgres:5432/${POSTGRES_DB:-chunki}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?Set GOOGLE_CLIENT_ID in .env — see apps/server/README.md}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?Set GOOGLE_CLIENT_SECRET in .env — see apps/server/README.md}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:8787/api/auth/google/callback}
+      SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in .env (32+ random chars)}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+    ports:
+      - '${PORT:-8787}:8787'
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:8787/api/health']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  postgres_data:

@@ -1,21 +1,34 @@
 import 'dotenv/config';
-import cors from 'cors';
-import express from 'express';
-import { gradeRouter } from './routes/grade.js';
+import Fastify from 'fastify';
+import cors from '@fastify/cors';
+import cookie from '@fastify/cookie';
+import { loadEnv } from './config/env.js';
+import { waitForDatabase } from './db/pool.js';
+import { gradeRoutes } from './routes/grade.js';
+import { authRoutes } from './modules/auth/routes.js';
 import { getGradingProvider } from './grading/index.js';
 
-const app = express();
-const port = Number(process.env.PORT) || 8787;
+async function main() {
+  const env = loadEnv();
 
-app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:5173' }));
-app.use(express.json({ limit: '1mb' }));
+  await waitForDatabase();
 
-app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, gradingProvider: getGradingProvider().name });
-});
+  const app = Fastify({ logger: true });
 
-app.use('/api/grade', gradeRouter);
+  await app.register(cors, { origin: env.CORS_ORIGIN, credentials: true });
+  await app.register(cookie, { secret: env.SESSION_SECRET });
 
-app.listen(port, () => {
-  console.log(`server listening on :${port} (grading provider: ${getGradingProvider().name})`);
+  app.get('/api/health', async () => ({ ok: true, gradingProvider: getGradingProvider().name }));
+
+  await app.register(gradeRoutes, { prefix: '/api/grade' });
+  await app.register(authRoutes, { prefix: '/api/auth' });
+
+  // 0.0.0.0 (not the Fastify default of 127.0.0.1) so the port mapping from
+  // Docker Compose / a container host can actually reach it.
+  await app.listen({ port: env.PORT, host: '0.0.0.0' });
+}
+
+main().catch((err) => {
+  console.error('Fatal startup error:', err instanceof Error ? err.message : err);
+  process.exit(1);
 });
