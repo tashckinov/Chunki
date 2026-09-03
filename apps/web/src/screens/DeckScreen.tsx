@@ -41,7 +41,7 @@ export function DeckScreen() {
         ))}
         <div
           onPointerDown={(e) => s.onCardPointerDown(e.clientX, e.clientY)}
-          className="absolute inset-0 rounded-[var(--radius-lg)] bg-surface shadow-[var(--shadow-sm)] flex flex-col cursor-grab select-none overflow-hidden"
+          className="absolute inset-0 rounded-[var(--radius-lg)] bg-surface shadow-[var(--shadow-sm)] flex flex-col cursor-grab select-none overflow-hidden touch-none"
           style={{ transform: v.cardTransform, transition: v.cardTransition }}
         >
           <div className="absolute inset-0 pointer-events-none" style={{ background: v.tintColor, opacity: v.tintOpacity }} />
@@ -63,7 +63,7 @@ export function DeckScreen() {
           >
             Отложить
           </div>
-          <div onClick={s.flipCard} className="scroll-clean flex-1 min-h-0 flex flex-col justify-center gap-3.5 px-8 py-8 text-center">
+          <div onClick={s.flipCard} className="scroll-clean flex-1 min-h-0 flex flex-col justify-center gap-3.5 px-8 pt-16 pb-8 text-center">
             <div className="flex flex-col gap-3.5 flex-none">
               <div className="text-meta">{v.cur.kind}</div>
               <div className="text-[32px] leading-[40px] font-medium">{v.cur.en}</div>
