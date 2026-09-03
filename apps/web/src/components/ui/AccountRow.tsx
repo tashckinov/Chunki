@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAppStore } from '../../store/appStore';
+import { APP_VERSION } from '../../lib/version';
 import { Dialog } from './Dialog';
 import { Button } from './Button';
 import { Input } from './Input';
@@ -88,6 +89,7 @@ function AccountDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o
           <div className="border-t border-border pt-4">
             <InterfaceModeSetting />
           </div>
+          <div className="text-meta text-center">Chunki {APP_VERSION}</div>
         </div>
       </Dialog>
     );
@@ -113,6 +115,7 @@ function AccountDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o
             Выйти
           </Button>
         </div>
+        <div className="text-meta text-center">Chunki {APP_VERSION}</div>
       </div>
     </Dialog>
   );
