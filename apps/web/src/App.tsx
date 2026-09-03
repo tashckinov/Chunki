@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import { useAppStore } from './store/appStore';
+import { consumeAuthErrorFlag } from './lib/auth';
 import { BottomNavigation, type NavItem } from './components/ui/BottomNavigation';
 import { Icon, type IconName } from './components/ui/Icon';
 import { Logo } from './components/brand/Logo';
@@ -133,6 +135,11 @@ function navTabForScreen(screen: string): number {
 export default function App() {
   const navTab = useAppStore((s) => navTabForScreen(s.screen));
   const setNavTab = useAppStore((s) => s.setNavTab);
+
+  useEffect(() => {
+    if (consumeAuthErrorFlag()) useAppStore.setState({ authError: true });
+    useAppStore.getState().checkAuth();
+  }, []);
 
   return (
     <div className="h-dvh w-full flex justify-center bg-bg overflow-hidden">

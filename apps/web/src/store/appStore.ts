@@ -4,6 +4,7 @@ import { EX_BLOCKS, EXTRA_TOPIC_DEFS, PROGRAM_TOPICS } from '@app/shared';
 import type { CEFRLevel, ExercisesGradeResult, PlacementGradeResult } from '@app/shared';
 import { gradeExercises, gradePlacementTest } from '../lib/api';
 import { activeCards } from '../lib/deck';
+import { fetchCurrentUser, logout, startGoogleLogin, type AuthUser } from '../lib/auth';
 
 export type Screen =
   | 'goals'
@@ -39,14 +40,12 @@ const BACK_MAP: Partial<Record<Screen, Screen>> = {
   deckdone: 'cardslib',
 };
 
-export interface UserProfile {
-  name: string;
-  email: string;
-}
-
 interface AppState {
   screen: Screen;
-  user: UserProfile | null;
+  /** Null until the initial /api/auth/me check resolves, or when signed out. */
+  user: AuthUser | null;
+  authChecked: boolean;
+  authError: boolean;
   interfaceMode: 'ru-en' | 'en-en';
   hasProgram: boolean;
   plan: 'monthly' | 'yearly';
@@ -99,8 +98,12 @@ interface AppState {
 
   go: (screen: Screen) => void;
   back: () => void;
-  signIn: (profile: UserProfile) => void;
-  signOut: () => void;
+  /** Redirects the whole page into the backend's Google OAuth flow. */
+  signIn: () => void;
+  signOut: () => Promise<void>;
+  /** Runs once on app start to see if a session cookie is already valid. */
+  checkAuth: () => Promise<void>;
+  dismissAuthError: () => void;
   setInterfaceMode: (mode: 'ru-en' | 'en-en') => void;
 
   pickFrom: (level: CEFRLevel) => void;
@@ -164,6 +167,8 @@ export const useAppStore = create<AppState>()(
     (set, get) => ({
       screen: 'home',
       user: null,
+      authChecked: false,
+      authError: false,
       interfaceMode: 'ru-en',
       hasProgram: false,
       plan: 'monthly',
@@ -216,8 +221,20 @@ export const useAppStore = create<AppState>()(
 
       go: (screen) => set({ screen }),
       back: () => set((s) => ({ screen: BACK_MAP[s.screen] ?? 'home' })),
-      signIn: (profile) => set({ user: profile }),
-      signOut: () => set({ user: null }),
+      signIn: () => startGoogleLogin(),
+      signOut: async () => {
+        set({ user: null });
+        await logout().catch(() => {});
+      },
+      checkAuth: async () => {
+        try {
+          const user = await fetchCurrentUser();
+          set({ user, authChecked: true });
+        } catch {
+          set({ authChecked: true });
+        }
+      },
+      dismissAuthError: () => set({ authError: false }),
       setInterfaceMode: (mode) => set({ interfaceMode: mode }),
 
       pickFrom: (level) => set({ from: level }),
@@ -378,7 +395,10 @@ export const useAppStore = create<AppState>()(
     {
       name: 'chunki/v1',
       partialize: (s) => {
-        const { dx, dy, dragging, flying, grading, gradingError, checkingContext, ...rest } = s;
+        // user/authChecked/authError are derived fresh from the session
+        // cookie on every load (see checkAuth) — persisting them would show
+        // a stale logged-in/out state before that check resolves.
+        const { dx, dy, dragging, flying, grading, gradingError, checkingContext, user, authChecked, authError, ...rest } = s;
         void dx;
         void dy;
         void dragging;
@@ -386,6 +406,9 @@ export const useAppStore = create<AppState>()(
         void grading;
         void gradingError;
         void checkingContext;
+        void user;
+        void authChecked;
+        void authError;
         return rest;
       },
     },
