@@ -101,6 +101,43 @@ npm run dev:server                     # http://localhost:8787
 the OAuth `state`/`nonce`/PKCE verifier between `/api/auth/google` and the callback. Generate
 one with `openssl rand -base64 32`.
 
+## Deploying (VPS backend + GitHub Pages frontend)
+
+The frontend (`apps/web`) is static and stays on GitHub Pages. The backend can't live there —
+it needs its own always-on host with Docker. Once frontend and backend are on different
+domains, that's a genuinely **cross-site** setup (not just cross-*origin* like local dev's
+different ports), which changes a few things vs. local dev:
+
+1. **Put a reverse proxy with real TLS in front of the backend.** Fastify itself only speaks
+   plain HTTP; something like Caddy (auto-HTTPS, one-line config) or nginx + certbot needs to
+   terminate HTTPS and forward to `127.0.0.1:8787` (or the `backend` container). This is
+   required, not optional — see point 3.
+2. **Point a domain at the VPS** (e.g. `api.yourdomain.com`) and use that (over HTTPS) as
+   `GOOGLE_REDIRECT_URI`. Add the same URL as an Authorized redirect URI on the Google OAuth
+   client (Google Cloud Console → Credentials) — it has to match exactly.
+3. **Set `NODE_ENV=production`.** This switches session/OAuth cookies to
+   `SameSite=None; Secure`, which cross-site credentialed requests require — browsers silently
+   drop `SameSite=Lax` cookies set/read across different sites, and `Secure` cookies require
+   HTTPS (hence point 1).
+4. **Set `FRONTEND_URL` to the full GitHub Pages URL, including the `/Chunki` path** (e.g.
+   `https://<user>.github.io/Chunki`) — that's where the callback redirects after login.
+5. **Set `CORS_ORIGIN` to the bare origin, without a path** (e.g. `https://<user>.github.io` —
+   no `/Chunki`). This is deliberately a separate variable from `FRONTEND_URL`: a browser's
+   `Origin` header never includes a path, so a path-bearing `CORS_ORIGIN` would just never
+   match and every credentialed request would be silently rejected by CORS.
+
+Then, on the VPS:
+
+```bash
+git clone <repo> && cd Chunki
+cp .env.example .env    # fill in GOOGLE_*, SESSION_SECRET, and the prod values above
+docker compose up -d --build
+docker compose exec backend npm run migrate
+```
+
+Everything else (commands, healthchecks, migrations) is identical to local Docker Compose use —
+see "Running locally" above.
+
 ## Startup and failure behavior
 
 - **Missing/invalid env config** (Google credentials, `SESSION_SECRET`, `DATABASE_URL`,

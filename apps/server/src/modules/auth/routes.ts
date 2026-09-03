@@ -26,6 +26,12 @@ function logSafeError(err: unknown): string {
 export const authRoutes: FastifyPluginAsync = async (app) => {
   const env = loadEnv();
   const isProd = env.NODE_ENV === 'production';
+  // Production is a cross-site deployment (frontend on GitHub Pages, backend
+  // on its own host) — cookies need SameSite=None (which browsers only send
+  // over HTTPS, hence the paired `secure: isProd`). Dev keeps Lax, which is
+  // enough for same-site localhost and doesn't require HTTPS.
+  const cookieSameSite = isProd ? 'none' : 'lax';
+  const frontendBase = env.FRONTEND_URL.replace(/\/+$/, '');
 
   app.get('/google', async (_request, reply) => {
     const state = randomBytes(24).toString('base64url');
@@ -37,7 +43,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       signed: true,
       httpOnly: true,
       secure: isProd,
-      sameSite: 'lax',
+      sameSite: cookieSameSite,
       path: '/api/auth',
       maxAge: OAUTH_COOKIE_MAX_AGE_SECONDS,
     });
@@ -50,7 +56,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     const rawCookie = request.cookies[OAUTH_COOKIE_NAME];
     reply.clearCookie(OAUTH_COOKIE_NAME, { path: '/api/auth' });
 
-    const failure = () => reply.redirect(`${env.FRONTEND_URL}/?auth_error=1`);
+    const failure = () => reply.redirect(`${frontendBase}/?auth_error=1`);
 
     if (query.error) {
       request.log.warn({ error: query.error }, 'Google returned an OAuth error');
@@ -85,13 +91,13 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       reply.setCookie(SESSION_COOKIE_NAME, token, {
         httpOnly: true,
         secure: isProd,
-        sameSite: 'lax',
+        sameSite: cookieSameSite,
         path: '/',
         maxAge: SESSION_COOKIE_MAX_AGE_SECONDS,
         expires: expiresAt,
       });
 
-      return reply.redirect(env.FRONTEND_URL);
+      return reply.redirect(frontendBase);
     } catch (err) {
       request.log.error({ message: logSafeError(err) }, 'Google auth callback failed');
       return failure();

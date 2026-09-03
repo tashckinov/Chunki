@@ -34,7 +34,13 @@ services:
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       PORT: 8787
-      CORS_ORIGIN: ${FRONTEND_URL:-http://localhost:5173}
+      # The bare origin (scheme+host[:port], NO path) that's allowed to make
+      # credentialed requests — e.g. https://<user>.github.io, NOT
+      # https://<user>.github.io/Chunki. Deliberately separate from
+      # FRONTEND_URL below, which is a full URL (with path) used only for the
+      # post-login redirect; CORS match against a path-bearing value would
+      # just silently never match the browser's Origin header.
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
       # Always the Compose service name, never localhost, from inside the container.
       DATABASE_URL: postgresql://${POSTGRES_USER:-chunki}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (copy .env.example)}@postgres:5432/${POSTGRES_DB:-chunki}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?Set GOOGLE_CLIENT_ID in .env — see apps/server/README.md}
