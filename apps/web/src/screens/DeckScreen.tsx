@@ -45,26 +45,28 @@ export function DeckScreen() {
           style={{ transform: v.cardTransform, transition: v.cardTransition }}
         >
           <div className="absolute inset-0 pointer-events-none" style={{ background: v.tintColor, opacity: v.tintOpacity }} />
-          <div
-            className="absolute top-4 left-4 px-3 py-1.5 rounded-full text-[13px] font-medium bg-negative-subtle text-negative pointer-events-none"
-            style={{ opacity: v.opDont }}
-          >
-            Учить
-          </div>
-          <div
-            className="absolute top-4 right-4 px-3 py-1.5 rounded-full text-[13px] font-medium bg-accent-subtle text-accent pointer-events-none"
-            style={{ opacity: v.opKnow }}
-          >
-            Знаю
-          </div>
-          <div
-            className="absolute left-1/2 top-4 -translate-x-1/2 px-3 py-1.5 rounded-full text-[13px] font-medium bg-surface-subtle text-text-secondary pointer-events-none"
-            style={{ opacity: v.opBury }}
-          >
-            Отложить
-          </div>
-          <div onClick={s.flipCard} className="scroll-clean flex-1 min-h-0 flex flex-col justify-center gap-3.5 px-8 pt-16 pb-8 text-center">
+          <div onClick={s.flipCard} className="scroll-clean flex-1 min-h-0 flex flex-col justify-center gap-3.5 px-8 py-8 text-center">
             <div className="flex flex-col gap-3.5 flex-none">
+              {/* One fixed slot, not three — the direction labels share the exact
+                  same spot and swap by opacity, sitting a fixed ~14px above the
+                  kind label rather than drifting to the card's corners. */}
+              <div className="relative h-8 flex-none pointer-events-none">
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="px-3 py-1.5 rounded-full text-[13px] font-medium bg-negative-subtle text-negative" style={{ opacity: v.opDont }}>
+                    Учить
+                  </span>
+                </div>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="px-3 py-1.5 rounded-full text-[13px] font-medium bg-accent-subtle text-accent" style={{ opacity: v.opKnow }}>
+                    Знаю
+                  </span>
+                </div>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="px-3 py-1.5 rounded-full text-[13px] font-medium bg-surface-subtle text-text-secondary" style={{ opacity: v.opBury }}>
+                    Отложить
+                  </span>
+                </div>
+              </div>
               <div className="text-meta">{v.cur.kind}</div>
               <div className="text-[32px] leading-[40px] font-medium">{v.cur.en}</div>
               <div className="text-[14px] text-text-secondary">{v.cur.ipa}</div>
