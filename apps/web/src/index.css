@@ -1,4 +1,11 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+/* Self-hosted so the app makes no request to Google's font CDN — avoids an
+   external dependency and the "Permissions-Policy ... attribution-reporting"
+   console warning that CDN's responses trigger in some browsers. */
+@import '@fontsource/manrope/400.css';
+@import '@fontsource/manrope/500.css';
+@import '@fontsource/manrope/600.css';
+@import '@fontsource/manrope/700.css';
+@import '@fontsource/manrope/800.css';
 @import 'tailwindcss';
 @import './styles/tokens.css';
 @import './styles/components.css';

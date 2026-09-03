@@ -14,6 +14,7 @@
   "dependencies": {
     "@app/shared": "*",
     "@base-ui/react": "^1.7.0",
+    "@fontsource/manrope": "^5.3.0",
     "lucide-react": "^1.39.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
