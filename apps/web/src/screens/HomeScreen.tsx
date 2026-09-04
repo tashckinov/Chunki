@@ -1,7 +1,9 @@
+import { useMemo } from 'react';
 import { PROGRAM_TOPICS } from '@app/shared';
 import { ChevronRight, PlusCircle, Play, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { useCalendarView, deckSizeLabel, extraListView } from '../store/derived';
+import { flattenChunks } from '../lib/collections';
 import { plural } from '../lib/plural';
 import { Card } from '../components/ui/Card';
 import { ListRow } from '../components/ui/ListRow';
@@ -13,6 +15,8 @@ export function HomeScreen() {
   const extrasOn = extras.filter((e) => e.on).length;
   const currentTopic = PROGRAM_TOPICS[s.currentTopicIndex];
   const upcomingTopics = PROGRAM_TOPICS.slice(s.currentTopicIndex, s.currentTopicIndex + 3);
+  const unauthorized = s.collectionsStatus === 'error' && s.collectionsError === 'unauthorized';
+  const allChunks = useMemo(() => flattenChunks(Object.values(s.collectionDetails)), [s.collectionDetails]);
 
   return (
     <div className="scroll-clean flex-1 min-h-0 pt-6 pb-8 flex flex-col gap-8">
@@ -108,12 +112,12 @@ export function HomeScreen() {
 
       <div className="px-5">
         <button
-          onClick={() => s.goDeck()}
+          onClick={unauthorized ? s.signIn : () => s.goDeck(allChunks)}
           className="pressable w-full flex items-center gap-4 rounded-[var(--radius-lg)] bg-accent-2-subtle px-6 py-5 text-left"
         >
           <div className="flex-1 min-w-0">
             <div className="text-[12.5px] font-semibold text-accent-2-strong uppercase tracking-wide mb-1">Карточки на сегодня</div>
-            <div className="text-[16.5px] font-semibold">{deckSizeLabel()}</div>
+            <div className="text-[16.5px] font-semibold">{unauthorized ? 'Войдите через Google' : deckSizeLabel(allChunks.length)}</div>
             <div className="text-body-secondary mt-0.5">свайпом, отдельно от программы</div>
           </div>
           <div className="w-12 h-12 flex-none rounded-full bg-accent-2 text-on-accent-2 flex items-center justify-center">

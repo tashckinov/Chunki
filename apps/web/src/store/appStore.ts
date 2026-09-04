@@ -3,8 +3,16 @@ import { persist } from 'zustand/middleware';
 import { EX_BLOCKS, EXTRA_TOPIC_DEFS, PROGRAM_TOPICS } from '@app/shared';
 import type { CEFRLevel, ExercisesGradeResult, PlacementGradeResult } from '@app/shared';
 import { gradeExercises, gradePlacementTest } from '../lib/api';
-import { activeCards } from '../lib/deck';
 import { fetchCurrentUser, logout, startGoogleLogin, type AuthUser } from '../lib/auth';
+import {
+  fetchCollectionBySlug,
+  fetchCollections,
+  flattenChunks,
+  ApiError,
+  type ChunkSummary,
+  type CollectionDetail,
+  type CollectionSummary,
+} from '../lib/collections';
 
 export type Screen =
   | 'goals'
@@ -87,8 +95,13 @@ interface AppState {
   confirmRemoveKey: string | null;
 
   deckIndex: number;
-  activeDeckCardIds: string[] | null;
+  activeDeckChunks: ChunkSummary[];
   masteredCardIds: string[];
+
+  collections: CollectionSummary[];
+  collectionDetails: Record<string, CollectionDetail>;
+  collectionsStatus: 'idle' | 'loading' | 'loaded' | 'error';
+  collectionsError: 'unauthorized' | 'error' | null;
   flipped: boolean;
   dx: number;
   dy: number;
@@ -137,7 +150,8 @@ interface AppState {
   goProgram: () => void;
   goExtras: () => void;
   goCardsLib: () => void;
-  goDeck: (cardIds?: string[]) => void;
+  goDeck: (chunks?: ChunkSummary[]) => void;
+  loadCollections: () => Promise<void>;
   openCurrentTopic: () => void;
   setNavTab: (v: number) => void;
 
@@ -210,8 +224,13 @@ export const useAppStore = create<AppState>()(
       confirmRemoveKey: null,
 
       deckIndex: 0,
-      activeDeckCardIds: null,
+      activeDeckChunks: [],
       masteredCardIds: [],
+
+      collections: [],
+      collectionDetails: {},
+      collectionsStatus: 'idle',
+      collectionsError: null,
       flipped: false,
       dx: 0,
       dy: 0,
@@ -284,8 +303,24 @@ export const useAppStore = create<AppState>()(
       goProgram: () => set({ screen: 'program' }),
       goExtras: () => set({ screen: 'extras' }),
       goCardsLib: () => set({ screen: 'cardslib' }),
-      goDeck: (cardIds) =>
-        set({ screen: 'deck', activeDeckCardIds: cardIds ?? null, deckIndex: 0, flipped: false, dx: 0, dy: 0, verdicts: {} }),
+      goDeck: (chunks) => {
+        const resolved = chunks ?? flattenChunks(Object.values(get().collectionDetails));
+        set({ screen: 'deck', activeDeckChunks: resolved, deckIndex: 0, flipped: false, dx: 0, dy: 0, verdicts: {} });
+      },
+      loadCollections: async () => {
+        if (get().collectionsStatus === 'loading' || get().collectionsStatus === 'loaded') return;
+        set({ collectionsStatus: 'loading', collectionsError: null });
+        try {
+          const list = await fetchCollections();
+          const details = await Promise.all(list.map((c) => fetchCollectionBySlug(c.slug)));
+          const collectionDetails: Record<string, CollectionDetail> = {};
+          for (const detail of details) collectionDetails[detail.slug] = detail;
+          set({ collections: list, collectionDetails, collectionsStatus: 'loaded' });
+        } catch (err) {
+          const unauthorized = err instanceof ApiError && err.status === 401;
+          set({ collectionsStatus: 'error', collectionsError: unauthorized ? 'unauthorized' : 'error' });
+        }
+      },
       openCurrentTopic: () => set({ screen: 'topic' }),
       setNavTab: (v) => {
         const s = get();
@@ -372,7 +407,7 @@ export const useAppStore = create<AppState>()(
       flipCard: () => set((s) => ({ flipped: !s.flipped })),
       swipe: (dir) => {
         const s = get();
-        const deck = activeCards(s.activeDeckCardIds);
+        const deck = s.activeDeckChunks;
         const cur = deck[s.deckIndex];
         if (!cur) return;
         set({ flying: dir, dragging: false });
@@ -398,7 +433,26 @@ export const useAppStore = create<AppState>()(
         // user/authChecked/authError are derived fresh from the session
         // cookie on every load (see checkAuth) — persisting them would show
         // a stale logged-in/out state before that check resolves.
-        const { dx, dy, dragging, flying, grading, gradingError, checkingContext, user, authChecked, authError, ...rest } = s;
+        // collections/collectionDetails likewise come fresh from the
+        // backend on every load (see loadCollections) — persisting them
+        // would show stale content after it changes server-side.
+        const {
+          dx,
+          dy,
+          dragging,
+          flying,
+          grading,
+          gradingError,
+          checkingContext,
+          user,
+          authChecked,
+          authError,
+          collections,
+          collectionDetails,
+          collectionsStatus,
+          collectionsError,
+          ...rest
+        } = s;
         void dx;
         void dy;
         void dragging;
@@ -409,6 +463,10 @@ export const useAppStore = create<AppState>()(
         void user;
         void authChecked;
         void authError;
+        void collections;
+        void collectionDetails;
+        void collectionsStatus;
+        void collectionsError;
         return rest;
       },
     },

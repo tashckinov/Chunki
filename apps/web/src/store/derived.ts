@@ -1,9 +1,8 @@
-import { CARDS, EXTRA_TOPIC_DEFS, MCQ, PROGRAM_TOPICS } from '@app/shared';
+import { EXTRA_TOPIC_DEFS, MCQ, PROGRAM_TOPICS } from '@app/shared';
 import type { CEFRLevel } from '@app/shared';
 import { useAppStore } from './appStore';
 import { plural } from '../lib/plural';
 import { buildSessions, DAY_LABELS, formatDayMonth, startOfDay, weekdayMon0 } from '../lib/schedule';
-import { activeCards } from '../lib/deck';
 
 const LEVELS_FROM: CEFRLevel[] = ['A1', 'A2', 'A2+', 'B1', 'B1+', 'B2'];
 const LEVELS_TO: CEFRLevel[] = ['B1', 'B1+', 'B2', 'C1'];
@@ -154,8 +153,8 @@ export function deckTallyView(verdicts: Record<string, string>) {
   ];
 }
 
-export function deckSizeLabel() {
-  return `${CARDS.length} ${plural(CARDS.length, 'чанк', 'чанка', 'чанков')}`;
+export function deckSizeLabel(count: number) {
+  return `${count} ${plural(count, 'чанк', 'чанка', 'чанков')}`;
 }
 
 function clamp01(v: number) {
@@ -164,7 +163,7 @@ function clamp01(v: number) {
 
 export function useDeckView() {
   const s = useAppStore();
-  const deck = activeCards(s.activeDeckCardIds);
+  const deck = s.activeDeckChunks;
   const flyOffsets: Record<string, [number, number]> = {
     know: [520, -60],
     dont: [-520, -60],
@@ -204,7 +203,7 @@ export function useDeckView() {
     opBury,
     tintColor,
     tintOpacity: maxOp * 0.14,
-    deckCounter: `${Math.min(s.deckIndex + 1, deck.length)} / ${deck.length} · чанки темы`,
-    deckValue: s.deckIndex / deck.length,
+    deckCounter: `${Math.min(s.deckIndex + 1, deck.length)} / ${deck.length}`,
+    deckValue: deck.length ? s.deckIndex / deck.length : 0,
   };
 }

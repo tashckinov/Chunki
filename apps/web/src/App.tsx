@@ -139,6 +139,7 @@ export default function App() {
   useEffect(() => {
     if (consumeAuthErrorFlag()) useAppStore.setState({ authError: true });
     useAppStore.getState().checkAuth();
+    useAppStore.getState().loadCollections();
   }, []);
 
   return (

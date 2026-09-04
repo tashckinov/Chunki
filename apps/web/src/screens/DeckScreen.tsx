@@ -4,6 +4,7 @@ import { useDeckView } from '../store/derived';
 import { Icon } from '../components/ui/Icon';
 import { IconButton } from '../components/ui/IconButton';
 import { LinearProgress } from '../components/ui/Progress';
+import { Button } from '../components/ui/Button';
 
 export function DeckScreen() {
   const s = useAppStore();
@@ -23,6 +24,15 @@ export function DeckScreen() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s.dragging]);
+
+  if (!v.cur) {
+    return (
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-4 px-8 text-center">
+        <div className="text-body-secondary">В этой колоде пока нет карточек.</div>
+        <Button onClick={s.back}>Назад</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 min-h-0 flex flex-col bg-bg">
@@ -49,7 +59,7 @@ export function DeckScreen() {
             <div className="flex flex-col gap-3.5 flex-none">
               {/* One fixed slot, not three — the direction labels share the exact
                   same spot and swap by opacity, sitting a fixed ~14px above the
-                  kind label rather than drifting to the card's corners. */}
+                  level label rather than drifting to the card's corners. */}
               <div className="relative h-8 flex-none pointer-events-none">
                 <div className="absolute inset-0 flex items-center justify-center">
                   <span className="px-3 py-1.5 rounded-full text-[13px] font-medium bg-negative-subtle text-negative" style={{ opacity: v.opDont }}>
@@ -67,21 +77,20 @@ export function DeckScreen() {
                   </span>
                 </div>
               </div>
-              <div className="text-meta">{v.cur.kind}</div>
-              <div className="text-[32px] leading-[40px] font-medium">{v.cur.en}</div>
-              <div className="text-[14px] text-text-secondary">{v.cur.ipa}</div>
+              <div className="text-meta">{v.cur.level}</div>
+              <div className="text-[32px] leading-[40px] font-medium">{v.cur.text}</div>
               {!s.flipped && <div className="text-body-secondary anim-pulse">Нажмите, чтобы увидеть перевод</div>}
             </div>
             {s.flipped && (
               <div className="flex flex-col gap-3 anim-rise flex-none">
                 <div className="h-px bg-border" />
-                {s.interfaceMode === 'ru-en' && <div className="text-[21px] leading-7 text-accent">{v.cur.ru}</div>}
-                <div className="text-[15px] leading-6 text-text-secondary italic">{v.cur.ex}</div>
-                <div className="rounded-[var(--radius-md)] bg-accent-2-subtle px-4 py-3 text-left">
-                  <div className="text-[12.5px] font-semibold text-accent-2-strong mb-1">Не путать с «{v.cur.contrast.phrase}»</div>
-                  <div className="text-[13.5px] leading-[19px] text-text-secondary">{v.cur.contrast.note}</div>
-                </div>
-                <div className="text-meta">Из темы: {v.cur.topic}</div>
+                {s.interfaceMode === 'ru-en' && <div className="text-[21px] leading-7 text-accent">{v.cur.translation}</div>}
+                {v.cur.example && <div className="text-[15px] leading-6 text-text-secondary italic">{v.cur.example}</div>}
+                {v.cur.explanation && (
+                  <div className="rounded-[var(--radius-md)] bg-accent-2-subtle px-4 py-3 text-left">
+                    <div className="text-[13.5px] leading-[19px] text-text-secondary">{v.cur.explanation}</div>
+                  </div>
+                )}
               </div>
             )}
           </div>
