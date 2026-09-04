@@ -3,7 +3,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { loadEnv } from '../../config/env.js';
 import { buildGoogleAuthUrl, exchangeGoogleCode, generatePkcePair } from './google.js';
 import { completeGoogleLogin } from './service.js';
-import { SESSION_COOKIE_NAME, destroySession, getSession } from './session.js';
+import { SESSION_COOKIE_NAME, destroySession, extractSessionToken, getSession } from './session.js';
 
 const OAUTH_COOKIE_NAME = 'chunki_oauth_state';
 const OAUTH_COOKIE_MAX_AGE_SECONDS = 10 * 60;
@@ -97,7 +97,13 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
         expires: expiresAt,
       });
 
-      return reply.redirect(frontendBase);
+      // Safari (macOS and iOS) blocks third-party cookies unconditionally —
+      // SameSite=None doesn't help, so the cross-site `chunki_session` cookie
+      // above never makes it back to the frontend there. Also hand the token
+      // over via URL fragment (never sent to any server, so it's safe here)
+      // so the frontend can store it itself and send it as a normal
+      // Authorization header, which works in every browser.
+      return reply.redirect(`${frontendBase}/#auth_token=${encodeURIComponent(token)}`);
     } catch (err) {
       request.log.error({ message: logSafeError(err) }, 'Google auth callback failed');
       return failure();
@@ -105,7 +111,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get('/me', async (request, reply) => {
-    const token = request.cookies[SESSION_COOKIE_NAME];
+    const token = extractSessionToken(request);
     const session = token ? await getSession(token) : null;
 
     if (!session) {
@@ -124,7 +130,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post('/logout', async (request, reply) => {
-    const token = request.cookies[SESSION_COOKIE_NAME];
+    const token = extractSessionToken(request);
     if (token) await destroySession(token);
     reply.clearCookie(SESSION_COOKIE_NAME, { path: '/' });
     return { ok: true };

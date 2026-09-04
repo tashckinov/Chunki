@@ -6,6 +6,7 @@ vi.mock('./session.js', async () => {
   const actual = await vi.importActual<typeof import('./session.js')>('./session.js');
   return {
     SESSION_COOKIE_NAME: actual.SESSION_COOKIE_NAME,
+    extractSessionToken: actual.extractSessionToken,
     getSession: vi.fn(),
     destroySession: vi.fn(),
     createSession: vi.fn(),

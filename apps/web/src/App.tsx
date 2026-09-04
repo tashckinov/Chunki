@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useAppStore } from './store/appStore';
-import { consumeAuthErrorFlag } from './lib/auth';
+import { consumeAuthErrorFlag, consumeAuthToken } from './lib/auth';
 import { BottomNavigation, type NavItem } from './components/ui/BottomNavigation';
 import { Icon, type IconName } from './components/ui/Icon';
 import { Logo } from './components/brand/Logo';
@@ -137,6 +137,7 @@ export default function App() {
   const setNavTab = useAppStore((s) => s.setNavTab);
 
   useEffect(() => {
+    consumeAuthToken();
     if (consumeAuthErrorFlag()) useAppStore.setState({ authError: true });
     useAppStore.getState().checkAuth();
     useAppStore.getState().loadCollections();
