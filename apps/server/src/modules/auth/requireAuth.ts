@@ -1,5 +1,5 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { SESSION_COOKIE_NAME, getSession } from './session.js';
+import { extractSessionToken, getSession } from './session.js';
 
 /**
  * Shared preHandler for routes that just need "is there a valid Chunki
@@ -8,7 +8,7 @@ import { SESSION_COOKIE_NAME, getSession } from './session.js';
  * inline check (it actually uses the session data), left as-is.
  */
 export async function requireAuth(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-  const token = request.cookies[SESSION_COOKIE_NAME];
+  const token = extractSessionToken(request);
   const session = token ? await getSession(token) : null;
   if (!session) {
     reply.code(401).send({ error: 'unauthorized' });

@@ -4,7 +4,7 @@ import cookie from '@fastify/cookie';
 
 vi.mock('../auth/session.js', async () => {
   const actual = await vi.importActual<typeof import('../auth/session.js')>('../auth/session.js');
-  return { SESSION_COOKIE_NAME: actual.SESSION_COOKIE_NAME, getSession: vi.fn() };
+  return { SESSION_COOKIE_NAME: actual.SESSION_COOKIE_NAME, extractSessionToken: actual.extractSessionToken, getSession: vi.fn() };
 });
 vi.mock('./service.js', () => ({ getChunkById: vi.fn() }));
 

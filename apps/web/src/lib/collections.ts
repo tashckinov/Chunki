@@ -1,3 +1,5 @@
+import { authHeaders } from './auth';
+
 // GitHub Pages is static — no dev-server proxy for /api/*, so production
 // needs an absolute backend URL (set at build time, see lib/auth.ts).
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/+$/, '');
@@ -15,7 +17,7 @@ export class ApiError extends Error {
 }
 
 async function getJson<T>(path: string): Promise<T> {
-  const res = await fetch(apiUrl(path), { credentials: 'include' });
+  const res = await fetch(apiUrl(path), { credentials: 'include', headers: authHeaders() });
   if (!res.ok) throw new ApiError(res.status, `${path} failed: ${res.status}`);
   return res.json() as Promise<T>;
 }

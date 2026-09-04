@@ -1,4 +1,5 @@
 import { randomBytes, createHash } from 'node:crypto';
+import type { FastifyRequest } from 'fastify';
 import { pool } from '../../db/pool.js';
 
 export const SESSION_COOKIE_NAME = 'chunki_session';
@@ -14,6 +15,21 @@ export interface AuthenticatedSession {
 
 function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
+}
+
+/**
+ * Safari blocks the cross-site `chunki_session` cookie outright (ITP blocks
+ * third-party cookies unconditionally, regardless of SameSite=None) — this
+ * broke Google sign-in on iOS Safari and the installed PWA. The callback now
+ * also hands the token to the frontend via URL fragment, and the frontend
+ * resends it as `Authorization: Bearer <token>`, which every browser sends
+ * for a plain cross-origin fetch. The cookie is kept as a harmless fallback
+ * for same-site (dev) deployments.
+ */
+export function extractSessionToken(request: FastifyRequest): string | null {
+  const auth = request.headers.authorization;
+  if (auth?.startsWith('Bearer ')) return auth.slice('Bearer '.length);
+  return request.cookies[SESSION_COOKIE_NAME] ?? null;
 }
 
 /**
