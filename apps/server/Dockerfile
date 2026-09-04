@@ -11,7 +11,11 @@ COPY apps/web/package.json apps/web/package.json
 COPY packages/shared/package.json packages/shared/package.json
 
 FROM base AS build
-RUN npm ci
+# BuildKit cache mount for npm's package cache: persists across builds (even
+# when package-lock.json changes and this layer reruns), so npm ci re-fetches
+# from disk instead of the registry. Doesn't affect the final image — the
+# cache lives outside any layer.
+RUN --mount=type=cache,target=/root/.npm npm ci
 COPY packages/shared packages/shared
 COPY apps/server apps/server
 RUN npm run build -w packages/shared
@@ -21,7 +25,7 @@ FROM base AS runtime
 ENV NODE_ENV=production
 # Only the workspaces the backend actually needs at runtime — apps/web's
 # (unrelated) dependencies never end up in this image.
-RUN npm ci --omit=dev --workspace=apps/server --workspace=packages/shared
+RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev --workspace=apps/server --workspace=packages/shared
 
 COPY --from=build /app/packages/shared/dist packages/shared/dist
 COPY --from=build /app/apps/server/dist apps/server/dist
