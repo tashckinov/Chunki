@@ -33,6 +33,9 @@ export type Screen =
 
 export type DeckVerdict = 'know' | 'dont' | 'bury';
 
+/** Number of "Знаю" swipes needed to fully master a chunk. */
+export const MAX_CHUNK_LEVEL = 4;
+
 const BACK_MAP: Partial<Record<Screen, Screen>> = {
   goals: 'home',
   test: 'goals',
@@ -96,7 +99,8 @@ interface AppState {
 
   deckIndex: number;
   activeDeckChunks: ChunkSummary[];
-  masteredCardIds: string[];
+  /** Per-chunk mastery level, 0..MAX_CHUNK_LEVEL — rises on "Знаю", drops on "Учить". */
+  chunkLevels: Record<string, number>;
 
   collections: CollectionSummary[];
   collectionDetails: Record<string, CollectionDetail>;
@@ -225,7 +229,7 @@ export const useAppStore = create<AppState>()(
 
       deckIndex: 0,
       activeDeckChunks: [],
-      masteredCardIds: [],
+      chunkLevels: {},
 
       collections: [],
       collectionDetails: {},
@@ -413,16 +417,25 @@ export const useAppStore = create<AppState>()(
         set({ flying: dir, dragging: false });
         setTimeout(() => {
           const next = s.deckIndex + 1;
-          set((st) => ({
-            deckIndex: next,
-            flipped: false,
-            dx: 0,
-            dy: 0,
-            flying: null,
-            verdicts: { ...st.verdicts, [cur.id]: dir },
-            masteredCardIds: dir === 'know' && !st.masteredCardIds.includes(cur.id) ? [...st.masteredCardIds, cur.id] : st.masteredCardIds,
-            screen: next >= deck.length ? 'deckdone' : 'deck',
-          }));
+          set((st) => {
+            const level = st.chunkLevels[cur.id] ?? 0;
+            const nextLevel =
+              dir === 'know'
+                ? Math.min(MAX_CHUNK_LEVEL, level + 1)
+                : dir === 'dont'
+                  ? Math.max(0, level - 1)
+                  : level;
+            return {
+              deckIndex: next,
+              flipped: false,
+              dx: 0,
+              dy: 0,
+              flying: null,
+              verdicts: { ...st.verdicts, [cur.id]: dir },
+              chunkLevels: nextLevel === level ? st.chunkLevels : { ...st.chunkLevels, [cur.id]: nextLevel },
+              screen: next >= deck.length ? 'deckdone' : 'deck',
+            };
+          });
         }, 230);
       },
       undoCard: () => set((s) => (s.deckIndex > 0 ? { deckIndex: s.deckIndex - 1, flipped: false, dx: 0, dy: 0 } : {})),

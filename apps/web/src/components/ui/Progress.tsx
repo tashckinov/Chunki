@@ -6,6 +6,45 @@ export function LinearProgress({ value }: { value: number }) {
   );
 }
 
+/** A ring split into discrete arcs, filled left-to-right — how well a single chunk is learned. */
+export function SegmentedRing({
+  segments,
+  filled,
+  size = 20,
+  thickness = 3,
+  gapDegrees = 18,
+}: {
+  segments: number;
+  filled: number;
+  size?: number;
+  thickness?: number;
+  gapDegrees?: number;
+}) {
+  const radius = (size - thickness) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const segmentAngle = 360 / segments;
+  const arcLength = (Math.max(0, segmentAngle - gapDegrees) / 360) * circumference;
+
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      {Array.from({ length: segments }, (_, i) => (
+        <circle
+          key={i}
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          strokeWidth={thickness}
+          strokeLinecap="round"
+          strokeDasharray={`${arcLength} ${circumference - arcLength}`}
+          className={i < filled ? 'stroke-accent transition-[stroke] duration-200' : 'stroke-surface-subtle'}
+          style={{ transform: `rotate(${i * segmentAngle - 90}deg)`, transformOrigin: '50% 50%' }}
+        />
+      ))}
+    </svg>
+  );
+}
+
 export function CircularProgress({ value, size = 96, thickness = 7 }: { value: number; size?: number; thickness?: number }) {
   const radius = (size - thickness) / 2;
   const circumference = 2 * Math.PI * radius;
