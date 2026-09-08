@@ -4,6 +4,7 @@ import { loadEnv } from '../../config/env.js';
 import { buildGoogleAuthUrl, exchangeGoogleCode, generatePkcePair } from './google.js';
 import { completeGoogleLogin } from './service.js';
 import { SESSION_COOKIE_NAME, destroySession, extractSessionToken, getSession } from './session.js';
+import { webauthnRoutes } from './webauthnRoutes.js';
 
 const OAUTH_COOKIE_NAME = 'chunki_oauth_state';
 const OAUTH_COOKIE_MAX_AGE_SECONDS = 10 * 60;
@@ -32,6 +33,8 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
   // enough for same-site localhost and doesn't require HTTPS.
   const cookieSameSite = isProd ? 'none' : 'lax';
   const frontendBase = env.FRONTEND_URL.replace(/\/+$/, '');
+
+  await app.register(webauthnRoutes);
 
   app.get('/google', async (_request, reply) => {
     const state = randomBytes(24).toString('base64url');

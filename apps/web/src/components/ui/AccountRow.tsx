@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { KeyRound } from 'lucide-react';
 import { useAppStore } from '../../store/appStore';
 import { APP_VERSION } from '../../lib/version';
 import { Dialog } from './Dialog';
@@ -73,30 +74,47 @@ function GoogleGlyph() {
 }
 
 /**
- * No password/email-signup path here — Google OAuth is the only sign-in
- * method. The client never submits or overrides a profile picture: `imageUrl`
- * always comes back from the backend's /api/auth/me, sourced from Google's
- * verified profile at login time.
+ * Sign-in is Google OAuth or a Passkey — no password/email-signup path.
+ * A passkey account is separate from a Google account, even on the same
+ * device: there's no account linking yet. The client never submits or
+ * overrides a profile picture: `imageUrl` always comes back from the
+ * backend's /api/auth/me, sourced from the provider's verified profile (or
+ * left null for passkey accounts, which have no provider profile at all).
  */
 function AccountDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  const { user, signIn, signOut, authError, dismissAuthError } = useAppStore();
+  const { user, signIn, signOut, authError, dismissAuthError, signInWithPasskey, passkeyBusy, passkeyError, dismissPasskeyError } = useAppStore();
 
   if (!user) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange} headline="Профиль">
         <div className="flex flex-col gap-5">
-          <button
-            type="button"
-            onClick={() => {
-              dismissAuthError();
-              signIn();
-            }}
-            className="pressable w-full flex items-center justify-center gap-2.5 rounded-[var(--radius-md)] border border-border px-4 py-3 text-[14.5px] font-medium"
-          >
-            <GoogleGlyph />
-            Войти через Google
-          </button>
+          <div className="flex flex-col gap-2.5">
+            <button
+              type="button"
+              onClick={() => {
+                dismissAuthError();
+                signIn();
+              }}
+              className="pressable w-full flex items-center justify-center gap-2.5 rounded-[var(--radius-md)] border border-border px-4 py-3 text-[14.5px] font-medium"
+            >
+              <GoogleGlyph />
+              Войти через Google
+            </button>
+            <button
+              type="button"
+              disabled={passkeyBusy}
+              onClick={() => {
+                dismissPasskeyError();
+                void signInWithPasskey();
+              }}
+              className="pressable w-full flex items-center justify-center gap-2.5 rounded-[var(--radius-md)] border border-border px-4 py-3 text-[14.5px] font-medium disabled:opacity-60"
+            >
+              <KeyRound size={18} />
+              {passkeyBusy ? 'Подключаем Passkey…' : 'Войти через Passkey'}
+            </button>
+          </div>
           {authError && <div className="text-[13px] text-negative -mt-2">Не получилось войти. Попробуйте ещё раз.</div>}
+          {passkeyError && <div className="text-[13px] text-negative -mt-2">{passkeyError}</div>}
           <div className="border-t border-border pt-4">
             <InterfaceModeSetting />
           </div>

@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware';
 import { EX_BLOCKS, EXTRA_TOPIC_DEFS, PROGRAM_TOPICS } from '@app/shared';
 import type { CEFRLevel, ExercisesGradeResult, PlacementGradeResult } from '@app/shared';
 import { gradeExercises, gradePlacementTest } from '../lib/api';
-import { fetchCurrentUser, logout, startGoogleLogin, type AuthUser } from '../lib/auth';
+import { fetchCurrentUser, logout, startGoogleLogin, signInWithPasskey as signInWithPasskeyCeremony, type AuthUser } from '../lib/auth';
 import {
   fetchCollectionBySlug,
   fetchCollections,
@@ -57,6 +57,8 @@ interface AppState {
   user: AuthUser | null;
   authChecked: boolean;
   authError: boolean;
+  passkeyBusy: boolean;
+  passkeyError: string | null;
   interfaceMode: 'ru-en' | 'en-en';
   hasProgram: boolean;
   plan: 'monthly' | 'yearly';
@@ -121,6 +123,8 @@ interface AppState {
   /** Runs once on app start to see if a session cookie is already valid. */
   checkAuth: () => Promise<void>;
   dismissAuthError: () => void;
+  signInWithPasskey: () => Promise<void>;
+  dismissPasskeyError: () => void;
   setInterfaceMode: (mode: 'ru-en' | 'en-en') => void;
 
   pickFrom: (level: CEFRLevel) => void;
@@ -187,6 +191,8 @@ export const useAppStore = create<AppState>()(
       user: null,
       authChecked: false,
       authError: false,
+      passkeyBusy: false,
+      passkeyError: null,
       interfaceMode: 'ru-en',
       hasProgram: false,
       plan: 'monthly',
@@ -258,6 +264,16 @@ export const useAppStore = create<AppState>()(
         }
       },
       dismissAuthError: () => set({ authError: false }),
+      signInWithPasskey: async () => {
+        set({ passkeyBusy: true, passkeyError: null });
+        try {
+          const user = await signInWithPasskeyCeremony();
+          set({ user, passkeyBusy: false });
+        } catch {
+          set({ passkeyBusy: false, passkeyError: 'Не получилось войти через Passkey. Попробуйте ещё раз.' });
+        }
+      },
+      dismissPasskeyError: () => set({ passkeyError: null }),
       setInterfaceMode: (mode) => set({ interfaceMode: mode }),
 
       pickFrom: (level) => set({ from: level }),
@@ -460,6 +476,8 @@ export const useAppStore = create<AppState>()(
           user,
           authChecked,
           authError,
+          passkeyBusy,
+          passkeyError,
           collections,
           collectionDetails,
           collectionsStatus,
@@ -476,6 +494,8 @@ export const useAppStore = create<AppState>()(
         void user;
         void authChecked;
         void authError;
+        void passkeyBusy;
+        void passkeyError;
         void collections;
         void collectionDetails;
         void collectionsStatus;
