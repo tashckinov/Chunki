@@ -23,7 +23,11 @@ async function main() {
 
   const app = Fastify({ logger: true });
 
-  await app.register(cors, { origin: env.CORS_ORIGIN, credentials: true });
+  // @fastify/cors only allows GET/HEAD/POST by default — every PATCH/DELETE
+  // route in this app (admin edits/deletes, in particular) would otherwise
+  // fail the browser's CORS preflight with "Method ... not allowed by
+  // Access-Control-Allow-Methods" from the cross-site GitHub Pages frontend.
+  await app.register(cors, { origin: env.CORS_ORIGIN, credentials: true, methods: ['GET', 'POST', 'PATCH', 'DELETE'] });
   await app.register(cookie, { secret: env.SESSION_SECRET });
 
   // Publicly readable — banner images aren't sensitive, and a plain <img>
