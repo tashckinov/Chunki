@@ -39,6 +39,17 @@ export default defineConfig({
       // UpdatePrompt.tsx) so we can show an in-app "update available" banner
       // instead of the plugin's default silent/auto-injected registration.
       injectRegister: null,
+      workbox: {
+        // Without this, skipWaiting() (triggered by tapping "Обновить")
+        // activates the new worker but doesn't hand it control of the
+        // already-open tab — only a future navigation would. That left the
+        // app relying on a blind setTimeout reload racing against
+        // activation, causing double reloads / occasional blank screens.
+        // clientsClaim makes the new worker claim the open tab immediately
+        // on activation, so the controllerchange-driven reload becomes
+        // reliable instead of a guess.
+        clientsClaim: true,
+      },
       manifest: {
         name: 'Chunki — английский чанками',
         short_name: 'Chunki',

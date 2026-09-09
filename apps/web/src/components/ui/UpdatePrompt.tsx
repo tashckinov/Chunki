@@ -8,16 +8,14 @@ import { useRegisterSW } from 'virtual:pwa-register/react';
 // focus.
 const CHECK_INTERVAL_MS = 30 * 60 * 1000;
 
-let reloadOnControlChangeArmed = false;
-function reloadWhenNewWorkerTakesControl() {
-  if (reloadOnControlChangeArmed || !('serviceWorker' in navigator)) return;
-  reloadOnControlChangeArmed = true;
-  let reloaded = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (reloaded) return;
-    reloaded = true;
-    window.location.reload();
-  });
+// Guards against firing more than one location.reload() — a second call
+// while the first is still navigating aborts it, which used to produce a
+// "small reload, banner reappears, occasionally blank screen" bug.
+let reloaded = false;
+function reloadOnce() {
+  if (reloaded) return;
+  reloaded = true;
+  window.location.reload();
 }
 
 export function UpdatePrompt() {
@@ -26,9 +24,9 @@ export function UpdatePrompt() {
     needRefresh: [needRefresh],
     updateServiceWorker,
   } = useRegisterSW({
+    onNeedReload: reloadOnce,
     onRegisteredSW(_url, registration) {
       if (!registration) return;
-      reloadWhenNewWorkerTakesControl();
       registration.update();
       setInterval(() => registration.update(), CHECK_INTERVAL_MS);
       document.addEventListener('visibilitychange', () => {
@@ -42,10 +40,11 @@ export function UpdatePrompt() {
   const onUpdate = () => {
     setUpdating(true);
     updateServiceWorker(true);
-    // Belt and suspenders: reload unconditionally shortly after, in case the
-    // new worker never signals it took control. Worst case is one harmless
-    // extra reload instead of a button that silently does nothing.
-    setTimeout(() => window.location.reload(), 3000);
+    // Safety net only, not the primary path: onNeedReload (backed by
+    // clientsClaim in vite.config.ts) normally fires within well under a
+    // second since no network is involved. If it somehow never does, force
+    // a reload after a generous delay instead of leaving the button stuck.
+    setTimeout(reloadOnce, 10000);
   };
 
   return (
