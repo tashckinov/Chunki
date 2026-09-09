@@ -45,12 +45,16 @@ Run migrations, then seed demo content, against the Compose Postgres (after
 `docker compose up -d postgres` and the backend image has been built at least once):
 
 ```bash
-docker compose exec backend npm run migrate
-docker compose exec backend npm run seed
+docker compose exec backend npm run migrate -w apps/server
+docker compose exec backend npm run seed -w apps/server
 ```
 
-(If `backend` isn't running yet, `docker compose run --rm backend npm run migrate` — and `... seed`
-— work too.)
+The container's working directory is the monorepo root, and `migrate`/`seed` are scripts on
+`apps/server`'s own `package.json` — the `-w apps/server` is required, `npm run migrate` alone
+fails with `Missing script: "migrate"`.
+
+(If `backend` isn't running yet, `docker compose run --rm backend npm run migrate -w apps/server`
+— and `... seed -w apps/server` — work too.)
 
 **Verify Postgres health:**
 
@@ -73,7 +77,7 @@ docker compose exec postgres psql -U chunki -d chunki -c 'select * from schema_m
 ```bash
 docker compose down -v          # removes the postgres_data volume
 docker compose up -d postgres
-docker compose exec backend npm run migrate
+docker compose exec backend npm run migrate -w apps/server
 ```
 
 ### Option B — backend on the host, Postgres in Docker
@@ -136,7 +140,7 @@ Then, on the VPS:
 git clone <repo> && cd Chunki
 cp .env.example .env    # fill in GOOGLE_*, SESSION_SECRET, and the prod values above
 docker compose up -d --build
-docker compose exec backend npm run migrate
+docker compose exec backend npm run migrate -w apps/server
 ```
 
 Everything else (commands, healthchecks, migrations) is identical to local Docker Compose use —
@@ -151,9 +155,9 @@ the VPS:
 ```bash
 cd Chunki                                   # the existing clone on the VPS
 git pull origin main
-docker compose up -d --build backend        # rebuild only the backend image; leaves postgres untouched
-docker compose exec backend npm run migrate # idempotent — safe even with no new migrations
-docker compose logs -f backend              # confirm clean startup, then Ctrl-C
+docker compose up -d --build backend                        # rebuild only the backend image; leaves postgres untouched
+docker compose exec backend npm run migrate -w apps/server   # idempotent — safe even with no new migrations
+docker compose logs -f backend                                # confirm clean startup, then Ctrl-C
 ```
 
 ## Startup and failure behavior
@@ -310,8 +314,8 @@ rejecting a duplicate membership:
 
 ```bash
 docker compose up -d postgres
-docker compose exec backend npm run migrate     # or: npm run migrate:dev -w apps/server, from the host
-npm run test:integration -w apps/server         # reads DATABASE_URL from apps/server/.env
+docker compose exec backend npm run migrate -w apps/server   # or: npm run migrate:dev -w apps/server, from the host
+npm run test:integration -w apps/server                        # reads DATABASE_URL from apps/server/.env
 ```
 
 The integration suite inserts its own uniquely-suffixed rows and doesn't delete them afterward

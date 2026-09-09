@@ -43,8 +43,8 @@ npm run build:shared         # compiles packages/shared once (rerun after editin
 
 cp .env.example .env         # repo root — Google OAuth + Postgres config, see apps/server/README.md
 docker compose up -d postgres
-docker compose exec backend npm run migrate    # after `docker compose up --build` at least once,
-                                                # or: npm run migrate:dev -w apps/server
+docker compose exec backend npm run migrate -w apps/server    # after `docker compose up --build` at least once,
+                                                                 # or: npm run migrate:dev -w apps/server, from the host
 
 npm run dev:server           # http://localhost:8787 — mock grading by default
 npm run dev:web              # http://localhost:5173 — proxies /api to the server above
