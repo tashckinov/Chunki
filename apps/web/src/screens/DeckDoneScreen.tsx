@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useAppStore } from '../store/appStore';
 import { deckTallyView } from '../store/derived';
 import { plural } from '../lib/plural';
@@ -11,10 +12,11 @@ const VERDICT_COPY: Record<string, { label: string; className: string }> = {
 };
 
 export function DeckDoneScreen() {
-  const { sessionVerdicts, sessionProductionResults, sessionProductionPending, activeDeckChunks, goCardsLib } = useAppStore();
+  const { sessionVerdicts, sessionProductionResults, sessionProductionPending, productionLimitReached, activeDeckChunks, goCardsLib } = useAppStore();
   const tally = deckTallyView(sessionVerdicts);
   const productionEntries = Object.entries(sessionProductionResults);
   const pendingCount = Object.keys(sessionProductionPending).length;
+  const [subscribeStub, setSubscribeStub] = useState(false);
 
   return (
     <div className="flex-1 min-h-0 px-5 py-8 flex flex-col gap-8 anim-rise overflow-y-auto scroll-clean">
@@ -57,6 +59,22 @@ export function DeckDoneScreen() {
               <Spinner size={16} borderWidth={2} />
               Проверяем ещё {pendingCount} {plural(pendingCount, 'ответ', 'ответа', 'ответов')}…
             </div>
+          )}
+        </div>
+      )}
+
+      {productionLimitReached && (
+        <div className="rounded-[var(--radius-md)] bg-accent-subtle p-4 flex flex-col gap-2.5">
+          <div className="text-[14.5px] font-semibold">Бесплатные проверки закончились</div>
+          <div className="text-body-secondary text-[13.5px]">
+            На бесплатном тарифе доступно 3 проверки предложений. Хотите больше? Оформите подписку.
+          </div>
+          {subscribeStub ? (
+            <div className="text-negative text-[13.5px]">Извините, не получилось. Подписка пока не доступна.</div>
+          ) : (
+            <Button size="sm" onClick={() => setSubscribeStub(true)}>
+              Оформить подписку
+            </Button>
           )}
         </div>
       )}

@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { NavigationBar } from '../../components/ui/NavigationBar';
 import { IconButton } from '../../components/ui/IconButton';
 import { Button } from '../../components/ui/Button';
-import { fetchAdminUsers, setUserPremiumUntil, type AdminUser } from '../../lib/admin';
+import { fetchAdminUsers, setUserPremiumUntil, resetProductionChecks, type AdminUser } from '../../lib/admin';
+
+const FREE_PRODUCTION_CHECKS_LIMIT = 3;
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
@@ -44,6 +46,19 @@ export function UsersSection({ onOpenMenu }: { onOpenMenu: () => void }) {
     }
   }
 
+  async function resetChecks(userId: string) {
+    setBusyId(userId);
+    setError(null);
+    try {
+      const updated = await resetProductionChecks(userId);
+      setUsers((prev) => prev?.map((u) => (u.id === userId ? updated : u)) ?? prev);
+    } catch {
+      setError('Не удалось сбросить попытки.');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   return (
     <div className="flex-1 min-h-0 flex flex-col">
       <NavigationBar title="Пользователи" leading={<IconButton icon="Menu" label="Меню" onClick={onOpenMenu} />} />
@@ -69,6 +84,14 @@ export function UsersSection({ onOpenMenu }: { onOpenMenu: () => void }) {
                 </div>
                 <div className="text-[13.5px]">
                   Подписка до: <span className="font-medium">{formatDate(u.premiumUntil)}</span>
+                </div>
+                <div className="flex items-center justify-between gap-2 text-[13.5px]">
+                  <span>
+                    Проверок предложений: {u.productionChecksUsed}/{FREE_PRODUCTION_CHECKS_LIMIT}
+                  </span>
+                  <Button size="sm" variant="ghost" disabled={busyId === u.id} onClick={() => resetChecks(u.id)}>
+                    Сбросить попытки
+                  </Button>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Button size="sm" variant="secondary" disabled={busyId === u.id} onClick={() => apply(u.id, addDaysIso(30))}>

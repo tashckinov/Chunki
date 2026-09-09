@@ -127,6 +127,8 @@ interface AppState {
   sessionProductionResults: Record<string, { kind: 'ok'; verdict: ProductionVerdict; feedback: string } | { kind: 'error'; message: string }>;
   /** Chunks whose production-check answer was submitted but hasn't resolved yet — drives DeckDoneScreen's "still checking" indicator. */
   sessionProductionPending: Record<string, true>;
+  /** Set when this deck session got kicked to the summary early because a free user hit the 3-check limit — drives DeckDoneScreen's upsell block. */
+  productionLimitReached: boolean;
   /** Chunks already sent to a recognition check this session, so a repeat "don't know"/"unsure" doesn't loop. */
   recognitionAttemptedThisSession: Record<string, true>;
 
@@ -282,6 +284,7 @@ export const useAppStore = create<AppState>()(
       sessionVerdicts: {},
       sessionProductionResults: {},
       sessionProductionPending: {},
+      productionLimitReached: false,
       recognitionAttemptedThisSession: {},
 
       recognitionChunkId: null,
@@ -391,6 +394,7 @@ export const useAppStore = create<AppState>()(
           sessionVerdicts: {},
           sessionProductionResults: {},
           sessionProductionPending: {},
+          productionLimitReached: false,
           recognitionAttemptedThisSession: {},
         });
         const chunkIds = resolved.map((c) => c.id);
@@ -609,7 +613,11 @@ export const useAppStore = create<AppState>()(
         try {
           const check = await getProductionCheck(chunkId);
           if (!check.available) {
-            get().advanceDeck();
+            if (check.reason === 'limit_reached') {
+              set({ screen: 'deckdone', productionLimitReached: true });
+            } else {
+              get().advanceDeck();
+            }
             return;
           }
           set({

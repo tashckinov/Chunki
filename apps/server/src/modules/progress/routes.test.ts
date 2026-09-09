@@ -147,6 +147,15 @@ describe('GET /api/progress/production-check/:chunkId', () => {
     expect(res.json()).toEqual({ available: false });
   });
 
+  it('returns available:false with reason limit_reached for a capped free user', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(authenticatedSession);
+    vi.mocked(service.buildProductionCheck).mockResolvedValue({ kind: 'limit_reached' });
+
+    const res = await app.inject({ method: 'GET', url: `/api/progress/production-check/${validChunkId}`, cookies: authCookie });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ available: false, reason: 'limit_reached' });
+  });
+
   it('returns the situation when available', async () => {
     vi.mocked(session.getSession).mockResolvedValue(authenticatedSession);
     vi.mocked(service.buildProductionCheck).mockResolvedValue({
@@ -199,6 +208,21 @@ describe('POST /api/progress/production-check/:chunkId', () => {
 
     expect(res.statusCode).toBe(502);
     expect(res.json()).toEqual({ error: 'judge_unavailable' });
+  });
+
+  it('returns 402 limit_reached for a capped free user', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(authenticatedSession);
+    vi.mocked(service.submitProductionAnswer).mockResolvedValue({ kind: 'limit_reached' });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/progress/production-check/${validChunkId}`,
+      cookies: authCookie,
+      payload: { answer: 'anything' },
+    });
+
+    expect(res.statusCode).toBe(402);
+    expect(res.json()).toEqual({ error: 'limit_reached' });
   });
 
   it('rate-limits after too many requests from the same user', async () => {

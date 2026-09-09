@@ -4,6 +4,7 @@ import { requireAdmin } from '../auth/requireAuth.js';
 import {
   listUsers,
   setUserPremiumUntil,
+  resetProductionChecks,
   listCollectionsAdmin,
   createCollection,
   updateCollection,
@@ -75,6 +76,20 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       return { error: 'invalid_request' };
     }
     const result = await setUserPremiumUntil(params.data.id, body.data.premiumUntil ? new Date(body.data.premiumUntil) : null);
+    if (result.kind === 'not_found') {
+      reply.code(404);
+      return { error: 'not_found' };
+    }
+    return { user: result.user };
+  });
+
+  app.post('/users/:id/reset-production-checks', async (request, reply) => {
+    const params = idParamSchema.safeParse(request.params);
+    if (!params.success) {
+      reply.code(400);
+      return { error: 'invalid_request' };
+    }
+    const result = await resetProductionChecks(params.data.id);
     if (result.kind === 'not_found') {
       reply.code(404);
       return { error: 'not_found' };

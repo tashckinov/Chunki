@@ -78,6 +78,9 @@ export const progressRoutes: FastifyPluginAsync = async (app) => {
       reply.code(409);
       return { error: 'wrong_state' };
     }
+    if (result.kind === 'limit_reached') {
+      return { available: false, reason: 'limit_reached' };
+    }
     if (result.kind === 'unavailable') {
       return { available: false };
     }
@@ -129,6 +132,10 @@ export const progressRoutes: FastifyPluginAsync = async (app) => {
       if (result.kind === 'unavailable') {
         reply.code(409);
         return { error: 'unavailable' };
+      }
+      if (result.kind === 'limit_reached') {
+        reply.code(402);
+        return { error: 'limit_reached' };
       }
       return { verdict: result.verdict, feedback: result.feedback, progress: result.progress };
     },

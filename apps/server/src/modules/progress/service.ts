@@ -1,6 +1,7 @@
 import type { ProductionCheckVerdict } from '@app/shared';
 import { getProductionJudgeProvider } from '../../openrouter/index.js';
 import { recordAiCallLog } from '../aiLogs/repository.js';
+import { findAccountStatus, incrementProductionChecksUsed } from '../users/repository.js';
 import {
   findProgress,
   upsertProgress,
@@ -9,6 +10,15 @@ import {
   findDistractorTranslations,
   type ProgressRow,
 } from './repository.js';
+
+// Free (non-premium, non-admin) users get 3 lifetime production checks —
+// permanent until an admin resets production_checks_used back to 0 (see
+// admin/repository.ts's resetProductionChecksUsed).
+const FREE_PRODUCTION_CHECKS_LIMIT = 3;
+
+function isPremiumActive(premiumUntil: Date | null): boolean {
+  return !!premiumUntil && premiumUntil.getTime() > Date.now();
+}
 
 export type SortVerdict = 'know' | 'dont' | 'bury';
 
@@ -125,6 +135,7 @@ export type ProductionCheckAvailability =
   | { kind: 'not_found' }
   | { kind: 'wrong_state' }
   | { kind: 'unavailable' }
+  | { kind: 'limit_reached' }
   | { kind: 'ok'; chunkId: string; situationPrompt: string; chunkText: string; chunkTranslation: string };
 
 export async function buildProductionCheck(userId: string, chunkId: string): Promise<ProductionCheckAvailability> {
@@ -135,6 +146,11 @@ export async function buildProductionCheck(userId: string, chunkId: string): Pro
   const state = progress?.state ?? 'unseen';
   if (!PRODUCTION_ELIGIBLE_STATES.has(state)) return { kind: 'wrong_state' };
   if (chunk.situation_prompts.length === 0) return { kind: 'unavailable' };
+
+  const account = await findAccountStatus(userId);
+  if (account && !account.isAdmin && !isPremiumActive(account.premiumUntil) && account.productionChecksUsed >= FREE_PRODUCTION_CHECKS_LIMIT) {
+    return { kind: 'limit_reached' };
+  }
 
   // Round-robin by attempt count, not random — cycles through every prompt
   // over repeated encounters instead of a repeat-prone random pick. Stable
@@ -148,6 +164,7 @@ export type ProductionSubmitResult =
   | { kind: 'not_found' }
   | { kind: 'wrong_state' }
   | { kind: 'unavailable' }
+  | { kind: 'limit_reached' }
   | { kind: 'ok'; verdict: ProductionCheckVerdict; feedback: string; progress: ProgressSummary };
 
 const VERDICT_STATE: Record<ProductionCheckVerdict, string> = { chunk_used: 'active', meaning_only: 'passive', not_conveyed: 'unknown' };
@@ -159,6 +176,10 @@ export async function submitProductionAnswer(userId: string, chunkId: string, an
   const current = (await findProgress(userId, chunkId)) ?? emptyRow();
   if (!PRODUCTION_ELIGIBLE_STATES.has(current.state)) return { kind: 'wrong_state' };
   if (chunk.situation_prompts.length === 0) return { kind: 'unavailable' };
+
+  const account = await findAccountStatus(userId);
+  const isFree = !!account && !account.isAdmin && !isPremiumActive(account.premiumUntil);
+  if (account && isFree && account.productionChecksUsed >= FREE_PRODUCTION_CHECKS_LIMIT) return { kind: 'limit_reached' };
 
   const index = current.times_production_attempted % chunk.situation_prompts.length;
   const judge = getProductionJudgeProvider();
@@ -196,6 +217,8 @@ export async function submitProductionAnswer(userId: string, chunkId: string, an
     error: null,
     durationMs: Date.now() - startedAt,
   }).catch(() => {});
+
+  if (isFree) await incrementProductionChecksUsed(userId).catch(() => {});
 
   const row = await upsertProgress(userId, chunkId, {
     state: VERDICT_STATE[result.verdict],

@@ -59,3 +59,22 @@ export async function touchLastLogin(userId: string): Promise<Date> {
   );
   return rows[0].last_login_at;
 }
+
+export interface AccountStatus {
+  premiumUntil: Date | null;
+  isAdmin: boolean;
+  productionChecksUsed: number;
+}
+
+export async function findAccountStatus(userId: string): Promise<AccountStatus | null> {
+  const { rows } = await pool.query<{ premium_until: Date | null; is_admin: boolean; production_checks_used: number }>(
+    `SELECT premium_until, is_admin, production_checks_used FROM users WHERE id = $1`,
+    [userId],
+  );
+  if (!rows[0]) return null;
+  return { premiumUntil: rows[0].premium_until, isAdmin: rows[0].is_admin, productionChecksUsed: rows[0].production_checks_used };
+}
+
+export async function incrementProductionChecksUsed(userId: string): Promise<void> {
+  await pool.query(`UPDATE users SET production_checks_used = production_checks_used + 1 WHERE id = $1`, [userId]);
+}

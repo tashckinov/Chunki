@@ -9,13 +9,14 @@ export interface AdminUserRow {
   last_login_at: Date;
   is_admin: boolean;
   premium_until: Date | null;
+  production_checks_used: number;
 }
 
 export async function listUsers(): Promise<AdminUserRow[]> {
   // No pagination yet — fine at this project's current scale; the row cap is
   // just a safety net, not a real pagination story.
   const { rows } = await pool.query<AdminUserRow>(
-    `SELECT id, email, display_name, created_at, last_login_at, is_admin, premium_until
+    `SELECT id, email, display_name, created_at, last_login_at, is_admin, premium_until, production_checks_used
      FROM users
      ORDER BY created_at DESC
      LIMIT 200`,
@@ -27,8 +28,18 @@ export async function setUserPremiumUntil(id: string, premiumUntil: Date | null)
   const { rows } = await pool.query<AdminUserRow>(
     `UPDATE users SET premium_until = $2, updated_at = now()
      WHERE id = $1
-     RETURNING id, email, display_name, created_at, last_login_at, is_admin, premium_until`,
+     RETURNING id, email, display_name, created_at, last_login_at, is_admin, premium_until, production_checks_used`,
     [id, premiumUntil],
+  );
+  return rows[0] ?? null;
+}
+
+export async function resetProductionChecksUsed(id: string): Promise<AdminUserRow | null> {
+  const { rows } = await pool.query<AdminUserRow>(
+    `UPDATE users SET production_checks_used = 0, updated_at = now()
+     WHERE id = $1
+     RETURNING id, email, display_name, created_at, last_login_at, is_admin, premium_until, production_checks_used`,
+    [id],
   );
   return rows[0] ?? null;
 }

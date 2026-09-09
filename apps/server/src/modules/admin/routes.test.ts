@@ -9,6 +9,7 @@ vi.mock('../auth/session.js', async () => {
 vi.mock('./service.js', () => ({
   listUsers: vi.fn(),
   setUserPremiumUntil: vi.fn(),
+  resetProductionChecks: vi.fn(),
   listCollectionsAdmin: vi.fn(),
   createCollection: vi.fn(),
   updateCollection: vi.fn(),
@@ -70,7 +71,9 @@ describe('admin routes auth', () => {
 describe('GET /api/admin/users', () => {
   it('returns the user list for an admin', async () => {
     vi.mocked(session.getSession).mockResolvedValue(adminSession);
-    const users = [{ id: validId, email: 'a@b.com', displayName: null, createdAt: '2026-01-01T00:00:00.000Z', lastLoginAt: '2026-01-01T00:00:00.000Z', isAdmin: false, premiumUntil: null }];
+    const users = [
+      { id: validId, email: 'a@b.com', displayName: null, createdAt: '2026-01-01T00:00:00.000Z', lastLoginAt: '2026-01-01T00:00:00.000Z', isAdmin: false, premiumUntil: null, productionChecksUsed: 0 },
+    ];
     vi.mocked(service.listUsers).mockResolvedValue(users);
 
     const res = await app.inject({ method: 'GET', url: '/api/admin/users', cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' } });
@@ -83,7 +86,16 @@ describe('GET /api/admin/users', () => {
 describe('PATCH /api/admin/users/:id', () => {
   it('sets premiumUntil and returns the updated user', async () => {
     vi.mocked(session.getSession).mockResolvedValue(adminSession);
-    const updated = { id: validId, email: 'a@b.com', displayName: null, createdAt: '2026-01-01T00:00:00.000Z', lastLoginAt: '2026-01-01T00:00:00.000Z', isAdmin: false, premiumUntil: '2026-02-01T00:00:00.000Z' };
+    const updated = {
+      id: validId,
+      email: 'a@b.com',
+      displayName: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      lastLoginAt: '2026-01-01T00:00:00.000Z',
+      isAdmin: false,
+      premiumUntil: '2026-02-01T00:00:00.000Z',
+      productionChecksUsed: 0,
+    };
     vi.mocked(service.setUserPremiumUntil).mockResolvedValue({ kind: 'ok', user: updated });
 
     const res = await app.inject({
@@ -100,7 +112,10 @@ describe('PATCH /api/admin/users/:id', () => {
 
   it('accepts null to revoke a subscription', async () => {
     vi.mocked(session.getSession).mockResolvedValue(adminSession);
-    vi.mocked(service.setUserPremiumUntil).mockResolvedValue({ kind: 'ok', user: { id: validId, email: null, displayName: null, createdAt: '', lastLoginAt: '', isAdmin: false, premiumUntil: null } });
+    vi.mocked(service.setUserPremiumUntil).mockResolvedValue({
+      kind: 'ok',
+      user: { id: validId, email: null, displayName: null, createdAt: '', lastLoginAt: '', isAdmin: false, premiumUntil: null, productionChecksUsed: 0 },
+    });
 
     const res = await app.inject({
       method: 'PATCH',
@@ -141,6 +156,47 @@ describe('PATCH /api/admin/users/:id', () => {
     expect(res.statusCode).toBe(400);
     expect(res.json()).toEqual({ error: 'invalid_request' });
     expect(service.setUserPremiumUntil).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/admin/users/:id/reset-production-checks', () => {
+  it('resets the counter and returns the updated user', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(adminSession);
+    const updated = {
+      id: validId,
+      email: 'a@b.com',
+      displayName: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      lastLoginAt: '2026-01-01T00:00:00.000Z',
+      isAdmin: false,
+      premiumUntil: null,
+      productionChecksUsed: 0,
+    };
+    vi.mocked(service.resetProductionChecks).mockResolvedValue({ kind: 'ok', user: updated });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/admin/users/${validId}/reset-production-checks`,
+      cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ user: updated });
+    expect(service.resetProductionChecks).toHaveBeenCalledWith(validId);
+  });
+
+  it('returns 404 for an unknown user', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(adminSession);
+    vi.mocked(service.resetProductionChecks).mockResolvedValue({ kind: 'not_found' });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/admin/users/${validId}/reset-production-checks`,
+      cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' },
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toEqual({ error: 'not_found' });
   });
 });
 

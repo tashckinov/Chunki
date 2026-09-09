@@ -1,6 +1,7 @@
 import {
   listUsers as repoListUsers,
   setUserPremiumUntil as repoSetUserPremiumUntil,
+  resetProductionChecksUsed as repoResetProductionChecksUsed,
   listCollectionsAdmin as repoListCollectionsAdmin,
   createCollection as repoCreateCollection,
   updateCollection as repoUpdateCollection,
@@ -27,6 +28,7 @@ export interface AdminUserSummary {
   lastLoginAt: string;
   isAdmin: boolean;
   premiumUntil: string | null;
+  productionChecksUsed: number;
 }
 
 function toUserSummary(row: AdminUserRow): AdminUserSummary {
@@ -38,6 +40,7 @@ function toUserSummary(row: AdminUserRow): AdminUserSummary {
     lastLoginAt: row.last_login_at.toISOString(),
     isAdmin: row.is_admin,
     premiumUntil: row.premium_until ? row.premium_until.toISOString() : null,
+    productionChecksUsed: row.production_checks_used,
   };
 }
 
@@ -49,6 +52,11 @@ export type SetPremiumResult = { kind: 'ok'; user: AdminUserSummary } | { kind: 
 
 export async function setUserPremiumUntil(userId: string, premiumUntil: Date | null): Promise<SetPremiumResult> {
   const row = await repoSetUserPremiumUntil(userId, premiumUntil);
+  return row ? { kind: 'ok', user: toUserSummary(row) } : { kind: 'not_found' };
+}
+
+export async function resetProductionChecks(userId: string): Promise<SetPremiumResult> {
+  const row = await repoResetProductionChecksUsed(userId);
   return row ? { kind: 'ok', user: toUserSummary(row) } : { kind: 'not_found' };
 }
 

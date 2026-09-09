@@ -8,6 +8,7 @@ export interface AdminUser {
   lastLoginAt: string;
   isAdmin: boolean;
   premiumUntil: string | null;
+  productionChecksUsed: number;
 }
 
 export interface AdminCollection {
@@ -63,6 +64,11 @@ export async function fetchAdminUsers(): Promise<AdminUser[]> {
 
 export async function setUserPremiumUntil(userId: string, premiumUntil: string | null): Promise<AdminUser> {
   const data = await patchJson<{ user: AdminUser }>(`/api/admin/users/${userId}`, { premiumUntil });
+  return data.user;
+}
+
+export async function resetProductionChecks(userId: string): Promise<AdminUser> {
+  const data = await postJson<{ user: AdminUser }>(`/api/admin/users/${userId}/reset-production-checks`, {});
   return data.user;
 }
 
