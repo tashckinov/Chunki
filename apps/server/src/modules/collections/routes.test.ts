@@ -20,6 +20,7 @@ const authenticatedSession = {
   email: 'person@example.com',
   displayName: 'Person',
   providerImageUrl: null,
+  isAdmin: false,
 };
 
 let app: FastifyInstance;

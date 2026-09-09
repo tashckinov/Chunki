@@ -21,6 +21,7 @@ const authenticatedSession = {
   email: 'person@example.com',
   displayName: 'Person',
   providerImageUrl: 'https://lh3.googleusercontent.com/verified-pic',
+  isAdmin: false,
 };
 
 let app: FastifyInstance;
@@ -64,6 +65,7 @@ describe('GET /api/auth/me', () => {
         email: authenticatedSession.email,
         displayName: authenticatedSession.displayName,
         imageUrl: authenticatedSession.providerImageUrl,
+        isAdmin: authenticatedSession.isAdmin,
       },
     });
     expect(session.getSession).toHaveBeenCalledWith('a-valid-opaque-token');

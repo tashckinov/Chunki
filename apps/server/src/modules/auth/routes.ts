@@ -128,6 +128,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
         email: session.email,
         displayName: session.displayName,
         imageUrl: session.providerImageUrl,
+        isAdmin: session.isAdmin,
       },
     };
   });

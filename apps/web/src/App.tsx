@@ -23,6 +23,7 @@ import { DeckScreen } from './screens/DeckScreen';
 import { DeckDoneScreen } from './screens/DeckDoneScreen';
 import { RecognitionCheckScreen } from './screens/RecognitionCheckScreen';
 import { ProductionCheckScreen } from './screens/ProductionCheckScreen';
+import { AdminScreen } from './screens/AdminScreen';
 
 const SIDEBAR_ITEMS: { label: string; icon: IconName }[] = [
   { label: 'Главная', icon: 'Today' },
@@ -85,6 +86,8 @@ function CurrentScreen() {
       return <RecognitionCheckScreen />;
     case 'productioncheck':
       return <ProductionCheckScreen />;
+    case 'admin':
+      return <AdminScreen />;
     default:
       return <HomeScreen />;
   }

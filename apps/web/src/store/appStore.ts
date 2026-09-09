@@ -42,7 +42,8 @@ export type Screen =
   | 'deck'
   | 'deckdone'
   | 'recognitioncheck'
-  | 'productioncheck';
+  | 'productioncheck'
+  | 'admin';
 
 export type DeckVerdict = 'know' | 'dont' | 'bury';
 
@@ -61,6 +62,7 @@ const BACK_MAP: Partial<Record<Screen, Screen>> = {
   deckdone: 'cardslib',
   recognitioncheck: 'deck',
   productioncheck: 'deck',
+  admin: 'home',
 };
 
 interface AppState {

@@ -82,7 +82,7 @@ function GoogleGlyph() {
  * left null for passkey accounts, which have no provider profile at all).
  */
 function AccountDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  const { user, signIn, signOut, authError, dismissAuthError, signInWithPasskey, passkeyBusy, passkeyError, dismissPasskeyError } = useAppStore();
+  const { user, signIn, signOut, authError, dismissAuthError, signInWithPasskey, passkeyBusy, passkeyError, dismissPasskeyError, go } = useAppStore();
 
   if (!user) {
     return (
@@ -129,6 +129,19 @@ function AccountDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o
       <div className="flex flex-col gap-5">
         {user.email && <div className="text-body-secondary -mt-2">{user.email}</div>}
         <InterfaceModeSetting />
+        {user.isAdmin && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              go('admin');
+              onOpenChange(false);
+            }}
+            className="w-full"
+          >
+            Админка
+          </Button>
+        )}
         <div className="flex justify-end gap-2 border-t border-border pt-4">
           <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
             Закрыть

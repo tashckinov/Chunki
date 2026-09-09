@@ -17,6 +17,7 @@ const authenticatedSession = {
   email: 'person@example.com',
   displayName: 'Person',
   providerImageUrl: null,
+  isAdmin: false,
 };
 
 const validId = '11111111-1111-4111-8111-111111111111';

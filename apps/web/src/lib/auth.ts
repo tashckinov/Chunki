@@ -84,6 +84,7 @@ export interface AuthUser {
   displayName: string | null;
   /** From Google's verified profile at login time — never client-supplied. */
   imageUrl: string | null;
+  isAdmin: boolean;
 }
 
 /** Full-page redirect into the backend's OAuth flow — not a fetch. */

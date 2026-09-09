@@ -11,6 +11,7 @@ export interface AuthenticatedSession {
   displayName: string | null;
   /** From the provider's verified profile at login time, never from the client or the users table. */
   providerImageUrl: string | null;
+  isAdmin: boolean;
 }
 
 function hashToken(token: string): string {
@@ -57,8 +58,9 @@ export async function getSession(token: string): Promise<AuthenticatedSession | 
     email: string | null;
     display_name: string | null;
     provider_image_url: string | null;
+    is_admin: boolean;
   }>(
-    `SELECT u.id AS user_id, u.email, u.display_name, s.provider_image_url
+    `SELECT u.id AS user_id, u.email, u.display_name, u.is_admin, s.provider_image_url
      FROM sessions s
      JOIN users u ON u.id = s.user_id
      WHERE s.token_hash = $1 AND s.expires_at > now()`,
@@ -71,6 +73,7 @@ export async function getSession(token: string): Promise<AuthenticatedSession | 
     email: row.email,
     displayName: row.display_name,
     providerImageUrl: row.provider_image_url,
+    isAdmin: row.is_admin,
   };
 }
 

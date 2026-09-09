@@ -35,3 +35,17 @@ export async function requireAuthenticatedSession(request: FastifyRequest, reply
   }
   request.session = session;
 }
+
+/**
+ * For the admin module only. Composes requireAuthenticatedSession (so
+ * request.session is populated the same way) then additionally requires
+ * session.isAdmin, replying 403 rather than a 401 — the caller is signed in,
+ * they're just not allowed here.
+ */
+export async function requireAdmin(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await requireAuthenticatedSession(request, reply);
+  if (reply.sent) return;
+  if (!request.session!.isAdmin) {
+    reply.code(403).send({ error: 'forbidden' });
+  }
+}

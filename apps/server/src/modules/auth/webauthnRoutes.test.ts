@@ -26,7 +26,7 @@ const CHALLENGE_COOKIE_NAME = 'chunki_webauthn_challenge';
 const loginResult = {
   token: 'a-session-token',
   expiresAt: new Date('2030-01-01T00:00:00Z'),
-  user: { id: 'user-1', email: null, displayName: null, imageUrl: null },
+  user: { id: 'user-1', email: null, displayName: null, imageUrl: null, isAdmin: false },
 };
 
 let app: FastifyInstance;

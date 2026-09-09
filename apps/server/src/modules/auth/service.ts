@@ -14,6 +14,7 @@ export interface PublicUser {
   email: string | null;
   displayName: string | null;
   imageUrl: string | null;
+  isAdmin: boolean;
 }
 
 async function loginResultWithUser(token: string, expiresAt: Date): Promise<LoginResult & { user: PublicUser }> {
@@ -24,7 +25,13 @@ async function loginResultWithUser(token: string, expiresAt: Date): Promise<Logi
   return {
     token,
     expiresAt,
-    user: { id: session.userId, email: session.email, displayName: session.displayName, imageUrl: session.providerImageUrl },
+    user: {
+      id: session.userId,
+      email: session.email,
+      displayName: session.displayName,
+      imageUrl: session.providerImageUrl,
+      isAdmin: session.isAdmin,
+    },
   };
 }
 

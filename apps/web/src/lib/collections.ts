@@ -34,6 +34,25 @@ export async function postJson<T>(path: string, body: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+/** Shared with lib/admin.ts — same conventions as postJson above. */
+export async function patchJson<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(apiUrl(path), {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: { ...authHeaders(), 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new ApiError(res.status, `${path} failed: ${res.status}`);
+  return res.json() as Promise<T>;
+}
+
+/** Shared with lib/admin.ts — same conventions as postJson above. */
+export async function deleteJson<T>(path: string): Promise<T> {
+  const res = await fetch(apiUrl(path), { method: 'DELETE', credentials: 'include', headers: authHeaders() });
+  if (!res.ok) throw new ApiError(res.status, `${path} failed: ${res.status}`);
+  return res.json() as Promise<T>;
+}
+
 export interface ChunkSummary {
   id: string;
   text: string;

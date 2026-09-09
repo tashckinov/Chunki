@@ -19,7 +19,7 @@ const session = await import('../auth/session.js');
 const service = await import('./service.js');
 const { progressRoutes } = await import('./routes.js');
 
-const authenticatedSession = { userId: 'user-1', email: 'person@example.com', displayName: 'Person', providerImageUrl: null };
+const authenticatedSession = { userId: 'user-1', email: 'person@example.com', displayName: 'Person', providerImageUrl: null, isAdmin: false };
 const validChunkId = '11111111-1111-4111-8111-111111111111';
 
 let app: FastifyInstance;

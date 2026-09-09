@@ -1,0 +1,105 @@
+import { getJson, postJson, patchJson, deleteJson } from './collections';
+
+export interface AdminUser {
+  id: string;
+  email: string | null;
+  displayName: string | null;
+  createdAt: string;
+  lastLoginAt: string;
+  isAdmin: boolean;
+  premiumUntil: string | null;
+}
+
+export interface AdminCollection {
+  id: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  level: string;
+  position: number;
+  isPublished: boolean;
+  chunkCount: number;
+}
+
+export interface AdminChunk {
+  id: string;
+  text: string;
+  translation: string;
+  explanation: string | null;
+  example: string | null;
+  exampleTranslation: string | null;
+  level: string;
+  situationPrompt: string | null;
+  position: number;
+}
+
+export type NewCollectionInput = {
+  slug: string;
+  title: string;
+  description?: string | null;
+  level: string;
+  position?: number;
+  isPublished?: boolean;
+};
+
+export type CollectionPatch = Partial<Omit<NewCollectionInput, 'position'>> & { position?: number };
+
+export type NewChunkInput = {
+  text: string;
+  translation: string;
+  explanation?: string | null;
+  example?: string | null;
+  exampleTranslation?: string | null;
+  level: string;
+  situationPrompt?: string | null;
+};
+
+export type ChunkPatch = Partial<NewChunkInput>;
+
+export async function fetchAdminUsers(): Promise<AdminUser[]> {
+  const data = await getJson<{ users: AdminUser[] }>('/api/admin/users');
+  return data.users;
+}
+
+export async function setUserPremiumUntil(userId: string, premiumUntil: string | null): Promise<AdminUser> {
+  const data = await patchJson<{ user: AdminUser }>(`/api/admin/users/${userId}`, { premiumUntil });
+  return data.user;
+}
+
+export async function fetchAdminCollections(): Promise<AdminCollection[]> {
+  const data = await getJson<{ collections: AdminCollection[] }>('/api/admin/collections');
+  return data.collections;
+}
+
+export async function createAdminCollection(input: NewCollectionInput): Promise<AdminCollection> {
+  const data = await postJson<{ collection: AdminCollection }>('/api/admin/collections', input);
+  return data.collection;
+}
+
+export async function updateAdminCollection(id: string, patch: CollectionPatch): Promise<AdminCollection> {
+  const data = await patchJson<{ collection: AdminCollection }>(`/api/admin/collections/${id}`, patch);
+  return data.collection;
+}
+
+export async function fetchAdminChunks(collectionId: string): Promise<AdminChunk[]> {
+  const data = await getJson<{ chunks: AdminChunk[] }>(`/api/admin/collections/${collectionId}/chunks`);
+  return data.chunks;
+}
+
+export async function createAdminChunk(collectionId: string, input: NewChunkInput): Promise<AdminChunk> {
+  const data = await postJson<{ chunk: AdminChunk }>(`/api/admin/collections/${collectionId}/chunks`, input);
+  return data.chunk;
+}
+
+export async function updateAdminChunk(id: string, patch: ChunkPatch): Promise<Omit<AdminChunk, 'position'>> {
+  const data = await patchJson<{ chunk: Omit<AdminChunk, 'position'> }>(`/api/admin/chunks/${id}`, patch);
+  return data.chunk;
+}
+
+export async function deleteAdminChunk(id: string): Promise<void> {
+  await deleteJson(`/api/admin/chunks/${id}`);
+}
+
+export async function removeChunkFromCollection(collectionId: string, chunkId: string): Promise<void> {
+  await deleteJson(`/api/admin/collections/${collectionId}/chunks/${chunkId}`);
+}
