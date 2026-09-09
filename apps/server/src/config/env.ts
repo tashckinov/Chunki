@@ -1,5 +1,11 @@
 import { z } from 'zod';
 
+// Some deployment setups (e.g. this repo's docker-compose.yml, which always
+// sets a key even when its .env value is unset) pass unset optional vars
+// through as an empty string rather than omitting them. Treat "" the same
+// as "not provided" so that doesn't trip up z.enum(...).optional() below.
+const emptyToUndefined = (val: unknown) => (val === '' ? undefined : val);
+
 // Validated once at startup. Any missing/invalid required variable throws
 // immediately with a readable message instead of letting the app boot into
 // a broken or insecure state.
@@ -22,13 +28,13 @@ const envSchema = z.object({
   FRONTEND_URL: z.string().url('FRONTEND_URL must be a valid URL'),
 
   // Existing grading config (unrelated to auth), kept as-is.
-  GRADING_PROVIDER: z.enum(['mock', 'anthropic']).optional(),
+  GRADING_PROVIDER: z.preprocess(emptyToUndefined, z.enum(['mock', 'anthropic']).optional()),
   ANTHROPIC_API_KEY: z.string().optional(),
   ANTHROPIC_MODEL: z.string().optional(),
 
   // Chunk production-check judge — same optional/auto-select shape as the
   // grading vars above, via OpenRouter instead of Anthropic directly.
-  PRODUCTION_JUDGE_PROVIDER: z.enum(['mock', 'openrouter']).optional(),
+  PRODUCTION_JUDGE_PROVIDER: z.preprocess(emptyToUndefined, z.enum(['mock', 'openrouter']).optional()),
   OPENROUTER_API_KEY: z.string().optional(),
   OPENROUTER_MODEL: z.string().optional(),
 });

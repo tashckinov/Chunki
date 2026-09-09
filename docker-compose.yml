@@ -48,6 +48,16 @@ services:
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:8787/api/auth/google/callback}
       SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in .env (32+ random chars)}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      # Grading + production-check judge — both optional, both default to the
+      # mock provider when unset. Passed through here so setting them in .env
+      # actually reaches the container (Compose doesn't forward the whole
+      # host .env automatically — only what's listed in this block).
+      GRADING_PROVIDER: ${GRADING_PROVIDER:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
+      PRODUCTION_JUDGE_PROVIDER: ${PRODUCTION_JUDGE_PROVIDER:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-}
     ports:
       - '${PORT:-8787}:8787'
     healthcheck:
