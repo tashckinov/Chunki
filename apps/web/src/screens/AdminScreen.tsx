@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useAppStore } from '../store/appStore';
 import { NavigationBar } from '../components/ui/NavigationBar';
 import { Tabs } from '../components/ui/Tabs';
@@ -42,6 +42,17 @@ function LevelSelect({ value, onChange }: { value: string; onChange: (v: string)
         </option>
       ))}
     </select>
+  );
+}
+
+/** Persistent label + optional hint — placeholders alone disappear once you start typing, which was the source of "куда что писать" confusion in this editor. */
+function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+  return (
+    <label className="flex flex-col gap-1.5">
+      <span className="text-[13px] font-medium text-text-secondary">{label}</span>
+      {children}
+      {hint && <span className="text-meta">{hint}</span>}
+    </label>
   );
 }
 
@@ -219,19 +230,40 @@ function ChunkFormDialog({
         </>
       }
     >
-      <div className="flex flex-col gap-3 max-h-[60vh] overflow-y-auto pr-1">
-        <Input value={form.text} onChange={(v) => setForm((f) => ({ ...f, text: v }))} placeholder="Фраза (en)" />
-        <Input value={form.translation} onChange={(v) => setForm((f) => ({ ...f, translation: v }))} placeholder="Перевод" />
-        <Textarea value={form.explanation} onChange={(v) => setForm((f) => ({ ...f, explanation: v }))} placeholder="Пояснение" rows={2} />
-        <Input value={form.example} onChange={(v) => setForm((f) => ({ ...f, example: v }))} placeholder="Пример (en)" />
-        <Input value={form.exampleTranslation} onChange={(v) => setForm((f) => ({ ...f, exampleTranslation: v }))} placeholder="Перевод примера" />
-        <LevelSelect value={form.level} onChange={(v) => setForm((f) => ({ ...f, level: v }))} />
-        <Textarea
-          value={form.situationPrompt}
-          onChange={(v) => setForm((f) => ({ ...f, situationPrompt: v }))}
-          placeholder="Ситуация для продакшн-проверки (en, необязательно)"
-          rows={3}
-        />
+      <div className="flex flex-col gap-4 max-h-[60vh] overflow-y-auto pr-1">
+        <Field label="Фраза (английский)" hint="Лицевая сторона карточки — то, что должен выучить пользователь.">
+          <Input value={form.text} onChange={(v) => setForm((f) => ({ ...f, text: v }))} placeholder="sounds good" />
+        </Field>
+        <Field label="Перевод (русский)" hint="Оборот карточки.">
+          <Input value={form.translation} onChange={(v) => setForm((f) => ({ ...f, translation: v }))} placeholder="звучит хорошо" />
+        </Field>
+        <Field label="Пояснение (необязательно)" hint="Короткое объяснение значения — под переводом на обороте.">
+          <Textarea value={form.explanation} onChange={(v) => setForm((f) => ({ ...f, explanation: v }))} placeholder="Used to agree to a suggestion." rows={2} />
+        </Field>
+        <Field label="Пример использования (необязательно)" hint="Предложение-пример на обороте карточки.">
+          <Input value={form.example} onChange={(v) => setForm((f) => ({ ...f, example: v }))} placeholder="Seven o'clock? Sounds good." />
+        </Field>
+        <Field label="Перевод примера (необязательно)">
+          <Input value={form.exampleTranslation} onChange={(v) => setForm((f) => ({ ...f, exampleTranslation: v }))} placeholder="В семь? Звучит хорошо." />
+        </Field>
+        <Field label="Уровень (CEFR)" hint="Влияет на дистракторы в проверке на узнавание.">
+          <LevelSelect value={form.level} onChange={(v) => setForm((f) => ({ ...f, level: v }))} />
+        </Field>
+        <Field
+          label="Ситуация для продакшн-проверки (необязательно)"
+          hint={
+            'Если заполнено — после «Знаю» или верного ответа в проверке на узнавание пользователю покажут эту ' +
+            'ситуацию (на английском) и попросят естественно ответить, использовав фразу. Пусто — чанк просто ' +
+            'засчитывается по самооценке, без реальной проверки.'
+          }
+        >
+          <Textarea
+            value={form.situationPrompt}
+            onChange={(v) => setForm((f) => ({ ...f, situationPrompt: v }))}
+            placeholder="A friend suggests meeting at 7pm. You're happy with that. What do you reply?"
+            rows={3}
+          />
+        </Field>
       </div>
     </Dialog>
   );
@@ -296,14 +328,27 @@ function CollectionFormDialog({
         </>
       }
     >
-      <div className="flex flex-col gap-3">
-        <Input value={form.slug} onChange={(v) => setForm((f) => ({ ...f, slug: v }))} placeholder="slug (travel-basics)" />
-        <Input value={form.title} onChange={(v) => setForm((f) => ({ ...f, title: v }))} placeholder="Название" />
-        <Textarea value={form.description} onChange={(v) => setForm((f) => ({ ...f, description: v }))} placeholder="Описание" rows={2} />
-        <LevelSelect value={form.level} onChange={(v) => setForm((f) => ({ ...f, level: v }))} />
-        <Input value={form.position} onChange={(v) => setForm((f) => ({ ...f, position: v }))} placeholder="Позиция (число)" type="number" />
+      <div className="flex flex-col gap-4">
+        <Field label="Slug (URL)" hint="Латиницей через дефис, например travel-basics. Не менять у уже опубликованной колоды без необходимости.">
+          <Input value={form.slug} onChange={(v) => setForm((f) => ({ ...f, slug: v }))} placeholder="travel-basics" />
+        </Field>
+        <Field label="Название" hint="Видно пользователям в списке колод.">
+          <Input value={form.title} onChange={(v) => setForm((f) => ({ ...f, title: v }))} placeholder="Travel Basics" />
+        </Field>
+        <Field label="Описание" hint="Короткий текст под названием в списке.">
+          <Textarea value={form.description} onChange={(v) => setForm((f) => ({ ...f, description: v }))} placeholder="Useful English chunks for airports, hotels and travelling." rows={2} />
+        </Field>
+        <Field label="Уровень (CEFR)">
+          <LevelSelect value={form.level} onChange={(v) => setForm((f) => ({ ...f, level: v }))} />
+        </Field>
+        <Field label="Позиция" hint="Порядок среди колод — меньше число, выше в списке.">
+          <Input value={form.position} onChange={(v) => setForm((f) => ({ ...f, position: v }))} placeholder="0" type="number" />
+        </Field>
         <div className="flex items-center justify-between px-1">
-          <span className="text-[14px]">Опубликована</span>
+          <div className="flex flex-col">
+            <span className="text-[14px] font-medium">Опубликована</span>
+            <span className="text-meta">Выключено — черновик, не виден пользователям.</span>
+          </div>
           <Switch checked={form.isPublished} onChange={(v) => setForm((f) => ({ ...f, isPublished: v }))} />
         </div>
       </div>

@@ -119,6 +119,8 @@ interface AppState {
   chunkProgress: Record<string, ProgressSummary>;
   /** This deck session's swipe outcomes, for DeckDoneScreen's tally — not mastery bookkeeping. */
   sessionVerdicts: Record<string, DeckVerdict>;
+  /** This deck session's production-check verdicts, revealed together on DeckDoneScreen rather than inline per card. */
+  sessionProductionResults: Record<string, { verdict: ProductionVerdict; feedback: string }>;
   /** Chunks already sent to a recognition check this session, so a repeat "don't know"/"unsure" doesn't loop. */
   recognitionAttemptedThisSession: Record<string, true>;
 
@@ -273,6 +275,7 @@ export const useAppStore = create<AppState>()(
       activeDeckChunks: [],
       chunkProgress: {},
       sessionVerdicts: {},
+      sessionProductionResults: {},
       recognitionAttemptedThisSession: {},
 
       recognitionChunkId: null,
@@ -383,6 +386,7 @@ export const useAppStore = create<AppState>()(
           dx: 0,
           dy: 0,
           sessionVerdicts: {},
+          sessionProductionResults: {},
           recognitionAttemptedThisSession: {},
         });
         const chunkIds = resolved.map((c) => c.id);
@@ -629,9 +633,10 @@ export const useAppStore = create<AppState>()(
           set((st) => ({
             productionChecking: false,
             productionResult: { verdict, feedback },
+            sessionProductionResults: { ...st.sessionProductionResults, [chunkId]: { verdict, feedback } },
             chunkProgress: { ...st.chunkProgress, [chunkId]: progress },
           }));
-          setTimeout(() => get().advanceDeck(), 1400);
+          get().advanceDeck();
         } catch (err) {
           set({ productionChecking: false, productionCheckError: err instanceof Error ? err.message : String(err) });
         }
