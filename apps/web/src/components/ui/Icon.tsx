@@ -19,6 +19,8 @@ import {
   Plus,
   User,
   Menu,
+  Drama,
+  GripVertical,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -43,6 +45,8 @@ const ICONS: Record<string, LucideIcon> = {
   Add: Plus,
   Account: User,
   Menu,
+  Characters: Drama,
+  Grip: GripVertical,
 };
 
 export type IconName = keyof typeof ICONS;

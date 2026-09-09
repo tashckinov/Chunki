@@ -32,9 +32,10 @@ const SIDEBAR_ITEMS: { label: string; icon: IconName }[] = [
   { label: 'Доп. уроки', icon: 'Add' },
 ];
 
-const ADMIN_SIDEBAR_ITEMS: { label: string; icon: IconName; section: 'users' | 'content' | 'aiLogs' }[] = [
+const ADMIN_SIDEBAR_ITEMS: { label: string; icon: IconName; section: 'users' | 'content' | 'characters' | 'aiLogs' }[] = [
   { label: 'Пользователи', icon: 'Account', section: 'users' },
   { label: 'Контент', icon: 'Stars', section: 'content' },
+  { label: 'Персонажи', icon: 'Characters', section: 'characters' },
   { label: 'AI-логи', icon: 'CheckBox', section: 'aiLogs' },
 ];
 

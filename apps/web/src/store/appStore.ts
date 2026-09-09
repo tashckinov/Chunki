@@ -65,7 +65,7 @@ const BACK_MAP: Partial<Record<Screen, Screen>> = {
   admin: 'home',
 };
 
-type AdminSection = 'users' | 'content' | 'aiLogs';
+type AdminSection = 'users' | 'content' | 'characters' | 'aiLogs';
 
 interface AppState {
   screen: Screen;
