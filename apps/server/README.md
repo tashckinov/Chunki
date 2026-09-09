@@ -142,6 +142,20 @@ docker compose exec backend npm run migrate
 Everything else (commands, healthchecks, migrations) is identical to local Docker Compose use —
 see "Running locally" above.
 
+### Redeploying after a code change
+
+Merging a PR to `main` only rebuilds and redeploys the GitHub Pages **frontend** automatically
+(`.github/workflows/deploy-pages.yml`) — the **backend** is not touched until someone runs this on
+the VPS:
+
+```bash
+cd Chunki                                   # the existing clone on the VPS
+git pull origin main
+docker compose up -d --build backend        # rebuild only the backend image; leaves postgres untouched
+docker compose exec backend npm run migrate # idempotent — safe even with no new migrations
+docker compose logs -f backend              # confirm clean startup, then Ctrl-C
+```
+
 ## Startup and failure behavior
 
 - **Missing/invalid env config** (Google credentials, `SESSION_SECRET`, `DATABASE_URL`,
@@ -154,15 +168,45 @@ see "Running locally" above.
 ## API
 
 ```text
-GET  /api/auth/google            — starts Google sign-in (redirects to Google)
-GET  /api/auth/google/callback   — Google redirects here; sets the session cookie, then
-                                    redirects to FRONTEND_URL (or FRONTEND_URL/?auth_error=1)
-GET  /api/auth/me                — { user: { id, email, displayName, imageUrl } } or 401
-POST /api/auth/logout            — invalidates the session, clears the cookie
+GET  /api/auth/google                    — starts Google sign-in (redirects to Google)
+GET  /api/auth/google/callback           — Google redirects here; sets the session cookie and
+                                            redirects to FRONTEND_URL#auth_token=<token> (Safari
+                                            blocks the cross-site cookie, so the frontend also
+                                            picks the token up from the fragment and resends it
+                                            as `Authorization: Bearer <token>`), or
+                                            FRONTEND_URL/?auth_error=1 on failure
+GET  /api/auth/me                        — { user: { id, email, displayName, imageUrl } } or 401
+POST /api/auth/logout                    — invalidates the session, clears the cookie
+POST /api/auth/webauthn/register/options — starts passkey registration; { options } for
+                                            navigator.credentials.create(), sets a short-lived
+                                            signed challenge cookie
+POST /api/auth/webauthn/register/verify  — body is the browser's attestation response; creates a
+                                            brand-new (email-less) user + credential, logs them in
+POST /api/auth/webauthn/login/options    — starts usernameless passkey sign-in; { options } with
+                                            no allowCredentials (the OS shows its own picker)
+POST /api/auth/webauthn/login/verify     — body is the browser's assertion response; looks the
+                                            credential up by id, verifies, logs the owner in
 ```
 
-`FRONTEND_URL` is the *only* redirect destination the callback ever uses — there's no
-client-suppliable "return to" parameter, so there's nothing to make an open redirect out of.
+Every `POST /api/auth/webauthn/*/verify` and `GET /api/auth/me`/`POST /api/auth/logout` response
+carries the token the same way: `{ token, user }` in the JSON body for the webauthn routes (a
+plain `fetch`, so no fragment trick needed there), plus the `chunki_session` cookie as a
+same-site/dev fallback. `FRONTEND_URL` is the *only* redirect destination the Google callback ever
+uses — there's no client-suppliable "return to" parameter, so there's nothing to make an open
+redirect out of.
+
+### Passkey (WebAuthn) sign-in
+
+One button, no username/email/ID ever entered — see `apps/web/src/lib/auth.ts`'s
+`signInWithPasskey()`. The frontend origin (not this backend's own host) is the WebAuthn Relying
+Party: `CORS_ORIGIN` (already "the bare frontend origin, no path", see below) is reused directly as
+both the RP ID's source (`new URL(CORS_ORIGIN).hostname`) and the expected origin — no separate
+env var. `localhost` is a spec-valid RP ID for dev.
+
+A passkey account is **separate from a Google account**, even on the same device — there's no
+account linking yet (matches the existing `findOrCreateUserFromProvider` scope decision below).
+Reconciling accounts across devices/methods is planned as a future "sync code" feature, not
+implemented here.
 
 ### Google profile images — read, never stored
 
@@ -239,13 +283,16 @@ instead of duplicating them.
 
 ## Database
 
-Schema: `users`, `auth_identities` (one row per external account linked to a user — unique on
-`(provider, provider_user_id)`), `sessions` (opaque server-side sessions; the cookie carries a
-random token, Postgres stores only its SHA-256 hash), `collections`, `chunks`, `collection_chunks`
-(join table; deleting a collection or a chunk cascades only to that membership row, never to the
-other side — see the comments in `migrations/0002_collections_chunks.sql`). Migrations are plain
-`.sql` files applied in filename order by `src/db/migrate.ts`, tracked in a `schema_migrations`
-table — nothing touches the schema outside that runner.
+Schema: `users`, `auth_identities` (one row per external OAuth-style account linked to a user —
+unique on `(provider, provider_user_id)`), `webauthn_credentials` (one row per registered passkey —
+the same "identity lookup" role as `auth_identities`, but keyed by `credential_id` and carrying
+WebAuthn-specific fields `auth_identities` has no room for; deliberately not folded into
+`auth_identities`), `sessions` (opaque server-side sessions; the cookie carries a random token,
+Postgres stores only its SHA-256 hash), `collections`, `chunks`, `collection_chunks` (join table;
+deleting a collection or a chunk cascades only to that membership row, never to the other side —
+see the comments in `migrations/0002_collections_chunks.sql`). Migrations are plain `.sql` files
+applied in filename order by `src/db/migrate.ts`, tracked in a `schema_migrations` table — nothing
+touches the schema outside that runner.
 
 ## Tests
 
