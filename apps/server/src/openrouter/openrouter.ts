@@ -98,12 +98,12 @@ export class OpenRouterProductionJudgeProvider implements ProductionJudgeProvide
     try {
       parsed = JSON.parse(toolCall.function.arguments);
     } catch {
-      throw new Error('OpenRouter tool call arguments were not valid JSON.');
+      throw new Error(`OpenRouter tool call arguments were not valid JSON. Raw: ${toolCall.function.arguments.slice(0, 2000)}`);
     }
 
     const { verdict, feedback } = parsed as { verdict?: unknown; feedback?: unknown };
     if (!isVerdict(verdict) || typeof feedback !== 'string') {
-      throw new Error('OpenRouter tool call returned an unexpected shape.');
+      throw new Error(`OpenRouter tool call returned an unexpected shape. Parsed: ${JSON.stringify(parsed).slice(0, 2000)}`);
     }
 
     return { verdict, feedback };
