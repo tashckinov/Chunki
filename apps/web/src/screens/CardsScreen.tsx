@@ -19,9 +19,15 @@ const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 function CollectionCardHeader({ detail, progress }: { detail: CollectionDetail; progress: number }) {
   const { goDeck } = useAppStore();
   return (
-    <>
-      {detail.bannerUrl && <img src={apiUrl(detail.bannerUrl)} alt="" className="w-full aspect-[4/3] object-cover" />}
-      <button type="button" onClick={() => goDeck(detail.chunks)} className="pressable flex items-center gap-4 text-left p-5">
+    <button
+      type="button"
+      onClick={() => goDeck(detail.chunks)}
+      className="pressable flex flex-col min-[768px]:flex-row min-[768px]:items-center text-left"
+    >
+      {detail.bannerUrl && (
+        <img src={apiUrl(detail.bannerUrl)} alt="" className="w-full aspect-[4/3] object-cover min-[768px]:w-40 min-[768px]:flex-none" />
+      )}
+      <div className="flex items-center gap-4 p-5 min-w-0 flex-1">
         <div className="relative w-12 h-12 flex-none flex items-center justify-center">
           <CircularProgress value={progress} size={48} thickness={4} />
           <div className="absolute text-[11px] font-semibold">{Math.round(progress * 100)}%</div>
@@ -32,8 +38,8 @@ function CollectionCardHeader({ detail, progress }: { detail: CollectionDetail; 
             {detail.chunks.length} {plural(detail.chunks.length, 'чанк', 'чанка', 'чанков')} · {detail.level}
           </div>
         </div>
-      </button>
-    </>
+      </div>
+    </button>
   );
 }
 
