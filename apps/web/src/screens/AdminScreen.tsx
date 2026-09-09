@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useAppStore } from '../store/appStore';
+import { plural } from '../lib/plural';
 import { NavigationBar } from '../components/ui/NavigationBar';
 import { Tabs } from '../components/ui/Tabs';
 import { Button } from '../components/ui/Button';
@@ -157,10 +158,10 @@ interface ChunkFormValue {
   example: string;
   exampleTranslation: string;
   level: string;
-  situationPrompt: string;
+  situationPrompts: string[];
 }
 
-const EMPTY_CHUNK_FORM: ChunkFormValue = { text: '', translation: '', explanation: '', example: '', exampleTranslation: '', level: 'A2', situationPrompt: '' };
+const EMPTY_CHUNK_FORM: ChunkFormValue = { text: '', translation: '', explanation: '', example: '', exampleTranslation: '', level: 'A2', situationPrompts: [] };
 
 function chunkToForm(chunk: AdminChunk): ChunkFormValue {
   return {
@@ -170,7 +171,7 @@ function chunkToForm(chunk: AdminChunk): ChunkFormValue {
     example: chunk.example ?? '',
     exampleTranslation: chunk.exampleTranslation ?? '',
     level: chunk.level,
-    situationPrompt: chunk.situationPrompt ?? '',
+    situationPrompts: chunk.situationPrompts,
   };
 }
 
@@ -182,7 +183,7 @@ function formToChunkInput(v: ChunkFormValue): NewChunkInput {
     example: v.example.trim() || null,
     exampleTranslation: v.exampleTranslation.trim() || null,
     level: v.level,
-    situationPrompt: v.situationPrompt.trim() || null,
+    situationPrompts: v.situationPrompts.map((p) => p.trim()).filter(Boolean),
   };
 }
 
@@ -250,19 +251,35 @@ function ChunkFormDialog({
           <LevelSelect value={form.level} onChange={(v) => setForm((f) => ({ ...f, level: v }))} />
         </Field>
         <Field
-          label="Ситуация для продакшн-проверки (необязательно)"
+          label={`Ситуации для продакшн-проверки (${form.situationPrompts.length})`}
           hint={
-            'Если заполнено — после «Знаю» или верного ответа в проверке на узнавание пользователю покажут эту ' +
-            'ситуацию (на английском) и попросят естественно ответить, использовав фразу. Пусто — чанк просто ' +
-            'засчитывается по самооценке, без реальной проверки.'
+            'Если есть хотя бы одна — после «Знаю» или верного ответа в проверке на узнавание пользователю покажут ' +
+            'одну из них по очереди (на английском) и попросят естественно ответить, использовав фразу. Пусто — ' +
+            'чанк просто засчитывается по самооценке, без реальной проверки.'
           }
         >
-          <Textarea
-            value={form.situationPrompt}
-            onChange={(v) => setForm((f) => ({ ...f, situationPrompt: v }))}
-            placeholder="A friend suggests meeting at 7pm. You're happy with that. What do you reply?"
-            rows={3}
-          />
+          <div className="flex flex-col gap-2">
+            {form.situationPrompts.map((prompt, i) => (
+              <div key={i} className="flex items-start gap-2">
+                <Textarea
+                  value={prompt}
+                  onChange={(v) => setForm((f) => ({ ...f, situationPrompts: f.situationPrompts.map((p, j) => (j === i ? v : p)) }))}
+                  placeholder="A friend suggests meeting at 7pm. You're happy with that. What do you reply?"
+                  rows={2}
+                />
+                <IconButton
+                  icon="Delete"
+                  label="Удалить вопрос"
+                  size="sm"
+                  tone="muted"
+                  onClick={() => setForm((f) => ({ ...f, situationPrompts: f.situationPrompts.filter((_, j) => j !== i) }))}
+                />
+              </div>
+            ))}
+            <Button variant="secondary" size="sm" onClick={() => setForm((f) => ({ ...f, situationPrompts: [...f.situationPrompts, ''] }))}>
+              + Добавить вопрос
+            </Button>
+          </div>
         </Field>
       </div>
     </Dialog>
@@ -490,7 +507,7 @@ function ContentTab() {
               <div className="text-[14.5px] truncate">{chunk.text}</div>
               <div className="text-meta truncate">
                 {chunk.translation} · {chunk.level}
-                {chunk.situationPrompt ? ' · есть ситуация' : ''}
+                {chunk.situationPrompts.length > 0 ? ` · ${chunk.situationPrompts.length} ${plural(chunk.situationPrompts.length, 'ситуация', 'ситуации', 'ситуаций')}` : ''}
               </div>
             </div>
             <IconButton icon="Delete" label="Убрать из коллекции" size="sm" tone="muted" onClick={() => handleDetachChunk(chunk)} />

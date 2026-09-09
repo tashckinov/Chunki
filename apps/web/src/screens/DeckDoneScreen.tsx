@@ -1,6 +1,8 @@
 import { useAppStore } from '../store/appStore';
 import { deckTallyView } from '../store/derived';
+import { plural } from '../lib/plural';
 import { Button } from '../components/ui/Button';
+import { Spinner } from '../components/ui/Spinner';
 
 const VERDICT_COPY: Record<string, { label: string; className: string }> = {
   chunk_used: { label: 'Использовали фразу', className: 'text-positive' },
@@ -9,9 +11,10 @@ const VERDICT_COPY: Record<string, { label: string; className: string }> = {
 };
 
 export function DeckDoneScreen() {
-  const { sessionVerdicts, sessionProductionResults, activeDeckChunks, goCardsLib } = useAppStore();
+  const { sessionVerdicts, sessionProductionResults, sessionProductionPending, activeDeckChunks, goCardsLib } = useAppStore();
   const tally = deckTallyView(sessionVerdicts);
   const productionEntries = Object.entries(sessionProductionResults);
+  const pendingCount = Object.keys(sessionProductionPending).length;
 
   return (
     <div className="flex-1 min-h-0 px-5 py-8 flex flex-col gap-8 anim-rise overflow-y-auto scroll-clean">
@@ -28,7 +31,7 @@ export function DeckDoneScreen() {
       </div>
       <div className="text-body-secondary">Чанки, которые вы не знали, можно повторить в этой же колоде.</div>
 
-      {productionEntries.length > 0 && (
+      {(productionEntries.length > 0 || pendingCount > 0) && (
         <div className="flex flex-col gap-3">
           <div className="text-[15px] font-semibold">Итоги проверки на использование</div>
           {productionEntries.map(([chunkId, result]) => {
@@ -37,14 +40,24 @@ export function DeckDoneScreen() {
               <div key={chunkId} className="rounded-[var(--radius-md)] border border-border p-3.5 flex flex-col gap-1">
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-[14.5px] font-medium">{chunk?.text ?? '—'}</div>
-                  <span className={`text-[12px] font-medium ${VERDICT_COPY[result.verdict]?.className ?? ''}`}>
-                    {VERDICT_COPY[result.verdict]?.label ?? result.verdict}
-                  </span>
+                  {result.kind === 'ok' ? (
+                    <span className={`text-[12px] font-medium ${VERDICT_COPY[result.verdict]?.className ?? ''}`}>
+                      {VERDICT_COPY[result.verdict]?.label ?? result.verdict}
+                    </span>
+                  ) : (
+                    <span className="text-[12px] font-medium text-negative">Не удалось проверить</span>
+                  )}
                 </div>
-                <div className="text-body-secondary text-[13.5px]">{result.feedback}</div>
+                <div className="text-body-secondary text-[13.5px]">{result.kind === 'ok' ? result.feedback : result.message}</div>
               </div>
             );
           })}
+          {pendingCount > 0 && (
+            <div className="flex items-center gap-2.5 text-body-secondary text-[13.5px] py-1">
+              <Spinner size={16} borderWidth={2} />
+              Проверяем ещё {pendingCount} {plural(pendingCount, 'ответ', 'ответа', 'ответов')}…
+            </div>
+          )}
         </div>
       )}
 

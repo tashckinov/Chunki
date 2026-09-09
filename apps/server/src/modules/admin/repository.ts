@@ -1,3 +1,4 @@
+import pg from 'pg';
 import { pool } from '../../db/pool.js';
 
 export interface AdminUserRow {
@@ -127,13 +128,17 @@ export interface AdminChunkRow {
   example: string | null;
   example_translation: string | null;
   level: string;
-  situation_prompt: string | null;
+  situation_prompts: string[];
   position: number;
 }
 
 export async function listChunksForCollectionAdmin(collectionId: string): Promise<AdminChunkRow[]> {
   const { rows } = await pool.query<AdminChunkRow>(
-    `SELECT c.id, c.text, c.translation, c.explanation, c.example, c.example_translation, c.level, c.situation_prompt, cc.position
+    `SELECT c.id, c.text, c.translation, c.explanation, c.example, c.example_translation, c.level, cc.position,
+            COALESCE(
+              (SELECT array_agg(p.prompt ORDER BY p.position) FROM chunk_situation_prompts p WHERE p.chunk_id = c.id),
+              ARRAY[]::text[]
+            ) AS situation_prompts
      FROM collection_chunks cc
      JOIN chunks c ON c.id = cc.chunk_id
      WHERE cc.collection_id = $1
@@ -145,12 +150,25 @@ export async function listChunksForCollectionAdmin(collectionId: string): Promis
 
 type ChunkRowNoPosition = Omit<AdminChunkRow, 'position'>;
 
-async function findChunkByIdAdmin(id: string): Promise<ChunkRowNoPosition | null> {
-  const { rows } = await pool.query<ChunkRowNoPosition>(
-    `SELECT id, text, translation, explanation, example, example_translation, level, situation_prompt FROM chunks WHERE id = $1`,
+async function findChunkByIdAdmin(id: string, client: pg.PoolClient | pg.Pool = pool): Promise<ChunkRowNoPosition | null> {
+  const { rows } = await client.query<ChunkRowNoPosition>(
+    `SELECT c.id, c.text, c.translation, c.explanation, c.example, c.example_translation, c.level,
+            COALESCE(
+              (SELECT array_agg(p.prompt ORDER BY p.position) FROM chunk_situation_prompts p WHERE p.chunk_id = c.id),
+              ARRAY[]::text[]
+            ) AS situation_prompts
+     FROM chunks c WHERE c.id = $1`,
     [id],
   );
   return rows[0] ?? null;
+}
+
+/** Replaces the full set of situation prompts for a chunk, in order — mirrors how every other chunk field is a full-replace patch, not an incremental diff. */
+async function replaceSituationPrompts(client: pg.PoolClient, chunkId: string, prompts: string[]): Promise<void> {
+  await client.query(`DELETE FROM chunk_situation_prompts WHERE chunk_id = $1`, [chunkId]);
+  for (let i = 0; i < prompts.length; i++) {
+    await client.query(`INSERT INTO chunk_situation_prompts (chunk_id, prompt, position) VALUES ($1, $2, $3)`, [chunkId, prompts[i], i]);
+  }
 }
 
 export interface ChunkInput {
@@ -160,7 +178,7 @@ export interface ChunkInput {
   example: string | null;
   exampleTranslation: string | null;
   level: string;
-  situationPrompt: string | null;
+  situationPrompts: string[];
 }
 
 /** Inserts the chunk and appends it to the collection in one transaction — a chunk row without a collection_chunks membership would be orphaned and unreachable from any deck. */
@@ -168,13 +186,14 @@ export async function createChunkInCollection(collectionId: string, input: Chunk
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { rows: chunkRows } = await client.query<ChunkRowNoPosition>(
-      `INSERT INTO chunks (text, translation, explanation, example, example_translation, level, situation_prompt)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id, text, translation, explanation, example, example_translation, level, situation_prompt`,
-      [input.text, input.translation, input.explanation, input.example, input.exampleTranslation, input.level, input.situationPrompt],
+    const { rows: chunkRows } = await client.query<Omit<ChunkRowNoPosition, 'situation_prompts'>>(
+      `INSERT INTO chunks (text, translation, explanation, example, example_translation, level)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, text, translation, explanation, example, example_translation, level`,
+      [input.text, input.translation, input.explanation, input.example, input.exampleTranslation, input.level],
     );
     const chunk = chunkRows[0];
+    await replaceSituationPrompts(client, chunk.id, input.situationPrompts);
     const { rows: posRows } = await client.query<{ next_position: number }>(
       `SELECT COALESCE(MAX(position), -1) + 1 AS next_position FROM collection_chunks WHERE collection_id = $1`,
       [collectionId],
@@ -182,7 +201,7 @@ export async function createChunkInCollection(collectionId: string, input: Chunk
     const position = posRows[0].next_position;
     await client.query(`INSERT INTO collection_chunks (collection_id, chunk_id, position) VALUES ($1, $2, $3)`, [collectionId, chunk.id, position]);
     await client.query('COMMIT');
-    return { ...chunk, position };
+    return { ...chunk, situation_prompts: input.situationPrompts, position };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -198,32 +217,55 @@ export interface ChunkPatch {
   example?: string | null;
   exampleTranslation?: string | null;
   level?: string;
-  situationPrompt?: string | null;
+  situationPrompts?: string[];
 }
 
 export async function updateChunk(id: string, patch: ChunkPatch): Promise<ChunkRowNoPosition | null> {
-  const values: unknown[] = [id];
-  const sets: string[] = [];
-  const add = (column: string, value: unknown) => {
-    values.push(value);
-    sets.push(`${column} = $${values.length}`);
-  };
-  if (patch.text !== undefined) add('text', patch.text);
-  if (patch.translation !== undefined) add('translation', patch.translation);
-  if (patch.explanation !== undefined) add('explanation', patch.explanation);
-  if (patch.example !== undefined) add('example', patch.example);
-  if (patch.exampleTranslation !== undefined) add('example_translation', patch.exampleTranslation);
-  if (patch.level !== undefined) add('level', patch.level);
-  if (patch.situationPrompt !== undefined) add('situation_prompt', patch.situationPrompt);
-  if (sets.length === 0) return findChunkByIdAdmin(id);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
 
-  sets.push('updated_at = now()');
-  const { rows } = await pool.query<ChunkRowNoPosition>(
-    `UPDATE chunks SET ${sets.join(', ')} WHERE id = $1
-     RETURNING id, text, translation, explanation, example, example_translation, level, situation_prompt`,
-    values,
-  );
-  return rows[0] ?? null;
+    const values: unknown[] = [id];
+    const sets: string[] = [];
+    const add = (column: string, value: unknown) => {
+      values.push(value);
+      sets.push(`${column} = $${values.length}`);
+    };
+    if (patch.text !== undefined) add('text', patch.text);
+    if (patch.translation !== undefined) add('translation', patch.translation);
+    if (patch.explanation !== undefined) add('explanation', patch.explanation);
+    if (patch.example !== undefined) add('example', patch.example);
+    if (patch.exampleTranslation !== undefined) add('example_translation', patch.exampleTranslation);
+    if (patch.level !== undefined) add('level', patch.level);
+
+    if (sets.length > 0) {
+      sets.push('updated_at = now()');
+      const { rows } = await client.query(`UPDATE chunks SET ${sets.join(', ')} WHERE id = $1 RETURNING id`, values);
+      if (!rows[0]) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+    } else {
+      const { rows } = await client.query(`SELECT id FROM chunks WHERE id = $1`, [id]);
+      if (!rows[0]) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+    }
+
+    if (patch.situationPrompts !== undefined) {
+      await replaceSituationPrompts(client, id, patch.situationPrompts);
+    }
+
+    const row = await findChunkByIdAdmin(id, client);
+    await client.query('COMMIT');
+    return row;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 /** ON DELETE CASCADE on both collection_chunks and chunk_progress (see their migrations) means this alone detaches the chunk from every collection and clears any learner progress on it. */

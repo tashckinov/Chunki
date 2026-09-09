@@ -13,11 +13,11 @@ interface SeedChunk {
   exampleTranslation: string;
   level: string;
   /**
-   * Hand-authored scenario for the production check — most chunks won't
-   * have one yet (that's a separate content-authoring task); a handful of
-   * placeholders here just give local dev/testing something to exercise.
+   * Hand-authored scenarios for the production check — the app cycles
+   * through them round-robin across repeated encounters (see
+   * progress/service.ts). An admin can add unlimited more later.
    */
-  situationPrompt?: string;
+  situationPrompts?: string[];
 }
 
 interface SeedCollection {
@@ -36,7 +36,7 @@ const KEEP_IN_MIND: SeedChunk = {
   example: 'Keep in mind that the store closes at 8 tonight.',
   exampleTranslation: 'Имей в виду, что магазин сегодня закрывается в 8.',
   level: 'B1',
-  situationPrompt: "Your friend is about to go grocery shopping but it's getting late. What would you tell them about the store's closing time?",
+  situationPrompts: ["Your friend is about to go grocery shopping but it's getting late. What would you tell them about the store's closing time?"],
 };
 
 const SEED: SeedCollection[] = [
@@ -54,7 +54,7 @@ const SEED: SeedCollection[] = [
         example: "Seven o'clock at the usual place? Sounds good.",
         exampleTranslation: 'В семь на обычном месте? Договорились.',
         level: 'A2',
-        situationPrompt: 'A friend suggests meeting at 7pm at your usual café. You\'re happy with that. What do you reply?',
+        situationPrompts: ['A friend suggests meeting at 7pm at your usual café. You\'re happy with that. What do you reply?'],
       },
       {
         text: "I'm running late",
@@ -63,7 +63,7 @@ const SEED: SeedCollection[] = [
         example: "Sorry, I'm running late — I'll be there in ten minutes.",
         exampleTranslation: 'Извини, я опаздываю. Буду через десять минут.',
         level: 'A2',
-        situationPrompt: "You're going to be a few minutes late to meet a friend. You want to text them a quick heads-up. What do you write?",
+        situationPrompts: ["You're going to be a few minutes late to meet a friend. You want to text them a quick heads-up. What do you write?"],
       },
       {
         text: 'it depends on',
@@ -72,7 +72,7 @@ const SEED: SeedCollection[] = [
         example: 'It depends on the weather — we might cancel the trip.',
         exampleTranslation: 'Это зависит от погоды — мы можем отменить поездку.',
         level: 'B1',
-        situationPrompt: "A friend asks if you're going to the picnic this weekend, but it might rain and you're not sure yet. How do you answer?",
+        situationPrompts: ["A friend asks if you're going to the picnic this weekend, but it might rain and you're not sure yet. How do you answer?"],
       },
       {
         text: 'to be exact',
@@ -81,7 +81,7 @@ const SEED: SeedCollection[] = [
         example: "It's been five years, ten months to be exact.",
         exampleTranslation: 'Прошло пять лет, если быть точным — десять месяцев.',
         level: 'B1',
-        situationPrompt: "You're telling a friend how long you've been learning English — about three years, and nine months if you count precisely. How do you phrase that?",
+        situationPrompts: ["You're telling a friend how long you've been learning English — about three years, and nine months if you count precisely. How do you phrase that?"],
       },
       {
         text: 'make sure',
@@ -90,7 +90,7 @@ const SEED: SeedCollection[] = [
         example: 'Make sure you lock the door before you leave.',
         exampleTranslation: 'Убедись, что запер дверь перед уходом.',
         level: 'A2',
-        situationPrompt: "Your roommate is leaving the house and might forget to turn off the stove. What do you remind them to check?",
+        situationPrompts: ["Your roommate is leaving the house and might forget to turn off the stove. What do you remind them to check?"],
       },
       KEEP_IN_MIND,
       {
@@ -100,7 +100,7 @@ const SEED: SeedCollection[] = [
         example: "Don't worry, we'll figure it out together.",
         exampleTranslation: 'Не переживай, мы вместе разберёмся.',
         level: 'B1',
-        situationPrompt: "A friend is stressed about a problem that doesn't have an obvious solution yet. How do you reassure them you'll find a way through it together?",
+        situationPrompts: ["A friend is stressed about a problem that doesn't have an obvious solution yet. How do you reassure them you'll find a way through it together?"],
       },
       {
         text: 'take your time',
@@ -109,7 +109,7 @@ const SEED: SeedCollection[] = [
         example: "Take your time, we don't need to leave for another hour.",
         exampleTranslation: 'Не торопись, нам не нужно выходить ещё час.',
         level: 'A2',
-        situationPrompt: "A colleague is rushing to finish a task, but you don't need it for another hour. What do you tell them?",
+        situationPrompts: ["A colleague is rushing to finish a task, but you don't need it for another hour. What do you tell them?"],
       },
       {
         text: 'no worries',
@@ -118,7 +118,7 @@ const SEED: SeedCollection[] = [
         example: "No worries, it happens to everyone.",
         exampleTranslation: 'Без проблем, с каждым бывает.',
         level: 'A2',
-        situationPrompt: "A friend apologizes for showing up ten minutes late. How do you casually tell them it's totally fine?",
+        situationPrompts: ["A friend apologizes for showing up ten minutes late. How do you casually tell them it's totally fine?"],
       },
     ],
   },
@@ -136,7 +136,7 @@ const SEED: SeedCollection[] = [
         example: 'We need to check in before 6 p.m.',
         exampleTranslation: 'Нам нужно зарегистрироваться до 18:00.',
         level: 'A2',
-        situationPrompt: "You've just arrived at the airport and need to register for your flight before a deadline. What do you tell your travel companion you need to do first?",
+        situationPrompts: ["You've just arrived at the airport and need to register for your flight before a deadline. What do you tell your travel companion you need to do first?"],
       },
       {
         text: 'carry-on luggage',
@@ -145,7 +145,7 @@ const SEED: SeedCollection[] = [
         example: 'You can bring one piece of carry-on luggage.',
         exampleTranslation: 'Можно взять одну сумку ручной клади.',
         level: 'A2',
-        situationPrompt: "An airline employee asks how many bags you're bringing into the cabin. You have one small bag. How do you describe it?",
+        situationPrompts: ["An airline employee asks how many bags you're bringing into the cabin. You have one small bag. How do you describe it?"],
       },
       {
         text: 'miss a flight',
@@ -154,7 +154,7 @@ const SEED: SeedCollection[] = [
         example: "We almost missed our flight because of the traffic.",
         exampleTranslation: 'Мы чуть не опоздали на рейс из-за пробок.',
         level: 'A2',
-        situationPrompt: "Traffic made you very late to the airport and you're worried you won't make your flight in time. What do you tell your travel companion?",
+        situationPrompts: ["Traffic made you very late to the airport and you're worried you won't make your flight in time. What do you tell your travel companion?"],
       },
       {
         text: 'board the plane',
@@ -163,7 +163,7 @@ const SEED: SeedCollection[] = [
         example: 'Passengers will board the plane at gate 12.',
         exampleTranslation: 'Посадка пассажиров будет у выхода 12.',
         level: 'A2',
-        situationPrompt: "An announcement says it's time to get on the plane at gate 12. How do you tell your friend it's time?",
+        situationPrompts: ["An announcement says it's time to get on the plane at gate 12. How do you tell your friend it's time?"],
       },
       {
         text: 'go through security',
@@ -172,7 +172,7 @@ const SEED: SeedCollection[] = [
         example: 'It took twenty minutes to go through security.',
         exampleTranslation: 'Прохождение контроля безопасности заняло двадцать минут.',
         level: 'A2',
-        situationPrompt: "You're telling a friend about your airport experience — the screening check where they scanned your bags took twenty minutes. What part of the process are you describing?",
+        situationPrompts: ["You're telling a friend about your airport experience — the screening check where they scanned your bags took twenty minutes. What part of the process are you describing?"],
       },
       {
         text: 'book a room',
@@ -181,7 +181,7 @@ const SEED: SeedCollection[] = [
         example: "I'd like to book a room for two nights.",
         exampleTranslation: 'Я хотел бы забронировать номер на две ночи.',
         level: 'A2',
-        situationPrompt: "You're calling a hotel to reserve a room for two nights. What do you tell the receptionist?",
+        situationPrompts: ["You're calling a hotel to reserve a room for two nights. What do you tell the receptionist?"],
       },
       {
         text: 'a round trip',
@@ -190,7 +190,7 @@ const SEED: SeedCollection[] = [
         example: 'A round trip ticket is usually cheaper than two one-way tickets.',
         exampleTranslation: 'Билет туда-обратно обычно дешевле двух билетов в одну сторону.',
         level: 'A2',
-        situationPrompt: "You're buying a plane ticket that includes both the flight there and the flight back. How do you describe this kind of ticket to the travel agent?",
+        situationPrompts: ["You're buying a plane ticket that includes both the flight there and the flight back. How do you describe this kind of ticket to the travel agent?"],
       },
       {
         text: 'a layover',
@@ -199,7 +199,7 @@ const SEED: SeedCollection[] = [
         example: 'We have a two-hour layover in Istanbul.',
         exampleTranslation: 'У нас двухчасовая пересадка в Стамбуле.',
         level: 'B1',
-        situationPrompt: "Your flight to Rome includes a two-hour stop in Istanbul before continuing on. How do you describe this stop to a friend?",
+        situationPrompts: ["Your flight to Rome includes a two-hour stop in Istanbul before continuing on. How do you describe this stop to a friend?"],
       },
     ],
   },
@@ -217,7 +217,7 @@ const SEED: SeedCollection[] = [
         example: "We need to make a decision by Friday.",
         exampleTranslation: 'Нам нужно принять решение к пятнице.',
         level: 'B1',
-        situationPrompt: "Your team has two options for a project and needs to choose one by Friday. What do you tell your colleagues you need to do by then?",
+        situationPrompts: ["Your team has two options for a project and needs to choose one by Friday. What do you tell your colleagues you need to do by then?"],
       },
       KEEP_IN_MIND,
       {
@@ -227,7 +227,7 @@ const SEED: SeedCollection[] = [
         example: "Let me check the schedule and get back to you tomorrow.",
         exampleTranslation: 'Дай я проверю расписание и отвечу тебе завтра.',
         level: 'B1',
-        situationPrompt: "A colleague asks a question you can't answer right now. You need to check something first and reply tomorrow. What do you tell them?",
+        situationPrompts: ["A colleague asks a question you can't answer right now. You need to check something first and reply tomorrow. What do you tell them?"],
       },
       {
         text: 'touch base',
@@ -236,7 +236,7 @@ const SEED: SeedCollection[] = [
         example: "Let's touch base again next week.",
         exampleTranslation: 'Давай снова созвонимся на следующей неделе.',
         level: 'B1',
-        situationPrompt: "A colleague asks how you'd like to stay updated on a project over the next few weeks, without formal meetings. What do you suggest?",
+        situationPrompts: ["A colleague asks how you'd like to stay updated on a project over the next few weeks, without formal meetings. What do you suggest?"],
       },
       {
         text: 'follow up on something',
@@ -245,7 +245,7 @@ const SEED: SeedCollection[] = [
         example: "I'll follow up on the invoice tomorrow morning.",
         exampleTranslation: 'Я уточню насчёт счёта завтра утром.',
         level: 'B1',
-        situationPrompt: "You told a client you'd check on the status of an invoice. What do you tell a colleague you'll do about it tomorrow morning?",
+        situationPrompts: ["You told a client you'd check on the status of an invoice. What do you tell a colleague you'll do about it tomorrow morning?"],
       },
       {
         text: 'on the same page',
@@ -254,7 +254,7 @@ const SEED: SeedCollection[] = [
         example: "Before we start, let's make sure we're on the same page.",
         exampleTranslation: 'Прежде чем начать, давайте убедимся, что мы на одной волне.',
         level: 'B1',
-        situationPrompt: "Before starting a project with your team, you want to make sure everyone shares the same understanding of the plan. What do you say?",
+        situationPrompts: ["Before starting a project with your team, you want to make sure everyone shares the same understanding of the plan. What do you say?"],
       },
       {
         text: 'reach out to someone',
@@ -263,7 +263,7 @@ const SEED: SeedCollection[] = [
         example: "Feel free to reach out if you have any questions.",
         exampleTranslation: 'Не стесняйтесь обращаться, если появятся вопросы.',
         level: 'B1',
-        situationPrompt: "You're telling a new colleague that they can contact you anytime if they have questions. What do you say?",
+        situationPrompts: ["You're telling a new colleague that they can contact you anytime if they have questions. What do you say?"],
       },
       {
         text: 'put together a report',
@@ -272,28 +272,38 @@ const SEED: SeedCollection[] = [
         example: "She put together a report on last quarter's sales.",
         exampleTranslation: 'Она составила отчёт по продажам за прошлый квартал.',
         level: 'B1',
-        situationPrompt: "Your manager asks what you did with last quarter's sales data. You gathered and organized it into a document. How do you describe what you did?",
+        situationPrompts: ["Your manager asks what you did with last quarter's sales data. You gathered and organized it into a document. How do you describe what you did?"],
       },
     ],
   },
 ];
 
+async function replaceSituationPrompts(pool: pg.Pool, chunkId: string, prompts: string[]): Promise<void> {
+  await pool.query('DELETE FROM chunk_situation_prompts WHERE chunk_id = $1', [chunkId]);
+  for (let i = 0; i < prompts.length; i++) {
+    await pool.query('INSERT INTO chunk_situation_prompts (chunk_id, prompt, position) VALUES ($1, $2, $3)', [chunkId, prompts[i], i]);
+  }
+}
+
 async function upsertChunk(pool: pg.Pool, chunk: SeedChunk): Promise<string> {
   const existing = await pool.query<{ id: string }>('SELECT id FROM chunks WHERE text = $1', [chunk.text]);
+  const prompts = chunk.situationPrompts ?? [];
   if (existing.rows[0]) {
     await pool.query(
-      `UPDATE chunks SET translation = $2, explanation = $3, example = $4, example_translation = $5, level = $6, situation_prompt = $7, updated_at = now()
+      `UPDATE chunks SET translation = $2, explanation = $3, example = $4, example_translation = $5, level = $6, updated_at = now()
        WHERE id = $1`,
-      [existing.rows[0].id, chunk.translation, chunk.explanation, chunk.example, chunk.exampleTranslation, chunk.level, chunk.situationPrompt ?? null],
+      [existing.rows[0].id, chunk.translation, chunk.explanation, chunk.example, chunk.exampleTranslation, chunk.level],
     );
+    await replaceSituationPrompts(pool, existing.rows[0].id, prompts);
     return existing.rows[0].id;
   }
   const inserted = await pool.query<{ id: string }>(
-    `INSERT INTO chunks (text, translation, explanation, example, example_translation, level, situation_prompt)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `INSERT INTO chunks (text, translation, explanation, example, example_translation, level)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING id`,
-    [chunk.text, chunk.translation, chunk.explanation, chunk.example, chunk.exampleTranslation, chunk.level, chunk.situationPrompt ?? null],
+    [chunk.text, chunk.translation, chunk.explanation, chunk.example, chunk.exampleTranslation, chunk.level],
   );
+  await replaceSituationPrompts(pool, inserted.rows[0].id, prompts);
   return inserted.rows[0].id;
 }
 

@@ -99,7 +99,7 @@ export interface AdminChunkSummary {
   example: string | null;
   exampleTranslation: string | null;
   level: string;
-  situationPrompt: string | null;
+  situationPrompts: string[];
   position: number;
 }
 
@@ -112,7 +112,7 @@ function toChunkSummary(row: AdminChunkRow): AdminChunkSummary {
     example: row.example,
     exampleTranslation: row.example_translation,
     level: row.level,
-    situationPrompt: row.situation_prompt,
+    situationPrompts: row.situation_prompts,
     position: row.position,
   };
 }

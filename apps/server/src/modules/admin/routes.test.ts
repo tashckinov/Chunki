@@ -220,7 +220,7 @@ describe('collections CRUD', () => {
 describe('chunks CRUD', () => {
   it('GET /api/admin/collections/:id/chunks lists chunks in position order', async () => {
     vi.mocked(session.getSession).mockResolvedValue(adminSession);
-    const chunks = [{ id: validId, text: 'sounds good', translation: 'звучит хорошо', explanation: null, example: null, exampleTranslation: null, level: 'A2', situationPrompt: null, position: 0 }];
+    const chunks = [{ id: validId, text: 'sounds good', translation: 'звучит хорошо', explanation: null, example: null, exampleTranslation: null, level: 'A2', situationPrompts: [], position: 0 }];
     vi.mocked(service.listChunksForCollectionAdmin).mockResolvedValue(chunks);
 
     const res = await app.inject({ method: 'GET', url: `/api/admin/collections/${validId}/chunks`, cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' } });
@@ -231,7 +231,7 @@ describe('chunks CRUD', () => {
 
   it('POST /api/admin/collections/:id/chunks creates a chunk in the collection', async () => {
     vi.mocked(session.getSession).mockResolvedValue(adminSession);
-    const created = { id: validId, text: 'take your time', translation: 'не торопись', explanation: null, example: null, exampleTranslation: null, level: 'A2', situationPrompt: null, position: 3 };
+    const created = { id: validId, text: 'take your time', translation: 'не торопись', explanation: null, example: null, exampleTranslation: null, level: 'A2', situationPrompts: [], position: 3 };
     vi.mocked(service.createChunkInCollection).mockResolvedValue(created);
 
     const res = await app.inject({
@@ -251,7 +251,7 @@ describe('chunks CRUD', () => {
 
   it('PATCH /api/admin/chunks/:id updates a chunk', async () => {
     vi.mocked(session.getSession).mockResolvedValue(adminSession);
-    const updated = { id: validId, text: 'sounds good', translation: 'звучит здорово', explanation: null, example: null, exampleTranslation: null, level: 'A2', situationPrompt: null };
+    const updated = { id: validId, text: 'sounds good', translation: 'звучит здорово', explanation: null, example: null, exampleTranslation: null, level: 'A2', situationPrompts: [] };
     vi.mocked(service.updateChunk).mockResolvedValue({ kind: 'ok', chunk: updated });
 
     const res = await app.inject({

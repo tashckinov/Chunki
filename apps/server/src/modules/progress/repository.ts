@@ -58,17 +58,23 @@ export async function upsertProgress(userId: string, chunkId: string, patch: Pro
   return rows[0];
 }
 
-export interface ChunkWithSituationRow {
+export interface ChunkWithSituationsRow {
   id: string;
   text: string;
   translation: string;
   example: string | null;
-  situation_prompt: string | null;
+  situation_prompts: string[];
 }
 
-export async function findChunkWithSituation(chunkId: string): Promise<ChunkWithSituationRow | null> {
-  const { rows } = await pool.query<ChunkWithSituationRow>(
-    `SELECT id, text, translation, example, situation_prompt FROM chunks WHERE id = $1`,
+export async function findChunkWithSituationPrompts(chunkId: string): Promise<ChunkWithSituationsRow | null> {
+  const { rows } = await pool.query<ChunkWithSituationsRow>(
+    `SELECT c.id, c.text, c.translation, c.example,
+            COALESCE(
+              (SELECT array_agg(p.prompt ORDER BY p.position) FROM chunk_situation_prompts p WHERE p.chunk_id = c.id),
+              ARRAY[]::text[]
+            ) AS situation_prompts
+     FROM chunks c
+     WHERE c.id = $1`,
     [chunkId],
   );
   return rows[0] ?? null;

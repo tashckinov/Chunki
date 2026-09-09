@@ -119,8 +119,10 @@ interface AppState {
   chunkProgress: Record<string, ProgressSummary>;
   /** This deck session's swipe outcomes, for DeckDoneScreen's tally — not mastery bookkeeping. */
   sessionVerdicts: Record<string, DeckVerdict>;
-  /** This deck session's production-check verdicts, revealed together on DeckDoneScreen rather than inline per card. */
-  sessionProductionResults: Record<string, { verdict: ProductionVerdict; feedback: string }>;
+  /** This deck session's production-check verdicts, revealed together on DeckDoneScreen rather than inline per card. Judging runs in the background — see submitProductionCheck. */
+  sessionProductionResults: Record<string, { kind: 'ok'; verdict: ProductionVerdict; feedback: string } | { kind: 'error'; message: string }>;
+  /** Chunks whose production-check answer was submitted but hasn't resolved yet — drives DeckDoneScreen's "still checking" indicator. */
+  sessionProductionPending: Record<string, true>;
   /** Chunks already sent to a recognition check this session, so a repeat "don't know"/"unsure" doesn't loop. */
   recognitionAttemptedThisSession: Record<string, true>;
 
@@ -133,9 +135,6 @@ interface AppState {
   productionChunkId: string | null;
   productionSituation: string;
   productionAnswer: string;
-  productionChecking: boolean;
-  productionCheckError: string | null;
-  productionResult: { verdict: ProductionVerdict; feedback: string } | null;
 
   collections: CollectionSummary[];
   collectionDetails: Record<string, CollectionDetail>;
@@ -217,7 +216,7 @@ interface AppState {
   answerRecognitionCheck: (optionId: string) => Promise<void>;
   startProductionCheck: (chunkId: string) => Promise<void>;
   setProductionAnswer: (v: string) => void;
-  submitProductionCheck: () => Promise<void>;
+  submitProductionCheck: () => void;
 }
 
 let dragStart: { x: number; y: number } | null = null;
@@ -276,6 +275,7 @@ export const useAppStore = create<AppState>()(
       chunkProgress: {},
       sessionVerdicts: {},
       sessionProductionResults: {},
+      sessionProductionPending: {},
       recognitionAttemptedThisSession: {},
 
       recognitionChunkId: null,
@@ -287,9 +287,6 @@ export const useAppStore = create<AppState>()(
       productionChunkId: null,
       productionSituation: '',
       productionAnswer: '',
-      productionChecking: false,
-      productionCheckError: null,
-      productionResult: null,
 
       collections: [],
       collectionDetails: {},
@@ -387,6 +384,7 @@ export const useAppStore = create<AppState>()(
           dy: 0,
           sessionVerdicts: {},
           sessionProductionResults: {},
+          sessionProductionPending: {},
           recognitionAttemptedThisSession: {},
         });
         const chunkIds = resolved.map((c) => c.id);
@@ -612,9 +610,6 @@ export const useAppStore = create<AppState>()(
             productionChunkId: check.chunkId,
             productionSituation: check.situationPrompt,
             productionAnswer: '',
-            productionChecking: false,
-            productionCheckError: null,
-            productionResult: null,
           });
         } catch {
           get().advanceDeck();
@@ -623,23 +618,40 @@ export const useAppStore = create<AppState>()(
 
       setProductionAnswer: (v) => set({ productionAnswer: v }),
 
-      submitProductionCheck: async () => {
+      // Fire-and-forget: the judge call can take 20+ seconds, so this
+      // doesn't block the deck — it marks the chunk pending, advances
+      // immediately, and updates sessionProductionResults whenever the
+      // request actually resolves (DeckDoneScreen shows pending/resolved
+      // state, regardless of which screen is mounted by then).
+      submitProductionCheck: () => {
         const s = get();
         const chunkId = s.productionChunkId;
         if (!chunkId) return;
-        set({ productionChecking: true, productionCheckError: null });
-        try {
-          const { verdict, feedback, progress } = await postProductionCheck(chunkId, s.productionAnswer);
-          set((st) => ({
-            productionChecking: false,
-            productionResult: { verdict, feedback },
-            sessionProductionResults: { ...st.sessionProductionResults, [chunkId]: { verdict, feedback } },
-            chunkProgress: { ...st.chunkProgress, [chunkId]: progress },
-          }));
-          get().advanceDeck();
-        } catch (err) {
-          set({ productionChecking: false, productionCheckError: err instanceof Error ? err.message : String(err) });
-        }
+        const answer = s.productionAnswer;
+
+        set((st) => ({ sessionProductionPending: { ...st.sessionProductionPending, [chunkId]: true } }));
+        get().advanceDeck();
+
+        postProductionCheck(chunkId, answer)
+          .then(({ verdict, feedback, progress }) => {
+            set((st) => {
+              const { [chunkId]: _drop, ...pending } = st.sessionProductionPending;
+              return {
+                sessionProductionPending: pending,
+                sessionProductionResults: { ...st.sessionProductionResults, [chunkId]: { kind: 'ok', verdict, feedback } },
+                chunkProgress: { ...st.chunkProgress, [chunkId]: progress },
+              };
+            });
+          })
+          .catch((err) => {
+            set((st) => {
+              const { [chunkId]: _drop, ...pending } = st.sessionProductionPending;
+              return {
+                sessionProductionPending: pending,
+                sessionProductionResults: { ...st.sessionProductionResults, [chunkId]: { kind: 'error', message: err instanceof Error ? err.message : String(err) } },
+              };
+            });
+          });
       },
     }),
     {

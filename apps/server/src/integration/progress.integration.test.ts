@@ -23,10 +23,10 @@ async function insertUser() {
   return user.id;
 }
 
-async function insertChunk(text: string, situationPrompt: string | null = null) {
+async function insertChunk(text: string) {
   const { rows } = await pool.query<{ id: string }>(
-    `INSERT INTO chunks (text, translation, level, situation_prompt) VALUES ($1, $2, 'A2', $3) RETURNING id`,
-    [text, `translation of ${text}`, situationPrompt],
+    `INSERT INTO chunks (text, translation, level) VALUES ($1, $2, 'A2') RETURNING id`,
+    [text, `translation of ${text}`],
   );
   return rows[0].id;
 }

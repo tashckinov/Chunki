@@ -5,7 +5,7 @@ import {
   findProgress,
   upsertProgress,
   findProgressForChunks,
-  findChunkWithSituation,
+  findChunkWithSituationPrompts,
   findDistractorTranslations,
   type ProgressRow,
 } from './repository.js';
@@ -76,7 +76,7 @@ export type RecognitionCheckResult =
   | { kind: 'ok'; chunkId: string; prompt: string; options: RecognitionOption[] };
 
 export async function buildRecognitionCheck(userId: string, chunkId: string): Promise<RecognitionCheckResult> {
-  const chunk = await findChunkWithSituation(chunkId);
+  const chunk = await findChunkWithSituationPrompts(chunkId);
   if (!chunk) return { kind: 'not_found' };
 
   const progress = await findProgress(userId, chunkId);
@@ -102,7 +102,7 @@ export async function recordRecognitionResult(
   selectedOptionId: string,
   echoedOptions: RecognitionOption[],
 ): Promise<RecognitionSubmitResult> {
-  const chunk = await findChunkWithSituation(chunkId);
+  const chunk = await findChunkWithSituationPrompts(chunkId);
   if (!chunk) return { kind: 'options_mismatch' };
 
   const selected = echoedOptions.find((o) => o.id === selectedOptionId);
@@ -128,15 +128,20 @@ export type ProductionCheckAvailability =
   | { kind: 'ok'; chunkId: string; situationPrompt: string; chunkText: string; chunkTranslation: string };
 
 export async function buildProductionCheck(userId: string, chunkId: string): Promise<ProductionCheckAvailability> {
-  const chunk = await findChunkWithSituation(chunkId);
+  const chunk = await findChunkWithSituationPrompts(chunkId);
   if (!chunk) return { kind: 'not_found' };
 
   const progress = await findProgress(userId, chunkId);
   const state = progress?.state ?? 'unseen';
   if (!PRODUCTION_ELIGIBLE_STATES.has(state)) return { kind: 'wrong_state' };
-  if (!chunk.situation_prompt) return { kind: 'unavailable' };
+  if (chunk.situation_prompts.length === 0) return { kind: 'unavailable' };
 
-  return { kind: 'ok', chunkId, situationPrompt: chunk.situation_prompt, chunkText: chunk.text, chunkTranslation: chunk.translation };
+  // Round-robin by attempt count, not random — cycles through every prompt
+  // over repeated encounters instead of a repeat-prone random pick. Stable
+  // between this GET and the matching POST (submitProductionAnswer) below,
+  // since only that POST ever increments times_production_attempted.
+  const index = (progress?.times_production_attempted ?? 0) % chunk.situation_prompts.length;
+  return { kind: 'ok', chunkId, situationPrompt: chunk.situation_prompts[index], chunkText: chunk.text, chunkTranslation: chunk.translation };
 }
 
 export type ProductionSubmitResult =
@@ -148,19 +153,20 @@ export type ProductionSubmitResult =
 const VERDICT_STATE: Record<ProductionCheckVerdict, string> = { chunk_used: 'active', meaning_only: 'passive', not_conveyed: 'unknown' };
 
 export async function submitProductionAnswer(userId: string, chunkId: string, answer: string): Promise<ProductionSubmitResult> {
-  const chunk = await findChunkWithSituation(chunkId);
+  const chunk = await findChunkWithSituationPrompts(chunkId);
   if (!chunk) return { kind: 'not_found' };
 
   const current = (await findProgress(userId, chunkId)) ?? emptyRow();
   if (!PRODUCTION_ELIGIBLE_STATES.has(current.state)) return { kind: 'wrong_state' };
-  if (!chunk.situation_prompt) return { kind: 'unavailable' };
+  if (chunk.situation_prompts.length === 0) return { kind: 'unavailable' };
 
+  const index = current.times_production_attempted % chunk.situation_prompts.length;
   const judge = getProductionJudgeProvider();
   const judgeInput = {
     chunkText: chunk.text,
     chunkTranslation: chunk.translation,
     chunkExample: chunk.example,
-    situationPrompt: chunk.situation_prompt,
+    situationPrompt: chunk.situation_prompts[index],
     userAnswer: answer,
   };
   const startedAt = Date.now();

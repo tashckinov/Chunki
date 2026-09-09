@@ -2,14 +2,9 @@ import { useAppStore } from '../store/appStore';
 import { IconButton } from '../components/ui/IconButton';
 import { Textarea } from '../components/ui/Textarea';
 import { Button } from '../components/ui/Button';
-import { CheckingScreen } from './CheckingScreen';
 
 export function ProductionCheckScreen() {
   const s = useAppStore();
-
-  if (s.productionChecking) {
-    return <CheckingScreen title="Проверяем ответ…" />;
-  }
 
   return (
     <div className="flex-1 min-h-0 flex flex-col bg-bg">
@@ -24,8 +19,7 @@ export function ProductionCheckScreen() {
         </div>
 
         <Textarea value={s.productionAnswer} onChange={s.setProductionAnswer} placeholder="Что бы вы сказали?" rows={4} />
-        {s.productionCheckError && <div className="text-[13px] text-negative">Не получилось проверить ответ. Попробуйте ещё раз.</div>}
-        <Button onClick={() => void s.submitProductionCheck()} disabled={!s.productionAnswer.trim()}>
+        <Button onClick={s.submitProductionCheck} disabled={!s.productionAnswer.trim()}>
           Проверить
         </Button>
       </div>

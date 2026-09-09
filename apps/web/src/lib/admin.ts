@@ -29,7 +29,7 @@ export interface AdminChunk {
   example: string | null;
   exampleTranslation: string | null;
   level: string;
-  situationPrompt: string | null;
+  situationPrompts: string[];
   position: number;
 }
 
@@ -51,7 +51,7 @@ export type NewChunkInput = {
   example?: string | null;
   exampleTranslation?: string | null;
   level: string;
-  situationPrompt?: string | null;
+  situationPrompts?: string[];
 };
 
 export type ChunkPatch = Partial<NewChunkInput>;
