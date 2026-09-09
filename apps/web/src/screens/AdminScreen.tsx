@@ -19,10 +19,12 @@ import {
   updateAdminChunk,
   deleteAdminChunk,
   removeChunkFromCollection,
+  fetchAdminAiLogs,
   type AdminUser,
   type AdminCollection,
   type AdminChunk,
   type NewChunkInput,
+  type AdminAiLog,
 } from '../lib/admin';
 
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const;
@@ -474,6 +476,74 @@ function ContentTab() {
   );
 }
 
+interface ProductionJudgeRequest {
+  chunkText?: string;
+  situationPrompt?: string;
+  userAnswer?: string;
+}
+
+interface ProductionJudgeResponse {
+  verdict?: string;
+  feedback?: string;
+}
+
+function AiLogsTab() {
+  const [logs, setLogs] = useState<AdminAiLog[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchAdminAiLogs()
+      .then(setLogs)
+      .catch(() => setError('Не удалось загрузить логи.'));
+  }, []);
+
+  if (error) return <div className="px-5 py-4 text-negative">{error}</div>;
+  if (!logs) return <div className="px-5 py-4 text-body-secondary">Загрузка…</div>;
+
+  return (
+    <div className="flex flex-col gap-3 px-5 py-4">
+      {logs.length === 0 && <div className="text-body-secondary">Пока нет записей — они появятся после первой продакшн-проверки.</div>}
+      {logs.map((log) => {
+        const req = log.request as ProductionJudgeRequest;
+        const res = log.response as ProductionJudgeResponse | null;
+        return (
+          <div key={log.id} className="rounded-[var(--radius-md)] border border-border p-4 flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-2 text-meta">
+              <span>{new Date(log.createdAt).toLocaleString('ru-RU')}</span>
+              <span>
+                {log.provider}
+                {log.model ? ` · ${log.model}` : ''} · {log.durationMs} мс
+              </span>
+            </div>
+            <div className="text-[13.5px]">
+              {req.chunkText && <span className="font-medium">{req.chunkText}</span>}
+              {log.userEmail && <span className="text-text-secondary"> · {log.userEmail}</span>}
+            </div>
+            {req.situationPrompt && <div className="text-[13.5px] text-text-secondary">Ситуация: {req.situationPrompt}</div>}
+            {req.userAnswer && <div className="text-[13.5px]">Ответ: «{req.userAnswer}»</div>}
+            {log.error ? (
+              <div className="text-[13.5px] text-negative">Ошибка: {log.error}</div>
+            ) : (
+              res && (
+                <div className="text-[13.5px]">
+                  Вердикт: <span className="font-medium">{res.verdict}</span>
+                  {res.feedback && <span className="text-text-secondary"> — {res.feedback}</span>}
+                </div>
+              )
+            )}
+            <details className="text-meta">
+              <summary className="cursor-pointer">Полный JSON</summary>
+              <pre className="whitespace-pre-wrap break-all mt-1 text-[12px]">
+                {JSON.stringify({ request: log.request, response: log.response }, null, 2)}
+              </pre>
+            </details>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function AdminScreen() {
   const user = useAppStore((s) => s.user);
   const back = useAppStore((s) => s.back);
@@ -490,9 +560,9 @@ export function AdminScreen() {
     <div className="flex-1 min-h-0 flex flex-col">
       <NavigationBar size="large" title="Админка" onBack={back} hideBackOnDesktop />
       <div className="px-5 pb-2">
-        <Tabs items={['Пользователи', 'Контент']} value={tab} onChange={setTab} />
+        <Tabs items={['Пользователи', 'Контент', 'AI-логи']} value={tab} onChange={setTab} />
       </div>
-      <div className="scroll-clean flex-1 min-h-0">{tab === 0 ? <UsersTab /> : <ContentTab />}</div>
+      <div className="scroll-clean flex-1 min-h-0">{tab === 0 ? <UsersTab /> : tab === 1 ? <ContentTab /> : <AiLogsTab />}</div>
     </div>
   );
 }

@@ -117,5 +117,7 @@ export interface ProductionCheckResult {
 
 export interface ProductionJudgeProvider {
   name: string;
+  /** Which model actually answered — for admin-facing call logs. */
+  model: string;
   judgeProduction(input: ProductionCheckInput): Promise<ProductionCheckResult>;
 }

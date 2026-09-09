@@ -8,6 +8,7 @@ import type { ProductionCheckInput, ProductionCheckResult, ProductionJudgeProvid
  */
 export class MockProductionJudgeProvider implements ProductionJudgeProvider {
   name = 'mock';
+  model = 'mock';
 
   async judgeProduction(input: ProductionCheckInput): Promise<ProductionCheckResult> {
     const answer = input.userAnswer.trim();

@@ -17,6 +17,7 @@ vi.mock('./service.js', () => ({
   updateChunk: vi.fn(),
   deleteChunk: vi.fn(),
   removeChunkFromCollection: vi.fn(),
+  listAiCallLogsForAdmin: vi.fn(),
 }));
 
 const session = await import('../auth/session.js');
@@ -311,5 +312,51 @@ describe('chunks CRUD', () => {
     expect(res.json()).toEqual({ ok: true });
     expect(service.removeChunkFromCollection).toHaveBeenCalledWith(validId, otherId);
     expect(service.deleteChunk).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/admin/ai-logs', () => {
+  it('returns the logs with the default limit', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(adminSession);
+    const logs = [
+      {
+        id: validId,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        provider: 'openrouter',
+        model: 'openai/gpt-4o-mini',
+        userEmail: 'person@example.com',
+        chunkText: 'sounds good',
+        request: { situationPrompt: 'x', userAnswer: 'y' },
+        response: { verdict: 'chunk_used', feedback: 'Отлично!' },
+        error: null,
+        durationMs: 842,
+      },
+    ];
+    vi.mocked(service.listAiCallLogsForAdmin).mockResolvedValue(logs);
+
+    const res = await app.inject({ method: 'GET', url: '/api/admin/ai-logs', cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' } });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ logs });
+    expect(service.listAiCallLogsForAdmin).toHaveBeenCalledWith(100);
+  });
+
+  it('respects an explicit limit query param', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(adminSession);
+    vi.mocked(service.listAiCallLogsForAdmin).mockResolvedValue([]);
+
+    const res = await app.inject({ method: 'GET', url: '/api/admin/ai-logs?limit=25', cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' } });
+
+    expect(res.statusCode).toBe(200);
+    expect(service.listAiCallLogsForAdmin).toHaveBeenCalledWith(25);
+  });
+
+  it('rejects a limit above the max', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(adminSession);
+
+    const res = await app.inject({ method: 'GET', url: '/api/admin/ai-logs?limit=5000', cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' } });
+
+    expect(res.statusCode).toBe(400);
+    expect(service.listAiCallLogsForAdmin).not.toHaveBeenCalled();
   });
 });

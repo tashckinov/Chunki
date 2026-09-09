@@ -28,7 +28,7 @@ export class OpenRouterProductionJudgeProvider implements ProductionJudgeProvide
     return new OpenAI({ apiKey, baseURL: 'https://openrouter.ai/api/v1' });
   }
 
-  #model(): string {
+  get model(): string {
     return this.#env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
   }
 
@@ -45,7 +45,7 @@ export class OpenRouterProductionJudgeProvider implements ProductionJudgeProvide
     ].join('\n');
 
     const response = await client.chat.completions.create({
-      model: this.#model(),
+      model: this.model,
       // Generous headroom: reasoning-capable models (e.g. the gpt-5 family)
       // spend part of this budget on internal reasoning tokens before ever
       // emitting the tool call, so a tight limit here can cut them off with
@@ -89,7 +89,7 @@ export class OpenRouterProductionJudgeProvider implements ProductionJudgeProvide
       const choice = response.choices[0];
       throw new Error(
         `OpenRouter response did not include the expected tool call ` +
-          `(model=${this.#model()}, finish_reason=${choice?.finish_reason ?? 'unknown'}, ` +
+          `(model=${this.model}, finish_reason=${choice?.finish_reason ?? 'unknown'}, ` +
           `hasContent=${Boolean(choice?.message.content)}, refusal=${Boolean((choice?.message as { refusal?: unknown } | undefined)?.refusal)}).`,
       );
     }

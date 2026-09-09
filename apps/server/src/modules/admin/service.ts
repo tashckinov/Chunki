@@ -17,6 +17,7 @@ import {
   type ChunkInput,
   type ChunkPatch,
 } from './repository.js';
+import { listAiCallLogs as repoListAiCallLogs, type AiCallLogRow } from '../aiLogs/repository.js';
 
 export interface AdminUserSummary {
   id: string;
@@ -139,4 +140,36 @@ export async function deleteChunk(id: string): Promise<boolean> {
 
 export async function removeChunkFromCollection(collectionId: string, chunkId: string): Promise<boolean> {
   return repoRemoveChunkFromCollection(collectionId, chunkId);
+}
+
+export interface AiCallLogSummary {
+  id: string;
+  createdAt: string;
+  provider: string;
+  model: string | null;
+  userEmail: string | null;
+  chunkText: string | null;
+  request: unknown;
+  response: unknown | null;
+  error: string | null;
+  durationMs: number;
+}
+
+function toAiCallLogSummary(row: AiCallLogRow): AiCallLogSummary {
+  return {
+    id: row.id,
+    createdAt: row.created_at.toISOString(),
+    provider: row.provider,
+    model: row.model,
+    userEmail: row.user_email,
+    chunkText: row.chunk_text,
+    request: row.request,
+    response: row.response,
+    error: row.error,
+    durationMs: row.duration_ms,
+  };
+}
+
+export async function listAiCallLogsForAdmin(limit: number): Promise<AiCallLogSummary[]> {
+  return (await repoListAiCallLogs(limit)).map(toAiCallLogSummary);
 }

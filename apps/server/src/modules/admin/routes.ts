@@ -12,6 +12,7 @@ import {
   updateChunk,
   deleteChunk,
   removeChunkFromCollection,
+  listAiCallLogsForAdmin,
 } from './service.js';
 
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const;
@@ -19,6 +20,7 @@ const SLUG_REGEX = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 const idParamSchema = z.object({ id: z.string().uuid() });
 const collectionChunkParamSchema = z.object({ id: z.string().uuid(), chunkId: z.string().uuid() });
+const aiLogsQuerySchema = z.object({ limit: z.coerce.number().int().min(1).max(500).default(100) });
 
 const premiumBodySchema = z.object({ premiumUntil: z.string().datetime().nullable() });
 
@@ -173,5 +175,14 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       return { error: 'not_found' };
     }
     return { ok: true };
+  });
+
+  app.get('/ai-logs', async (request, reply) => {
+    const parsed = aiLogsQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      reply.code(400);
+      return { error: 'invalid_request' };
+    }
+    return { logs: await listAiCallLogsForAdmin(parsed.data.limit) };
   });
 };

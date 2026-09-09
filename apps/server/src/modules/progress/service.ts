@@ -1,5 +1,6 @@
 import type { ProductionCheckVerdict } from '@app/shared';
 import { getProductionJudgeProvider } from '../../openrouter/index.js';
+import { recordAiCallLog } from '../aiLogs/repository.js';
 import {
   findProgress,
   upsertProgress,
@@ -155,13 +156,40 @@ export async function submitProductionAnswer(userId: string, chunkId: string, an
   if (!chunk.situation_prompt) return { kind: 'unavailable' };
 
   const judge = getProductionJudgeProvider();
-  const result = await judge.judgeProduction({
+  const judgeInput = {
     chunkText: chunk.text,
     chunkTranslation: chunk.translation,
     chunkExample: chunk.example,
     situationPrompt: chunk.situation_prompt,
     userAnswer: answer,
-  });
+  };
+  const startedAt = Date.now();
+  let result;
+  try {
+    result = await judge.judgeProduction(judgeInput);
+  } catch (err) {
+    await recordAiCallLog({
+      userId,
+      chunkId,
+      provider: judge.name,
+      model: judge.model,
+      request: judgeInput,
+      response: null,
+      error: err instanceof Error ? err.message : String(err),
+      durationMs: Date.now() - startedAt,
+    }).catch(() => {});
+    throw err;
+  }
+  await recordAiCallLog({
+    userId,
+    chunkId,
+    provider: judge.name,
+    model: judge.model,
+    request: judgeInput,
+    response: result,
+    error: null,
+    durationMs: Date.now() - startedAt,
+  }).catch(() => {});
 
   const row = await upsertProgress(userId, chunkId, {
     state: VERDICT_STATE[result.verdict],

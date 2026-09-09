@@ -103,3 +103,21 @@ export async function deleteAdminChunk(id: string): Promise<void> {
 export async function removeChunkFromCollection(collectionId: string, chunkId: string): Promise<void> {
   await deleteJson(`/api/admin/collections/${collectionId}/chunks/${chunkId}`);
 }
+
+export interface AdminAiLog {
+  id: string;
+  createdAt: string;
+  provider: string;
+  model: string | null;
+  userEmail: string | null;
+  chunkText: string | null;
+  request: unknown;
+  response: unknown | null;
+  error: string | null;
+  durationMs: number;
+}
+
+export async function fetchAdminAiLogs(limit = 100): Promise<AdminAiLog[]> {
+  const data = await getJson<{ logs: AdminAiLog[] }>(`/api/admin/ai-logs?limit=${limit}`);
+  return data.logs;
+}
