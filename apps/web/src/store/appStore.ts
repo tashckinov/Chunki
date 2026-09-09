@@ -397,6 +397,11 @@ export const useAppStore = create<AppState>()(
           const collectionDetails: Record<string, CollectionDetail> = {};
           for (const detail of details) collectionDetails[detail.slug] = detail;
           set({ collections: list, collectionDetails, collectionsStatus: 'loaded' });
+
+          const chunkIds = flattenChunks(details).map((c) => c.id);
+          getProgressForChunks(chunkIds)
+            .then((progress) => set((st) => ({ chunkProgress: { ...st.chunkProgress, ...progress } })))
+            .catch(() => {});
         } catch (err) {
           const unauthorized = err instanceof ApiError && err.status === 401;
           set({ collectionsStatus: 'error', collectionsError: unauthorized ? 'unauthorized' : 'error' });
