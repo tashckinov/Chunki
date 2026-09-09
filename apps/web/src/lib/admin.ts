@@ -1,4 +1,4 @@
-import { getJson, postJson, patchJson, deleteJson } from './collections';
+import { getJson, postJson, patchJson, deleteJson, postFormData } from './collections';
 
 export interface AdminUser {
   id: string;
@@ -19,6 +19,7 @@ export interface AdminCollection {
   level: string;
   position: number;
   isPublished: boolean;
+  bannerUrl: string | null;
   chunkCount: number;
 }
 
@@ -41,6 +42,7 @@ export type NewCollectionInput = {
   level: string;
   position?: number;
   isPublished?: boolean;
+  bannerUrl?: string | null;
 };
 
 export type CollectionPatch = Partial<Omit<NewCollectionInput, 'position'>> & { position?: number };
@@ -70,6 +72,13 @@ export async function setUserPremiumUntil(userId: string, premiumUntil: string |
 export async function resetProductionChecks(userId: string): Promise<AdminUser> {
   const data = await postJson<{ user: AdminUser }>(`/api/admin/users/${userId}/reset-production-checks`, {});
   return data.user;
+}
+
+export async function uploadCollectionBanner(file: File): Promise<string> {
+  const form = new FormData();
+  form.set('file', file);
+  const data = await postFormData<{ url: string }>('/api/admin/uploads/banner', form);
+  return data.url;
 }
 
 export async function fetchAdminCollections(): Promise<AdminCollection[]> {

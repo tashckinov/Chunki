@@ -7,10 +7,12 @@ import { Textarea } from '../../components/ui/Textarea';
 import { Switch } from '../../components/ui/Switch';
 import { IconButton } from '../../components/ui/IconButton';
 import { Icon } from '../../components/ui/Icon';
+import { apiUrl } from '../../lib/collections';
 import {
   fetchAdminCollections,
   createAdminCollection,
   updateAdminCollection,
+  uploadCollectionBanner,
   fetchAdminChunks,
   createAdminChunk,
   updateAdminChunk,
@@ -197,12 +199,13 @@ interface CollectionFormValue {
   level: string;
   position: string;
   isPublished: boolean;
+  bannerUrl: string | null;
 }
 
-const EMPTY_COLLECTION_FORM: CollectionFormValue = { slug: '', title: '', description: '', level: 'A2', position: '0', isPublished: false };
+const EMPTY_COLLECTION_FORM: CollectionFormValue = { slug: '', title: '', description: '', level: 'A2', position: '0', isPublished: false, bannerUrl: null };
 
 function collectionToForm(c: AdminCollection): CollectionFormValue {
-  return { slug: c.slug, title: c.title, description: c.description ?? '', level: c.level, position: String(c.position), isPublished: c.isPublished };
+  return { slug: c.slug, title: c.title, description: c.description ?? '', level: c.level, position: String(c.position), isPublished: c.isPublished, bannerUrl: c.bannerUrl };
 }
 
 function CollectionEditView({
@@ -216,6 +219,8 @@ function CollectionEditView({
 }) {
   const [form, setForm] = useState<CollectionFormValue>(collection ? collectionToForm(collection) : EMPTY_COLLECTION_FORM);
   const [saving, setSaving] = useState(false);
+  const [bannerUploading, setBannerUploading] = useState(false);
+  const [bannerError, setBannerError] = useState<string | null>(null);
 
   useEffect(() => {
     setForm(collection ? collectionToForm(collection) : EMPTY_COLLECTION_FORM);
@@ -227,6 +232,19 @@ function CollectionEditView({
       await onSubmit(form);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleBannerFile(file: File) {
+    setBannerUploading(true);
+    setBannerError(null);
+    try {
+      const url = await uploadCollectionBanner(file);
+      setForm((f) => ({ ...f, bannerUrl: url }));
+    } catch {
+      setBannerError('Не удалось загрузить изображение.');
+    } finally {
+      setBannerUploading(false);
     }
   }
 
@@ -253,6 +271,39 @@ function CollectionEditView({
           </Field>
           <Field label="Позиция" hint="Порядок среди колод — меньше число, выше в списке.">
             <Input value={form.position} onChange={(v) => setForm((f) => ({ ...f, position: v }))} placeholder="0" type="number" />
+          </Field>
+          <Field label="Баннер коллекции (необязательно)" hint="Рекомендуемые пропорции 800×600 (4:3) — показывается в списке колод пользователю.">
+            <div className="flex flex-col gap-2">
+              <div className="aspect-[4/3] w-full max-w-[280px] rounded-[var(--radius-md)] bg-surface-subtle overflow-hidden flex items-center justify-center">
+                {form.bannerUrl ? (
+                  <img src={apiUrl(form.bannerUrl)} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-meta">Нет баннера</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="pressable inline-flex items-center rounded-[var(--radius-md)] bg-surface-subtle px-4 py-2 text-[13.5px] font-medium cursor-pointer">
+                  {bannerUploading ? 'Загружаем…' : form.bannerUrl ? 'Заменить' : 'Загрузить'}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="hidden"
+                    disabled={bannerUploading}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = '';
+                      if (file) handleBannerFile(file);
+                    }}
+                  />
+                </label>
+                {form.bannerUrl && (
+                  <Button variant="ghost" size="sm" onClick={() => setForm((f) => ({ ...f, bannerUrl: null }))}>
+                    Удалить
+                  </Button>
+                )}
+              </div>
+              {bannerError && <span className="text-negative text-[13px]">{bannerError}</span>}
+            </div>
           </Field>
           <div className="flex items-center justify-between px-1">
             <div className="flex flex-col">
@@ -329,6 +380,7 @@ export function ContentSection({ onOpenMenu }: { onOpenMenu: () => void }) {
       level: value.level,
       position: Number(value.position) || 0,
       isPublished: value.isPublished,
+      bannerUrl: value.bannerUrl,
     });
     setCollections((prev) => (prev ? [...prev, created] : [created]));
     setView({ kind: 'chunks', collectionId: created.id });
@@ -342,6 +394,7 @@ export function ContentSection({ onOpenMenu }: { onOpenMenu: () => void }) {
       level: value.level,
       position: Number(value.position) || 0,
       isPublished: value.isPublished,
+      bannerUrl: value.bannerUrl,
     });
     setCollections((prev) => prev?.map((c) => (c.id === updated.id ? updated : c)) ?? prev);
     setView({ kind: 'chunks', collectionId });
@@ -452,6 +505,11 @@ export function ContentSection({ onOpenMenu }: { onOpenMenu: () => void }) {
                 onClick={() => setView({ kind: 'chunks', collectionId: c.id })}
                 className="pressable flex items-center gap-3 py-3 border-b border-border last:border-b-0 text-left"
               >
+                {c.bannerUrl ? (
+                  <img src={apiUrl(c.bannerUrl)} alt="" className="w-12 h-9 flex-none rounded-[var(--radius-md)] object-cover" />
+                ) : (
+                  <div className="w-12 h-9 flex-none rounded-[var(--radius-md)] bg-surface-subtle" />
+                )}
                 <div className="flex-1 min-w-0">
                   <div className="text-[14.5px] truncate">
                     {c.title}

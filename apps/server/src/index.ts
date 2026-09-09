@@ -1,8 +1,11 @@
 import 'dotenv/config';
+import fs from 'node:fs';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
+import staticPlugin from '@fastify/static';
 import { loadEnv } from './config/env.js';
+import { UPLOADS_DIR } from './config/uploads.js';
 import { waitForDatabase } from './db/pool.js';
 import { gradeRoutes } from './routes/grade.js';
 import { authRoutes } from './modules/auth/routes.js';
@@ -22,6 +25,11 @@ async function main() {
 
   await app.register(cors, { origin: env.CORS_ORIGIN, credentials: true });
   await app.register(cookie, { secret: env.SESSION_SECRET });
+
+  // Publicly readable — banner images aren't sensitive, and a plain <img>
+  // tag needs no CORS setup to just render across origins.
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+  await app.register(staticPlugin, { root: UPLOADS_DIR, prefix: '/uploads/' });
 
   app.get('/api/health', async () => ({ ok: true, gradingProvider: getGradingProvider().name, productionJudgeProvider: getProductionJudgeProvider().name }));
 

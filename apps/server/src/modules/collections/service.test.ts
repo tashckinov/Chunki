@@ -22,6 +22,7 @@ function fakeCollection(overrides: Partial<CollectionRow> = {}): CollectionRow {
     description: 'Useful chunks for travelling.',
     level: 'A2',
     position: 10,
+    banner_url: null,
     ...overrides,
   };
 }
@@ -52,7 +53,7 @@ describe('getPublishedCollections', () => {
     const result = await getPublishedCollections();
 
     expect(result).toEqual([
-      { id: 'col-1', slug: 'travel-basics', title: 'Travel Basics', description: 'Useful chunks for travelling.', level: 'A2' },
+      { id: 'col-1', slug: 'travel-basics', title: 'Travel Basics', description: 'Useful chunks for travelling.', level: 'A2', bannerUrl: null },
     ]);
   });
 });

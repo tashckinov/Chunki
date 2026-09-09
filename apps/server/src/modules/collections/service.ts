@@ -8,6 +8,7 @@ export interface CollectionSummary {
   title: string;
   description: string | null;
   level: string;
+  bannerUrl: string | null;
 }
 
 export interface CollectionDetail extends CollectionSummary {
@@ -15,7 +16,7 @@ export interface CollectionDetail extends CollectionSummary {
 }
 
 function toSummary(row: CollectionRow): CollectionSummary {
-  return { id: row.id, slug: row.slug, title: row.title, description: row.description, level: row.level };
+  return { id: row.id, slug: row.slug, title: row.title, description: row.description, level: row.level, bannerUrl: row.banner_url };
 }
 
 export async function getPublishedCollections(): Promise<CollectionSummary[]> {

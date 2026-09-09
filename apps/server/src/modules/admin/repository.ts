@@ -52,6 +52,7 @@ export interface AdminCollectionRow {
   level: string;
   position: number;
   is_published: boolean;
+  banner_url: string | null;
   chunk_count: number;
 }
 
@@ -59,7 +60,7 @@ export async function listCollectionsAdmin(): Promise<AdminCollectionRow[]> {
   // Unlike the public collections module, this deliberately includes
   // unpublished collections — that's the whole point of an admin view.
   const { rows } = await pool.query<AdminCollectionRow>(
-    `SELECT c.id, c.slug, c.title, c.description, c.level, c.position, c.is_published,
+    `SELECT c.id, c.slug, c.title, c.description, c.level, c.position, c.is_published, c.banner_url,
             COUNT(cc.chunk_id)::int AS chunk_count
      FROM collections c
      LEFT JOIN collection_chunks cc ON cc.collection_id = c.id
@@ -73,7 +74,7 @@ type CollectionRowNoCount = Omit<AdminCollectionRow, 'chunk_count'>;
 
 async function findCollectionById(id: string): Promise<CollectionRowNoCount | null> {
   const { rows } = await pool.query<CollectionRowNoCount>(
-    `SELECT id, slug, title, description, level, position, is_published FROM collections WHERE id = $1`,
+    `SELECT id, slug, title, description, level, position, is_published, banner_url FROM collections WHERE id = $1`,
     [id],
   );
   return rows[0] ?? null;
@@ -86,14 +87,15 @@ export interface NewCollectionInput {
   level: string;
   position: number;
   isPublished: boolean;
+  bannerUrl: string | null;
 }
 
 export async function createCollection(input: NewCollectionInput): Promise<AdminCollectionRow> {
   const { rows } = await pool.query<CollectionRowNoCount>(
-    `INSERT INTO collections (slug, title, description, level, position, is_published)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING id, slug, title, description, level, position, is_published`,
-    [input.slug, input.title, input.description, input.level, input.position, input.isPublished],
+    `INSERT INTO collections (slug, title, description, level, position, is_published, banner_url)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     RETURNING id, slug, title, description, level, position, is_published, banner_url`,
+    [input.slug, input.title, input.description, input.level, input.position, input.isPublished, input.bannerUrl],
   );
   return { ...rows[0], chunk_count: 0 };
 }
@@ -105,6 +107,7 @@ export interface CollectionPatch {
   level?: string;
   position?: number;
   isPublished?: boolean;
+  bannerUrl?: string | null;
 }
 
 export async function updateCollection(id: string, patch: CollectionPatch): Promise<CollectionRowNoCount | null> {
@@ -120,12 +123,13 @@ export async function updateCollection(id: string, patch: CollectionPatch): Prom
   if (patch.level !== undefined) add('level', patch.level);
   if (patch.position !== undefined) add('position', patch.position);
   if (patch.isPublished !== undefined) add('is_published', patch.isPublished);
+  if (patch.bannerUrl !== undefined) add('banner_url', patch.bannerUrl);
   if (sets.length === 0) return findCollectionById(id);
 
   sets.push('updated_at = now()');
   const { rows } = await pool.query<CollectionRowNoCount>(
     `UPDATE collections SET ${sets.join(', ')} WHERE id = $1
-     RETURNING id, slug, title, description, level, position, is_published`,
+     RETURNING id, slug, title, description, level, position, is_published, banner_url`,
     values,
   );
   return rows[0] ?? null;

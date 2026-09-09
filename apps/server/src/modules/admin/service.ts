@@ -68,6 +68,7 @@ export interface AdminCollectionSummary {
   level: string;
   position: number;
   isPublished: boolean;
+  bannerUrl: string | null;
   chunkCount: number;
 }
 
@@ -80,6 +81,7 @@ function toCollectionSummary(row: AdminCollectionRow): AdminCollectionSummary {
     level: row.level,
     position: row.position,
     isPublished: row.is_published,
+    bannerUrl: row.banner_url,
     chunkCount: row.chunk_count,
   };
 }

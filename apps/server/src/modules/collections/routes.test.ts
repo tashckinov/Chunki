@@ -51,7 +51,7 @@ describe('GET /api/collections', () => {
 
   it('returns published collections for an authenticated session', async () => {
     vi.mocked(session.getSession).mockResolvedValue(authenticatedSession);
-    const collections = [{ id: 'col-1', slug: 'travel-basics', title: 'Travel Basics', description: null, level: 'A2' }];
+    const collections = [{ id: 'col-1', slug: 'travel-basics', title: 'Travel Basics', description: null, level: 'A2', bannerUrl: null }];
     vi.mocked(service.getPublishedCollections).mockResolvedValue(collections);
 
     const res = await app.inject({
@@ -80,6 +80,7 @@ describe('GET /api/collections/:slug', () => {
       title: 'Travel Basics',
       description: null,
       level: 'A2',
+      bannerUrl: null,
       chunks: [{ id: 'chunk-1', text: 'check in', translation: 'зарегистрироваться', explanation: null, example: null, exampleTranslation: null, level: 'A2' }],
     };
     vi.mocked(service.getPublishedCollectionBySlug).mockResolvedValue(detail);

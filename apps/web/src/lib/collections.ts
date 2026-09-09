@@ -46,6 +46,14 @@ export async function patchJson<T>(path: string, body: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+/** Shared with lib/admin.ts — file uploads. No content-type header: the
+ * browser sets multipart/form-data with the right boundary for a FormData body. */
+export async function postFormData<T>(path: string, body: FormData): Promise<T> {
+  const res = await fetch(apiUrl(path), { method: 'POST', credentials: 'include', headers: authHeaders(), body });
+  if (!res.ok) throw new ApiError(res.status, `${path} failed: ${res.status}`);
+  return res.json() as Promise<T>;
+}
+
 /** Shared with lib/admin.ts — same conventions as postJson above. */
 export async function deleteJson<T>(path: string): Promise<T> {
   const res = await fetch(apiUrl(path), { method: 'DELETE', credentials: 'include', headers: authHeaders() });
@@ -69,6 +77,7 @@ export interface CollectionSummary {
   title: string;
   description: string | null;
   level: string;
+  bannerUrl: string | null;
 }
 
 export interface CollectionDetail extends CollectionSummary {

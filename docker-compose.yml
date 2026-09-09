@@ -31,6 +31,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    volumes:
+      # Admin-uploaded assets (currently collection banners) — persisted
+      # across redeploys, since the image itself is rebuilt from scratch.
+      - uploads_data:/app/uploads
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       PORT: 8787
@@ -69,3 +73,4 @@ services:
 
 volumes:
   postgres_data:
+  uploads_data:

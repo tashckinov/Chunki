@@ -1,11 +1,17 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import cookie from '@fastify/cookie';
+
+const TEST_UPLOADS_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'chunki-uploads-test-'));
 
 vi.mock('../auth/session.js', async () => {
   const actual = await vi.importActual<typeof import('../auth/session.js')>('../auth/session.js');
   return { SESSION_COOKIE_NAME: actual.SESSION_COOKIE_NAME, extractSessionToken: actual.extractSessionToken, getSession: vi.fn() };
 });
+vi.mock('../../config/uploads.js', () => ({ UPLOADS_DIR: TEST_UPLOADS_DIR }));
 vi.mock('./service.js', () => ({
   listUsers: vi.fn(),
   setUserPremiumUntil: vi.fn(),
@@ -46,6 +52,20 @@ beforeEach(async () => {
 afterEach(async () => {
   await app.close();
 });
+
+afterAll(() => {
+  fs.rmSync(TEST_UPLOADS_DIR, { recursive: true, force: true });
+});
+
+function buildMultipartBody(filename: string, contentType: string, content: Buffer): { body: Buffer; boundary: string } {
+  const boundary = '----chunkiTestBoundary';
+  const body = Buffer.concat([
+    Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${filename}"\r\nContent-Type: ${contentType}\r\n\r\n`),
+    content,
+    Buffer.from(`\r\n--${boundary}--\r\n`),
+  ]);
+  return { body, boundary };
+}
 
 describe('admin routes auth', () => {
   it('returns 401 when unauthenticated', async () => {
@@ -203,7 +223,7 @@ describe('POST /api/admin/users/:id/reset-production-checks', () => {
 describe('collections CRUD', () => {
   it('GET /api/admin/collections returns all collections including unpublished', async () => {
     vi.mocked(session.getSession).mockResolvedValue(adminSession);
-    const collections = [{ id: validId, slug: 'x', title: 'X', description: null, level: 'A1', position: 0, isPublished: false, chunkCount: 0 }];
+    const collections = [{ id: validId, slug: 'x', title: 'X', description: null, level: 'A1', position: 0, isPublished: false, bannerUrl: null, chunkCount: 0 }];
     vi.mocked(service.listCollectionsAdmin).mockResolvedValue(collections);
 
     const res = await app.inject({ method: 'GET', url: '/api/admin/collections', cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' } });
@@ -214,7 +234,7 @@ describe('collections CRUD', () => {
 
   it('POST /api/admin/collections creates a collection', async () => {
     vi.mocked(session.getSession).mockResolvedValue(adminSession);
-    const created = { id: validId, slug: 'new-deck', title: 'New Deck', description: null, level: 'A1', position: 0, isPublished: false, chunkCount: 0 };
+    const created = { id: validId, slug: 'new-deck', title: 'New Deck', description: null, level: 'A1', position: 0, isPublished: false, bannerUrl: null, chunkCount: 0 };
     vi.mocked(service.createCollection).mockResolvedValue(created);
 
     const res = await app.inject({
@@ -244,7 +264,7 @@ describe('collections CRUD', () => {
 
   it('PATCH /api/admin/collections/:id updates a collection', async () => {
     vi.mocked(session.getSession).mockResolvedValue(adminSession);
-    const updated = { id: validId, slug: 'x', title: 'Renamed', description: null, level: 'A1', position: 0, isPublished: true, chunkCount: 2 };
+    const updated = { id: validId, slug: 'x', title: 'Renamed', description: null, level: 'A1', position: 0, isPublished: true, bannerUrl: null, chunkCount: 2 };
     vi.mocked(service.updateCollection).mockResolvedValue({ kind: 'ok', collection: updated });
 
     const res = await app.inject({
@@ -270,6 +290,58 @@ describe('collections CRUD', () => {
     });
 
     expect(res.statusCode).toBe(404);
+  });
+});
+
+describe('POST /api/admin/uploads/banner', () => {
+  it('saves the uploaded image and returns its URL', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(adminSession);
+    const { body, boundary } = buildMultipartBody('banner.png', 'image/png', Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/admin/uploads/banner',
+      cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' },
+      headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
+      payload: body,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const { url } = res.json();
+    expect(url).toMatch(/^\/uploads\/banners\/[0-9a-f-]+\.png$/);
+    const saved = fs.readFileSync(path.join(TEST_UPLOADS_DIR, url.replace('/uploads/', '')));
+    expect(saved).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  });
+
+  it('rejects an unsupported file type', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(adminSession);
+    const { body, boundary } = buildMultipartBody('banner.gif', 'image/gif', Buffer.from([0x47, 0x49, 0x46]));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/admin/uploads/banner',
+      cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' },
+      headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
+      payload: body,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: 'invalid_file_type' });
+  });
+
+  it('returns 403 for a non-admin user', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(nonAdminSession);
+    const { body, boundary } = buildMultipartBody('banner.png', 'image/png', Buffer.from([0x89, 0x50]));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/admin/uploads/banner',
+      cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' },
+      headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
+      payload: body,
+    });
+
+    expect(res.statusCode).toBe(403);
   });
 });
 

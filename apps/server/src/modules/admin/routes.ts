@@ -1,6 +1,12 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { pipeline } from 'node:stream/promises';
+import { randomUUID } from 'node:crypto';
 import type { FastifyPluginAsync } from 'fastify';
+import multipart from '@fastify/multipart';
 import { z } from 'zod';
 import { requireAdmin } from '../auth/requireAuth.js';
+import { UPLOADS_DIR } from '../../config/uploads.js';
 import {
   listUsers,
   setUserPremiumUntil,
@@ -19,6 +25,10 @@ import {
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const;
 const SLUG_REGEX = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
+// Collection banners: ~800x600 (4:3), shown in the Cards library.
+const BANNER_MIME_EXTENSIONS: Record<string, string> = { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp' };
+const MAX_BANNER_BYTES = 5 * 1024 * 1024;
+
 const idParamSchema = z.object({ id: z.string().uuid() });
 const collectionChunkParamSchema = z.object({ id: z.string().uuid(), chunkId: z.string().uuid() });
 const aiLogsQuerySchema = z.object({ limit: z.coerce.number().int().min(1).max(500).default(100) });
@@ -32,6 +42,7 @@ const collectionCreateSchema = z.object({
   level: z.enum(LEVELS),
   position: z.number().int().default(0),
   isPublished: z.boolean().default(false),
+  bannerUrl: z.string().nullable().optional(),
 });
 const collectionPatchSchema = z.object({
   slug: z.string().min(1).max(200).regex(SLUG_REGEX).optional(),
@@ -40,6 +51,7 @@ const collectionPatchSchema = z.object({
   level: z.enum(LEVELS).optional(),
   position: z.number().int().optional(),
   isPublished: z.boolean().optional(),
+  bannerUrl: z.string().nullable().optional(),
 });
 
 const chunkCreateSchema = z.object({
@@ -65,6 +77,7 @@ const chunkPatchSchema = chunkCreateSchema.partial();
  */
 export const adminRoutes: FastifyPluginAsync = async (app) => {
   app.addHook('preHandler', requireAdmin);
+  await app.register(multipart, { limits: { fileSize: MAX_BANNER_BYTES, files: 1 } });
 
   app.get('/users', async () => ({ users: await listUsers() }));
 
@@ -105,7 +118,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       reply.code(400);
       return { error: 'invalid_request' };
     }
-    const collection = await createCollection({ ...body.data, description: body.data.description ?? null });
+    const collection = await createCollection({ ...body.data, description: body.data.description ?? null, bannerUrl: body.data.bannerUrl ?? null });
     reply.code(201);
     return { collection };
   });
@@ -123,6 +136,39 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       return { error: 'not_found' };
     }
     return { collection: result.collection };
+  });
+
+  app.post('/uploads/banner', async (request, reply) => {
+    const file = await request.file();
+    if (!file) {
+      reply.code(400);
+      return { error: 'invalid_request' };
+    }
+    const ext = BANNER_MIME_EXTENSIONS[file.mimetype];
+    if (!ext) {
+      reply.code(400);
+      return { error: 'invalid_file_type' };
+    }
+
+    const filename = `${randomUUID()}${ext}`;
+    const bannersDir = path.join(UPLOADS_DIR, 'banners');
+    await fs.promises.mkdir(bannersDir, { recursive: true });
+    const dest = path.join(bannersDir, filename);
+    try {
+      await pipeline(file.file, fs.createWriteStream(dest));
+    } catch (err) {
+      // @fastify/multipart throws FST_REQ_FILE_TOO_LARGE once a stream
+      // exceeds the configured fileSize limit — surface that as a normal
+      // 400 instead of a generic write failure.
+      await fs.promises.rm(dest, { force: true });
+      if (err instanceof Error && 'code' in err && err.code === 'FST_REQ_FILE_TOO_LARGE') {
+        reply.code(400);
+        return { error: 'file_too_large' };
+      }
+      throw err;
+    }
+
+    return { url: `/uploads/banners/${filename}` };
   });
 
   app.get('/collections/:id/chunks', async (request, reply) => {

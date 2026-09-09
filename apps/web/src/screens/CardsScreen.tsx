@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Play, Check } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
-import { flattenChunks, type CollectionDetail } from '../lib/collections';
+import { apiUrl, flattenChunks, type CollectionDetail } from '../lib/collections';
 import { MASTERY_SEGMENTS, segmentsForState } from '../store/derived';
 import { plural } from '../lib/plural';
 import { NavigationBar } from '../components/ui/NavigationBar';
@@ -20,40 +20,43 @@ function DeckWidget({ detail }: { detail: CollectionDetail }) {
   const progress = detail.chunks.length ? masteredCount / detail.chunks.length : 0;
 
   return (
-    <Card variant="surface" className="border border-border p-5 flex flex-col gap-4">
-      <button type="button" onClick={() => goDeck(detail.chunks)} className="pressable flex items-center gap-4 text-left">
-        <div className="relative w-12 h-12 flex-none flex items-center justify-center">
-          <CircularProgress value={progress} size={48} thickness={4} />
-          <div className="absolute text-[11px] font-semibold">{Math.round(progress * 100)}%</div>
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="text-[16.5px] font-semibold truncate">{detail.title}</div>
-          <div className="text-meta mt-0.5">
-            {detail.chunks.length} {plural(detail.chunks.length, 'чанк', 'чанка', 'чанков')} · {detail.level}
+    <Card variant="surface" className="border border-border overflow-hidden flex flex-col">
+      {detail.bannerUrl && <img src={apiUrl(detail.bannerUrl)} alt="" className="w-full aspect-[4/3] object-cover" />}
+      <div className="p-5 flex flex-col gap-4">
+        <button type="button" onClick={() => goDeck(detail.chunks)} className="pressable flex items-center gap-4 text-left">
+          <div className="relative w-12 h-12 flex-none flex items-center justify-center">
+            <CircularProgress value={progress} size={48} thickness={4} />
+            <div className="absolute text-[11px] font-semibold">{Math.round(progress * 100)}%</div>
           </div>
-        </div>
-      </button>
-
-      <div className="flex flex-col">
-        {detail.chunks.map((chunk) => {
-          const state = chunkProgress[chunk.id]?.state;
-          const mastered = state === 'active';
-          return (
-            <div key={chunk.id} className="flex items-center gap-3 py-2 border-t border-border first:border-t-0">
-              {mastered ? (
-                <span className="flex-none w-5 h-5 rounded-full bg-positive text-white flex items-center justify-center">
-                  <Check size={13} strokeWidth={3} />
-                </span>
-              ) : (
-                <span className="flex-none">
-                  <SegmentedRing segments={MASTERY_SEGMENTS} filled={segmentsForState(state)} size={20} thickness={3} />
-                </span>
-              )}
-              <span className={`flex-1 text-[14.5px] truncate ${mastered ? 'text-text-secondary' : 'text-text'}`}>{chunk.text}</span>
-              <span className="text-[13.5px] text-text-secondary truncate">{chunk.translation}</span>
+          <div className="flex-1 min-w-0">
+            <div className="text-[16.5px] font-semibold truncate">{detail.title}</div>
+            <div className="text-meta mt-0.5">
+              {detail.chunks.length} {plural(detail.chunks.length, 'чанк', 'чанка', 'чанков')} · {detail.level}
             </div>
-          );
-        })}
+          </div>
+        </button>
+
+        <div className="flex flex-col">
+          {detail.chunks.map((chunk) => {
+            const state = chunkProgress[chunk.id]?.state;
+            const mastered = state === 'active';
+            return (
+              <div key={chunk.id} className="flex items-center gap-3 py-2 border-t border-border first:border-t-0">
+                {mastered ? (
+                  <span className="flex-none w-5 h-5 rounded-full bg-positive text-white flex items-center justify-center">
+                    <Check size={13} strokeWidth={3} />
+                  </span>
+                ) : (
+                  <span className="flex-none">
+                    <SegmentedRing segments={MASTERY_SEGMENTS} filled={segmentsForState(state)} size={20} thickness={3} />
+                  </span>
+                )}
+                <span className={`flex-1 text-[14.5px] truncate ${mastered ? 'text-text-secondary' : 'text-text'}`}>{chunk.text}</span>
+                <span className="text-[13.5px] text-text-secondary truncate">{chunk.translation}</span>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </Card>
   );
