@@ -9,54 +9,79 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { CircularProgress, SegmentedRing } from '../components/ui/Progress';
 import { Chip } from '../components/ui/Chip';
+import { SegmentedControl } from '../components/ui/SegmentedControl';
 
 // The backend's plain CEFR set (collections.level / chunks.level) — not the
 // richer CEFRLevel from @app/shared used elsewhere for the placement test.
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 
-function DeckWidget({ detail }: { detail: CollectionDetail }) {
-  const { chunkProgress, goDeck } = useAppStore();
+/** Banner + progress ring + title/meta — shared between the two card modes below, so both stay behaviorally consistent (same click target, same progress calc). */
+function CollectionCardHeader({ detail, progress }: { detail: CollectionDetail; progress: number }) {
+  const { goDeck } = useAppStore();
+  return (
+    <>
+      {detail.bannerUrl && <img src={apiUrl(detail.bannerUrl)} alt="" className="w-full aspect-[4/3] object-cover" />}
+      <button type="button" onClick={() => goDeck(detail.chunks)} className="pressable flex items-center gap-4 text-left p-5">
+        <div className="relative w-12 h-12 flex-none flex items-center justify-center">
+          <CircularProgress value={progress} size={48} thickness={4} />
+          <div className="absolute text-[11px] font-semibold">{Math.round(progress * 100)}%</div>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-[16.5px] font-semibold truncate">{detail.title}</div>
+          <div className="text-meta mt-0.5">
+            {detail.chunks.length} {plural(detail.chunks.length, 'чанк', 'чанка', 'чанков')} · {detail.level}
+          </div>
+        </div>
+      </button>
+    </>
+  );
+}
+
+function masteredProgress(detail: CollectionDetail, chunkProgress: Record<string, { state: string }>): number {
   const masteredCount = detail.chunks.filter((c) => chunkProgress[c.id]?.state === 'active').length;
-  const progress = detail.chunks.length ? masteredCount / detail.chunks.length : 0;
+  return detail.chunks.length ? masteredCount / detail.chunks.length : 0;
+}
+
+/** "Коллекции" mode — banner, title, overall progress only, no per-chunk breakdown. */
+function CollectionOverviewCard({ detail }: { detail: CollectionDetail }) {
+  const chunkProgress = useAppStore((s) => s.chunkProgress);
+  const progress = masteredProgress(detail, chunkProgress);
 
   return (
     <Card variant="surface" className="border border-border overflow-hidden flex flex-col">
-      {detail.bannerUrl && <img src={apiUrl(detail.bannerUrl)} alt="" className="w-full aspect-[4/3] object-cover" />}
-      <div className="p-5 flex flex-col gap-4">
-        <button type="button" onClick={() => goDeck(detail.chunks)} className="pressable flex items-center gap-4 text-left">
-          <div className="relative w-12 h-12 flex-none flex items-center justify-center">
-            <CircularProgress value={progress} size={48} thickness={4} />
-            <div className="absolute text-[11px] font-semibold">{Math.round(progress * 100)}%</div>
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-[16.5px] font-semibold truncate">{detail.title}</div>
-            <div className="text-meta mt-0.5">
-              {detail.chunks.length} {plural(detail.chunks.length, 'чанк', 'чанка', 'чанков')} · {detail.level}
-            </div>
-          </div>
-        </button>
+      <CollectionCardHeader detail={detail} progress={progress} />
+    </Card>
+  );
+}
 
-        <div className="flex flex-col">
-          {detail.chunks.map((chunk) => {
-            const state = chunkProgress[chunk.id]?.state;
-            const mastered = state === 'active';
-            return (
-              <div key={chunk.id} className="flex items-center gap-3 py-2 border-t border-border first:border-t-0">
-                {mastered ? (
-                  <span className="flex-none w-5 h-5 rounded-full bg-positive text-white flex items-center justify-center">
-                    <Check size={13} strokeWidth={3} />
-                  </span>
-                ) : (
-                  <span className="flex-none">
-                    <SegmentedRing segments={MASTERY_SEGMENTS} filled={segmentsForState(state)} size={20} thickness={3} />
-                  </span>
-                )}
-                <span className={`flex-1 text-[14.5px] truncate ${mastered ? 'text-text-secondary' : 'text-text'}`}>{chunk.text}</span>
-                <span className="text-[13.5px] text-text-secondary truncate">{chunk.translation}</span>
-              </div>
-            );
-          })}
-        </div>
+/** "Прогресс" mode — today's detailed view, chunk-by-chunk mastery breakdown. */
+function DeckWidget({ detail }: { detail: CollectionDetail }) {
+  const chunkProgress = useAppStore((s) => s.chunkProgress);
+  const progress = masteredProgress(detail, chunkProgress);
+
+  return (
+    <Card variant="surface" className="border border-border overflow-hidden flex flex-col">
+      <CollectionCardHeader detail={detail} progress={progress} />
+      <div className="px-5 pb-5 flex flex-col">
+        {detail.chunks.map((chunk) => {
+          const state = chunkProgress[chunk.id]?.state;
+          const mastered = state === 'active';
+          return (
+            <div key={chunk.id} className="flex items-center gap-3 py-2 border-t border-border first:border-t-0">
+              {mastered ? (
+                <span className="flex-none w-5 h-5 rounded-full bg-positive text-white flex items-center justify-center">
+                  <Check size={13} strokeWidth={3} />
+                </span>
+              ) : (
+                <span className="flex-none">
+                  <SegmentedRing segments={MASTERY_SEGMENTS} filled={segmentsForState(state)} size={20} thickness={3} />
+                </span>
+              )}
+              <span className={`flex-1 text-[14.5px] truncate ${mastered ? 'text-text-secondary' : 'text-text'}`}>{chunk.text}</span>
+              <span className="text-[13.5px] text-text-secondary truncate">{chunk.translation}</span>
+            </div>
+          );
+        })}
       </div>
     </Card>
   );
@@ -65,6 +90,7 @@ function DeckWidget({ detail }: { detail: CollectionDetail }) {
 export function CardsScreen() {
   const s = useAppStore();
   const [level, setLevel] = useState<string | null>(null);
+  const [mode, setMode] = useState<'collections' | 'progress'>('collections');
 
   useEffect(() => {
     s.loadCollections();
@@ -122,6 +148,15 @@ export function CardsScreen() {
             <div className="flex flex-col gap-3">
               <div className="text-section-title">Колоды</div>
 
+              <SegmentedControl
+                options={[
+                  { value: 'collections' as const, label: 'Коллекции' },
+                  { value: 'progress' as const, label: 'Прогресс' },
+                ]}
+                value={mode}
+                onChange={setMode}
+              />
+
               <div className="flex flex-col gap-2">
                 <div className="text-meta">Сложность</div>
                 <div className="flex gap-2 flex-wrap">
@@ -140,7 +175,8 @@ export function CardsScreen() {
             <div className="flex flex-col gap-4">
               {visibleCollections.map((c) => {
                 const detail = s.collectionDetails[c.slug];
-                return detail ? <DeckWidget key={c.id} detail={detail} /> : null;
+                if (!detail) return null;
+                return mode === 'collections' ? <CollectionOverviewCard key={c.id} detail={detail} /> : <DeckWidget key={c.id} detail={detail} />;
               })}
               {visibleCollections.length === 0 && <div className="text-body-secondary">Нет колод с таким фильтром.</div>}
             </div>

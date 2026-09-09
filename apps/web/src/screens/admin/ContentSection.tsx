@@ -114,6 +114,7 @@ function ChunkEditView({
 }) {
   const [form, setForm] = useState<ChunkFormValue>(chunk !== 'new' ? chunkToForm(chunk) : EMPTY_CHUNK_FORM);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     setForm(chunk !== 'new' ? chunkToForm(chunk) : EMPTY_CHUNK_FORM);
@@ -121,8 +122,11 @@ function ChunkEditView({
 
   async function save() {
     setSaving(true);
+    setSaveError(null);
     try {
       await onSubmit(form);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err));
     } finally {
       setSaving(false);
     }
@@ -137,6 +141,7 @@ function ChunkEditView({
       />
       <div className="scroll-clean flex-1 min-h-0 px-5 py-4">
         <div className="flex flex-col gap-4">
+          {saveError && <div className="text-negative text-[13px]">Не удалось сохранить: {saveError}</div>}
           <Field label="Фраза (английский)" hint="Лицевая сторона карточки — то, что должен выучить пользователь.">
             <Input value={form.text} onChange={(v) => setForm((f) => ({ ...f, text: v }))} placeholder="sounds good" />
           </Field>
@@ -219,6 +224,7 @@ function CollectionEditView({
 }) {
   const [form, setForm] = useState<CollectionFormValue>(collection ? collectionToForm(collection) : EMPTY_COLLECTION_FORM);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [bannerUploading, setBannerUploading] = useState(false);
   const [bannerError, setBannerError] = useState<string | null>(null);
 
@@ -228,8 +234,11 @@ function CollectionEditView({
 
   async function save() {
     setSaving(true);
+    setSaveError(null);
     try {
       await onSubmit(form);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err));
     } finally {
       setSaving(false);
     }
@@ -257,6 +266,7 @@ function CollectionEditView({
       />
       <div className="scroll-clean flex-1 min-h-0 px-5 py-4">
         <div className="flex flex-col gap-4">
+          {saveError && <div className="text-negative text-[13px]">Не удалось сохранить: {saveError}</div>}
           <Field label="Slug (URL)" hint="Латиницей через дефис, например travel-basics. Не менять у уже опубликованной колоды без необходимости.">
             <Input value={form.slug} onChange={(v) => setForm((f) => ({ ...f, slug: v }))} placeholder="travel-basics" />
           </Field>
