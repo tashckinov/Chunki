@@ -63,6 +63,7 @@ const SEED: SeedCollection[] = [
         example: "Sorry, I'm running late — I'll be there in ten minutes.",
         exampleTranslation: 'Извини, я опаздываю. Буду через десять минут.',
         level: 'A2',
+        situationPrompt: "You're going to be a few minutes late to meet a friend. You want to text them a quick heads-up. What do you write?",
       },
       {
         text: 'it depends on',
@@ -71,6 +72,7 @@ const SEED: SeedCollection[] = [
         example: 'It depends on the weather — we might cancel the trip.',
         exampleTranslation: 'Это зависит от погоды — мы можем отменить поездку.',
         level: 'B1',
+        situationPrompt: "A friend asks if you're going to the picnic this weekend, but it might rain and you're not sure yet. How do you answer?",
       },
       {
         text: 'to be exact',
@@ -79,6 +81,7 @@ const SEED: SeedCollection[] = [
         example: "It's been five years, ten months to be exact.",
         exampleTranslation: 'Прошло пять лет, если быть точным — десять месяцев.',
         level: 'B1',
+        situationPrompt: "You're telling a friend how long you've been learning English — about three years, and nine months if you count precisely. How do you phrase that?",
       },
       {
         text: 'make sure',
@@ -87,6 +90,7 @@ const SEED: SeedCollection[] = [
         example: 'Make sure you lock the door before you leave.',
         exampleTranslation: 'Убедись, что запер дверь перед уходом.',
         level: 'A2',
+        situationPrompt: "Your roommate is leaving the house and might forget to turn off the stove. What do you remind them to check?",
       },
       KEEP_IN_MIND,
       {
@@ -96,6 +100,7 @@ const SEED: SeedCollection[] = [
         example: "Don't worry, we'll figure it out together.",
         exampleTranslation: 'Не переживай, мы вместе разберёмся.',
         level: 'B1',
+        situationPrompt: "A friend is stressed about a problem that doesn't have an obvious solution yet. How do you reassure them you'll find a way through it together?",
       },
       {
         text: 'take your time',
@@ -104,6 +109,7 @@ const SEED: SeedCollection[] = [
         example: "Take your time, we don't need to leave for another hour.",
         exampleTranslation: 'Не торопись, нам не нужно выходить ещё час.',
         level: 'A2',
+        situationPrompt: "A colleague is rushing to finish a task, but you don't need it for another hour. What do you tell them?",
       },
       {
         text: 'no worries',
@@ -112,6 +118,7 @@ const SEED: SeedCollection[] = [
         example: "No worries, it happens to everyone.",
         exampleTranslation: 'Без проблем, с каждым бывает.',
         level: 'A2',
+        situationPrompt: "A friend apologizes for showing up ten minutes late. How do you casually tell them it's totally fine?",
       },
     ],
   },
@@ -129,6 +136,7 @@ const SEED: SeedCollection[] = [
         example: 'We need to check in before 6 p.m.',
         exampleTranslation: 'Нам нужно зарегистрироваться до 18:00.',
         level: 'A2',
+        situationPrompt: "You've just arrived at the airport and need to register for your flight before a deadline. What do you tell your travel companion you need to do first?",
       },
       {
         text: 'carry-on luggage',
@@ -137,6 +145,7 @@ const SEED: SeedCollection[] = [
         example: 'You can bring one piece of carry-on luggage.',
         exampleTranslation: 'Можно взять одну сумку ручной клади.',
         level: 'A2',
+        situationPrompt: "An airline employee asks how many bags you're bringing into the cabin. You have one small bag. How do you describe it?",
       },
       {
         text: 'miss a flight',
@@ -145,6 +154,7 @@ const SEED: SeedCollection[] = [
         example: "We almost missed our flight because of the traffic.",
         exampleTranslation: 'Мы чуть не опоздали на рейс из-за пробок.',
         level: 'A2',
+        situationPrompt: "Traffic made you very late to the airport and you're worried you won't make your flight in time. What do you tell your travel companion?",
       },
       {
         text: 'board the plane',
@@ -153,6 +163,7 @@ const SEED: SeedCollection[] = [
         example: 'Passengers will board the plane at gate 12.',
         exampleTranslation: 'Посадка пассажиров будет у выхода 12.',
         level: 'A2',
+        situationPrompt: "An announcement says it's time to get on the plane at gate 12. How do you tell your friend it's time?",
       },
       {
         text: 'go through security',
@@ -161,6 +172,7 @@ const SEED: SeedCollection[] = [
         example: 'It took twenty minutes to go through security.',
         exampleTranslation: 'Прохождение контроля безопасности заняло двадцать минут.',
         level: 'A2',
+        situationPrompt: "You're telling a friend about your airport experience — the screening check where they scanned your bags took twenty minutes. What part of the process are you describing?",
       },
       {
         text: 'book a room',
@@ -169,6 +181,7 @@ const SEED: SeedCollection[] = [
         example: "I'd like to book a room for two nights.",
         exampleTranslation: 'Я хотел бы забронировать номер на две ночи.',
         level: 'A2',
+        situationPrompt: "You're calling a hotel to reserve a room for two nights. What do you tell the receptionist?",
       },
       {
         text: 'a round trip',
@@ -177,6 +190,7 @@ const SEED: SeedCollection[] = [
         example: 'A round trip ticket is usually cheaper than two one-way tickets.',
         exampleTranslation: 'Билет туда-обратно обычно дешевле двух билетов в одну сторону.',
         level: 'A2',
+        situationPrompt: "You're buying a plane ticket that includes both the flight there and the flight back. How do you describe this kind of ticket to the travel agent?",
       },
       {
         text: 'a layover',
@@ -185,6 +199,7 @@ const SEED: SeedCollection[] = [
         example: 'We have a two-hour layover in Istanbul.',
         exampleTranslation: 'У нас двухчасовая пересадка в Стамбуле.',
         level: 'B1',
+        situationPrompt: "Your flight to Rome includes a two-hour stop in Istanbul before continuing on. How do you describe this stop to a friend?",
       },
     ],
   },
@@ -202,6 +217,7 @@ const SEED: SeedCollection[] = [
         example: "We need to make a decision by Friday.",
         exampleTranslation: 'Нам нужно принять решение к пятнице.',
         level: 'B1',
+        situationPrompt: "Your team has two options for a project and needs to choose one by Friday. What do you tell your colleagues you need to do by then?",
       },
       KEEP_IN_MIND,
       {
@@ -211,6 +227,7 @@ const SEED: SeedCollection[] = [
         example: "Let me check the schedule and get back to you tomorrow.",
         exampleTranslation: 'Дай я проверю расписание и отвечу тебе завтра.',
         level: 'B1',
+        situationPrompt: "A colleague asks a question you can't answer right now. You need to check something first and reply tomorrow. What do you tell them?",
       },
       {
         text: 'touch base',
@@ -228,6 +245,7 @@ const SEED: SeedCollection[] = [
         example: "I'll follow up on the invoice tomorrow morning.",
         exampleTranslation: 'Я уточню насчёт счёта завтра утром.',
         level: 'B1',
+        situationPrompt: "You told a client you'd check on the status of an invoice. What do you tell a colleague you'll do about it tomorrow morning?",
       },
       {
         text: 'on the same page',
@@ -236,6 +254,7 @@ const SEED: SeedCollection[] = [
         example: "Before we start, let's make sure we're on the same page.",
         exampleTranslation: 'Прежде чем начать, давайте убедимся, что мы на одной волне.',
         level: 'B1',
+        situationPrompt: "Before starting a project with your team, you want to make sure everyone shares the same understanding of the plan. What do you say?",
       },
       {
         text: 'reach out to someone',
@@ -244,6 +263,7 @@ const SEED: SeedCollection[] = [
         example: "Feel free to reach out if you have any questions.",
         exampleTranslation: 'Не стесняйтесь обращаться, если появятся вопросы.',
         level: 'B1',
+        situationPrompt: "You're telling a new colleague that they can contact you anytime if they have questions. What do you say?",
       },
       {
         text: 'put together a report',
@@ -252,6 +272,7 @@ const SEED: SeedCollection[] = [
         example: "She put together a report on last quarter's sales.",
         exampleTranslation: 'Она составила отчёт по продажам за прошлый квартал.',
         level: 'B1',
+        situationPrompt: "Your manager asks what you did with last quarter's sales data. You gathered and organized it into a document. How do you describe what you did?",
       },
     ],
   },
