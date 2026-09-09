@@ -23,13 +23,19 @@ import { DeckScreen } from './screens/DeckScreen';
 import { DeckDoneScreen } from './screens/DeckDoneScreen';
 import { RecognitionCheckScreen } from './screens/RecognitionCheckScreen';
 import { ProductionCheckScreen } from './screens/ProductionCheckScreen';
-import { AdminScreen } from './screens/AdminScreen';
+import { AdminScreen } from './screens/admin/AdminScreen';
 
 const SIDEBAR_ITEMS: { label: string; icon: IconName }[] = [
   { label: 'Главная', icon: 'Today' },
   { label: 'Программа', icon: 'CheckBox' },
   { label: 'Карточки', icon: 'Stars' },
   { label: 'Доп. уроки', icon: 'Add' },
+];
+
+const ADMIN_SIDEBAR_ITEMS: { label: string; icon: IconName; section: 'users' | 'content' | 'aiLogs' }[] = [
+  { label: 'Пользователи', icon: 'Account', section: 'users' },
+  { label: 'Контент', icon: 'Stars', section: 'content' },
+  { label: 'AI-логи', icon: 'CheckBox', section: 'aiLogs' },
 ];
 
 // Mobile tab bar carries the brand mark on the flashcards tab instead of a
@@ -93,32 +99,63 @@ function CurrentScreen() {
   }
 }
 
-/** Persistent left rail — desktop only (>=1200px), replaces the bottom tab bar. */
+/** Persistent left rail — desktop only (>=1200px), replaces the bottom tab bar.
+ * While screen === 'admin', it swaps to the admin section list (with a
+ * "Назад" item back to the normal app) instead of the regular nav items. */
 function SidebarNav({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   const goHome = useAppStore((s) => s.goHome);
+  const screen = useAppStore((s) => s.screen);
+  const adminSection = useAppStore((s) => s.adminSection);
+  const setAdminSection = useAppStore((s) => s.setAdminSection);
+  const back = useAppStore((s) => s.back);
+  const inAdmin = screen === 'admin';
+
   return (
     <nav className="hidden min-[1200px]:flex flex-col w-[248px] flex-none overflow-y-auto border-r border-border bg-surface px-3 py-8 gap-1">
       <button type="button" onClick={goHome} className="pressable flex items-center gap-2 px-3 pb-6 text-left">
         <Logo size={26} />
         <span className="text-[17px] font-semibold">Chunki</span>
       </button>
-      {SIDEBAR_ITEMS.map((item, i) => {
-        const active = i === value;
-        return (
-          <button
-            key={item.label}
-            type="button"
-            onClick={() => onChange(i)}
-            className={`pressable flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5 text-[14.5px] font-medium text-left ${
-              active ? 'bg-accent-subtle text-accent' : 'text-text-secondary'
-            }`}
-          >
-            <Icon name={item.icon} size={19} />
-            {item.label}
-          </button>
-        );
-      })}
+      {inAdmin
+        ? ADMIN_SIDEBAR_ITEMS.map((item) => {
+            const active = item.section === adminSection;
+            return (
+              <button
+                key={item.section}
+                type="button"
+                onClick={() => setAdminSection(item.section)}
+                className={`pressable flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5 text-[14.5px] font-medium text-left ${
+                  active ? 'bg-accent-subtle text-accent' : 'text-text-secondary'
+                }`}
+              >
+                <Icon name={item.icon} size={19} />
+                {item.label}
+              </button>
+            );
+          })
+        : SIDEBAR_ITEMS.map((item, i) => {
+            const active = i === value;
+            return (
+              <button
+                key={item.label}
+                type="button"
+                onClick={() => onChange(i)}
+                className={`pressable flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5 text-[14.5px] font-medium text-left ${
+                  active ? 'bg-accent-subtle text-accent' : 'text-text-secondary'
+                }`}
+              >
+                <Icon name={item.icon} size={19} />
+                {item.label}
+              </button>
+            );
+          })}
       <div className="flex-1" />
+      {inAdmin && (
+        <button type="button" onClick={back} className="pressable flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5 text-[14.5px] font-medium text-left text-text-secondary">
+          <Icon name="ArrowBack" size={19} />
+          Назад
+        </button>
+      )}
       <div className="border-t border-border pt-3">
         <AccountRow />
       </div>
@@ -144,6 +181,7 @@ function navTabForScreen(screen: string): number {
 }
 
 export default function App() {
+  const screen = useAppStore((s) => s.screen);
   const navTab = useAppStore((s) => navTabForScreen(s.screen));
   const setNavTab = useAppStore((s) => s.setNavTab);
 
@@ -159,9 +197,11 @@ export default function App() {
       <SidebarNav value={navTab} onChange={setNavTab} />
       <div className="w-full min-[768px]:max-w-[720px] min-[1200px]:max-w-[860px] h-dvh overflow-hidden flex flex-col">
         <CurrentScreen />
-        <div className="flex-none min-[1200px]:hidden">
-          <BottomNavigation items={MOBILE_NAV_ITEMS} value={navTab} onChange={setNavTab} />
-        </div>
+        {screen !== 'admin' && (
+          <div className="flex-none min-[1200px]:hidden">
+            <BottomNavigation items={MOBILE_NAV_ITEMS} value={navTab} onChange={setNavTab} />
+          </div>
+        )}
       </div>
       <UpdatePrompt />
     </div>

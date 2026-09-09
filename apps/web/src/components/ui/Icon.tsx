@@ -18,6 +18,7 @@ import {
   Sparkles,
   Plus,
   User,
+  Menu,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -41,6 +42,7 @@ const ICONS: Record<string, LucideIcon> = {
   Stars: Sparkles,
   Add: Plus,
   Account: User,
+  Menu,
 };
 
 export type IconName = keyof typeof ICONS;

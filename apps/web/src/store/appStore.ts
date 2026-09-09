@@ -65,8 +65,12 @@ const BACK_MAP: Partial<Record<Screen, Screen>> = {
   admin: 'home',
 };
 
+type AdminSection = 'users' | 'content' | 'aiLogs';
+
 interface AppState {
   screen: Screen;
+  /** Which admin sidebar/menu item is active — only meaningful while screen === 'admin'. */
+  adminSection: AdminSection;
   /** Null until the initial /api/auth/me check resolves, or when signed out. */
   user: AuthUser | null;
   authChecked: boolean;
@@ -193,6 +197,7 @@ interface AppState {
   loadCollections: () => Promise<void>;
   openCurrentTopic: () => void;
   setNavTab: (v: number) => void;
+  setAdminSection: (s: AdminSection) => void;
 
   goExercises: () => void;
   setExTab: (i: number) => void;
@@ -225,6 +230,7 @@ export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
       screen: 'home',
+      adminSection: 'users',
       user: null,
       authChecked: false,
       authError: false,
@@ -418,6 +424,7 @@ export const useAppStore = create<AppState>()(
         if ((v === 1 || v === 3) && !s.hasProgram) return set({ screen: 'goals' });
         set({ screen: (['home', 'program', 'cardslib', 'extras'] as Screen[])[v] ?? 'home' });
       },
+      setAdminSection: (s) => set({ adminSection: s }),
 
       goExercises: () => set({ screen: 'exercises', exTab: 0, exChoiceAnswers: {}, exWriteAnswers: {}, exerciseResult: null }),
       setExTab: (i) => set({ exTab: i }),
