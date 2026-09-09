@@ -25,6 +25,12 @@ const envSchema = z.object({
   GRADING_PROVIDER: z.enum(['mock', 'anthropic']).optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
   ANTHROPIC_MODEL: z.string().optional(),
+
+  // Chunk production-check judge — same optional/auto-select shape as the
+  // grading vars above, via OpenRouter instead of Anthropic directly.
+  PRODUCTION_JUDGE_PROVIDER: z.enum(['mock', 'openrouter']).optional(),
+  OPENROUTER_API_KEY: z.string().optional(),
+  OPENROUTER_MODEL: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -145,6 +145,25 @@ export function useCalendarView() {
   return { calStrip, calList, calFooter, nextWhen, extrasOn };
 }
 
+/** Segments a per-chunk SegmentedRing shows, by chunk_progress.state. Full ring (4) gets the "mastered" checkmark treatment. */
+export const MASTERY_SEGMENTS = 4;
+
+export function segmentsForState(state: string | undefined): number {
+  switch (state) {
+    case 'unsure':
+    case 'self_known':
+      return 1; // unverified either way — a hypothesis, not yet trusted
+    case 'recognition_confirmed':
+      return 2;
+    case 'passive':
+      return 3;
+    case 'active':
+      return MASTERY_SEGMENTS;
+    default: // 'unknown' / 'unseen' / no row at all
+      return 0;
+  }
+}
+
 export function deckTallyView(verdicts: Record<string, string>) {
   const tally = (dir: string) => String(Object.values(verdicts).filter((v) => v === dir).length);
   return [

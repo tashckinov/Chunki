@@ -63,7 +63,7 @@ export function DeckScreen() {
               <div className="relative h-8 flex-none pointer-events-none">
                 <div className="absolute inset-0 flex items-center justify-center">
                   <span className="px-3 py-1.5 rounded-full text-[13px] font-medium bg-negative-subtle text-negative" style={{ opacity: v.opDont }}>
-                    Учить
+                    Не знаю
                   </span>
                 </div>
                 <div className="absolute inset-0 flex items-center justify-center">
@@ -73,7 +73,7 @@ export function DeckScreen() {
                 </div>
                 <div className="absolute inset-0 flex items-center justify-center">
                   <span className="px-3 py-1.5 rounded-full text-[13px] font-medium bg-surface-subtle text-text-secondary" style={{ opacity: v.opBury }}>
-                    Отложить
+                    Не уверен
                   </span>
                 </div>
               </div>

@@ -8,7 +8,9 @@ import { gradeRoutes } from './routes/grade.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { collectionsRoutes } from './modules/collections/routes.js';
 import { chunksRoutes } from './modules/chunks/routes.js';
+import { progressRoutes } from './modules/progress/routes.js';
 import { getGradingProvider } from './grading/index.js';
+import { getProductionJudgeProvider } from './openrouter/index.js';
 
 async function main() {
   const env = loadEnv();
@@ -20,12 +22,13 @@ async function main() {
   await app.register(cors, { origin: env.CORS_ORIGIN, credentials: true });
   await app.register(cookie, { secret: env.SESSION_SECRET });
 
-  app.get('/api/health', async () => ({ ok: true, gradingProvider: getGradingProvider().name }));
+  app.get('/api/health', async () => ({ ok: true, gradingProvider: getGradingProvider().name, productionJudgeProvider: getProductionJudgeProvider().name }));
 
   await app.register(gradeRoutes, { prefix: '/api/grade' });
   await app.register(authRoutes, { prefix: '/api/auth' });
   await app.register(collectionsRoutes, { prefix: '/api/collections' });
   await app.register(chunksRoutes, { prefix: '/api/chunks' });
+  await app.register(progressRoutes, { prefix: '/api/progress' });
 
   // 0.0.0.0 (not the Fastify default of 127.0.0.1) so the port mapping from
   // Docker Compose / a container host can actually reach it.

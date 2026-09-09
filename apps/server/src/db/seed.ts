@@ -12,6 +12,12 @@ interface SeedChunk {
   example: string;
   exampleTranslation: string;
   level: string;
+  /**
+   * Hand-authored scenario for the production check — most chunks won't
+   * have one yet (that's a separate content-authoring task); a handful of
+   * placeholders here just give local dev/testing something to exercise.
+   */
+  situationPrompt?: string;
 }
 
 interface SeedCollection {
@@ -30,6 +36,7 @@ const KEEP_IN_MIND: SeedChunk = {
   example: 'Keep in mind that the store closes at 8 tonight.',
   exampleTranslation: 'Имей в виду, что магазин сегодня закрывается в 8.',
   level: 'B1',
+  situationPrompt: "Your friend is about to go grocery shopping but it's getting late. What would you tell them about the store's closing time?",
 };
 
 const SEED: SeedCollection[] = [
@@ -47,6 +54,7 @@ const SEED: SeedCollection[] = [
         example: "Seven o'clock at the usual place? Sounds good.",
         exampleTranslation: 'В семь на обычном месте? Договорились.',
         level: 'A2',
+        situationPrompt: 'A friend suggests meeting at 7pm at your usual café. You\'re happy with that. What do you reply?',
       },
       {
         text: "I'm running late",
@@ -211,6 +219,7 @@ const SEED: SeedCollection[] = [
         example: "Let's touch base again next week.",
         exampleTranslation: 'Давай снова созвонимся на следующей неделе.',
         level: 'B1',
+        situationPrompt: "A colleague asks how you'd like to stay updated on a project over the next few weeks, without formal meetings. What do you suggest?",
       },
       {
         text: 'follow up on something',
@@ -252,17 +261,17 @@ async function upsertChunk(pool: pg.Pool, chunk: SeedChunk): Promise<string> {
   const existing = await pool.query<{ id: string }>('SELECT id FROM chunks WHERE text = $1', [chunk.text]);
   if (existing.rows[0]) {
     await pool.query(
-      `UPDATE chunks SET translation = $2, explanation = $3, example = $4, example_translation = $5, level = $6, updated_at = now()
+      `UPDATE chunks SET translation = $2, explanation = $3, example = $4, example_translation = $5, level = $6, situation_prompt = $7, updated_at = now()
        WHERE id = $1`,
-      [existing.rows[0].id, chunk.translation, chunk.explanation, chunk.example, chunk.exampleTranslation, chunk.level],
+      [existing.rows[0].id, chunk.translation, chunk.explanation, chunk.example, chunk.exampleTranslation, chunk.level, chunk.situationPrompt ?? null],
     );
     return existing.rows[0].id;
   }
   const inserted = await pool.query<{ id: string }>(
-    `INSERT INTO chunks (text, translation, explanation, example, example_translation, level)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO chunks (text, translation, explanation, example, example_translation, level, situation_prompt)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING id`,
-    [chunk.text, chunk.translation, chunk.explanation, chunk.example, chunk.exampleTranslation, chunk.level],
+    [chunk.text, chunk.translation, chunk.explanation, chunk.example, chunk.exampleTranslation, chunk.level, chunk.situationPrompt ?? null],
   );
   return inserted.rows[0].id;
 }

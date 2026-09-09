@@ -4,7 +4,7 @@ import { authHeaders } from './auth';
 // needs an absolute backend URL (set at build time, see lib/auth.ts).
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/+$/, '');
 
-function apiUrl(path: string): string {
+export function apiUrl(path: string): string {
   return `${API_BASE_URL}${path}`;
 }
 
@@ -16,8 +16,20 @@ export class ApiError extends Error {
   }
 }
 
-async function getJson<T>(path: string): Promise<T> {
+export async function getJson<T>(path: string): Promise<T> {
   const res = await fetch(apiUrl(path), { credentials: 'include', headers: authHeaders() });
+  if (!res.ok) throw new ApiError(res.status, `${path} failed: ${res.status}`);
+  return res.json() as Promise<T>;
+}
+
+/** Shared with lib/progress.ts — same auth/error conventions as getJson above. */
+export async function postJson<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(apiUrl(path), {
+    method: 'POST',
+    credentials: 'include',
+    headers: { ...authHeaders(), 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
   if (!res.ok) throw new ApiError(res.status, `${path} failed: ${res.status}`);
   return res.json() as Promise<T>;
 }

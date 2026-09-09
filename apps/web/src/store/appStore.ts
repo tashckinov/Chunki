@@ -13,6 +13,17 @@ import {
   type CollectionDetail,
   type CollectionSummary,
 } from '../lib/collections';
+import {
+  postSort,
+  getProgressForChunks,
+  getRecognitionCheck,
+  postRecognitionCheck,
+  getProductionCheck,
+  postProductionCheck,
+  type ProgressSummary,
+  type RecognitionOption,
+  type ProductionVerdict,
+} from '../lib/progress';
 
 export type Screen =
   | 'goals'
@@ -29,12 +40,11 @@ export type Screen =
   | 'extras'
   | 'cardslib'
   | 'deck'
-  | 'deckdone';
+  | 'deckdone'
+  | 'recognitioncheck'
+  | 'productioncheck';
 
 export type DeckVerdict = 'know' | 'dont' | 'bury';
-
-/** Number of "Знаю" swipes needed to fully master a chunk. */
-export const MAX_CHUNK_LEVEL = 4;
 
 const BACK_MAP: Partial<Record<Screen, Screen>> = {
   goals: 'home',
@@ -49,6 +59,8 @@ const BACK_MAP: Partial<Record<Screen, Screen>> = {
   topicresult: 'exercises',
   deck: 'cardslib',
   deckdone: 'cardslib',
+  recognitioncheck: 'deck',
+  productioncheck: 'deck',
 };
 
 interface AppState {
@@ -99,8 +111,25 @@ interface AppState {
 
   deckIndex: number;
   activeDeckChunks: ChunkSummary[];
-  /** Per-chunk mastery level, 0..MAX_CHUNK_LEVEL — rises on "Знаю", drops on "Учить". */
-  chunkLevels: Record<string, number>;
+  /** Server-side mastery state per chunk — see lib/progress.ts. Never persisted to localStorage; refetched on load. */
+  chunkProgress: Record<string, ProgressSummary>;
+  /** This deck session's swipe outcomes, for DeckDoneScreen's tally — not mastery bookkeeping. */
+  sessionVerdicts: Record<string, DeckVerdict>;
+  /** Chunks already sent to a recognition check this session, so a repeat "don't know"/"unsure" doesn't loop. */
+  recognitionAttemptedThisSession: Record<string, true>;
+
+  recognitionChunkId: string | null;
+  recognitionPrompt: string;
+  recognitionOptions: RecognitionOption[];
+  recognitionSelectedId: string | null;
+  recognitionResult: boolean | null;
+
+  productionChunkId: string | null;
+  productionSituation: string;
+  productionAnswer: string;
+  productionChecking: boolean;
+  productionCheckError: string | null;
+  productionResult: { verdict: ProductionVerdict; feedback: string } | null;
 
   collections: CollectionSummary[];
   collectionDetails: Record<string, CollectionDetail>;
@@ -111,7 +140,6 @@ interface AppState {
   dy: number;
   dragging: boolean;
   flying: DeckVerdict | null;
-  verdicts: Record<string, DeckVerdict>;
 
   go: (screen: Screen) => void;
   back: () => void;
@@ -176,6 +204,12 @@ interface AppState {
   flipCard: () => void;
   swipe: (dir: DeckVerdict) => void;
   undoCard: () => void;
+  advanceDeck: () => void;
+  startRecognitionCheck: (chunkId: string) => Promise<void>;
+  answerRecognitionCheck: (optionId: string) => Promise<void>;
+  startProductionCheck: (chunkId: string) => Promise<void>;
+  setProductionAnswer: (v: string) => void;
+  submitProductionCheck: () => Promise<void>;
 }
 
 let dragStart: { x: number; y: number } | null = null;
@@ -229,7 +263,22 @@ export const useAppStore = create<AppState>()(
 
       deckIndex: 0,
       activeDeckChunks: [],
-      chunkLevels: {},
+      chunkProgress: {},
+      sessionVerdicts: {},
+      recognitionAttemptedThisSession: {},
+
+      recognitionChunkId: null,
+      recognitionPrompt: '',
+      recognitionOptions: [],
+      recognitionSelectedId: null,
+      recognitionResult: null,
+
+      productionChunkId: null,
+      productionSituation: '',
+      productionAnswer: '',
+      productionChecking: false,
+      productionCheckError: null,
+      productionResult: null,
 
       collections: [],
       collectionDetails: {},
@@ -240,7 +289,6 @@ export const useAppStore = create<AppState>()(
       dy: 0,
       dragging: false,
       flying: null,
-      verdicts: {},
 
       go: (screen) => set({ screen }),
       back: () => set((s) => ({ screen: BACK_MAP[s.screen] ?? 'home' })),
@@ -309,7 +357,20 @@ export const useAppStore = create<AppState>()(
       goCardsLib: () => set({ screen: 'cardslib' }),
       goDeck: (chunks) => {
         const resolved = chunks ?? flattenChunks(Object.values(get().collectionDetails));
-        set({ screen: 'deck', activeDeckChunks: resolved, deckIndex: 0, flipped: false, dx: 0, dy: 0, verdicts: {} });
+        set({
+          screen: 'deck',
+          activeDeckChunks: resolved,
+          deckIndex: 0,
+          flipped: false,
+          dx: 0,
+          dy: 0,
+          sessionVerdicts: {},
+          recognitionAttemptedThisSession: {},
+        });
+        const chunkIds = resolved.map((c) => c.id);
+        getProgressForChunks(chunkIds)
+          .then((progress) => set((st) => ({ chunkProgress: { ...st.chunkProgress, ...progress } })))
+          .catch(() => {});
       },
       loadCollections: async () => {
         if (get().collectionsStatus === 'loading' || get().collectionsStatus === 'loaded') return;
@@ -415,30 +476,143 @@ export const useAppStore = create<AppState>()(
         const cur = deck[s.deckIndex];
         if (!cur) return;
         set({ flying: dir, dragging: false });
-        setTimeout(() => {
-          const next = s.deckIndex + 1;
+        setTimeout(async () => {
           set((st) => {
-            const level = st.chunkLevels[cur.id] ?? 0;
-            const nextLevel =
-              dir === 'know'
-                ? Math.min(MAX_CHUNK_LEVEL, level + 1)
-                : dir === 'dont'
-                  ? Math.max(0, level - 1)
-                  : level;
+            const prev = st.chunkProgress[cur.id];
+            const optimisticState = dir === 'know' ? 'self_known' : dir === 'dont' ? 'unknown' : 'unsure';
             return {
-              deckIndex: next,
               flipped: false,
               dx: 0,
               dy: 0,
               flying: null,
-              verdicts: { ...st.verdicts, [cur.id]: dir },
-              chunkLevels: nextLevel === level ? st.chunkLevels : { ...st.chunkLevels, [cur.id]: nextLevel },
-              screen: next >= deck.length ? 'deckdone' : 'deck',
+              sessionVerdicts: { ...st.sessionVerdicts, [cur.id]: dir },
+              chunkProgress: {
+                ...st.chunkProgress,
+                [cur.id]: {
+                  chunkId: cur.id,
+                  state: optimisticState,
+                  timesReviewed: (prev?.timesReviewed ?? 0) + 1,
+                  timesProductionAttempted: prev?.timesProductionAttempted ?? 0,
+                  timesProductionPassed: prev?.timesProductionPassed ?? 0,
+                },
+              },
             };
           });
+
+          // Awaited (not fire-and-forget): the production/recognition-check
+          // fetches that follow read this chunk's state back from the
+          // server, so they'd race ahead of an in-flight sort otherwise.
+          try {
+            const progress = await postSort(cur.id, dir);
+            set((st) => ({ chunkProgress: { ...st.chunkProgress, [cur.id]: progress } }));
+          } catch {
+            // Keep the optimistic state; the check below still runs off it.
+          }
+
+          if (dir === 'know') {
+            await get().startProductionCheck(cur.id);
+          } else if (get().recognitionAttemptedThisSession[cur.id]) {
+            get().advanceDeck();
+          } else {
+            set((st) => ({ recognitionAttemptedThisSession: { ...st.recognitionAttemptedThisSession, [cur.id]: true } }));
+            await get().startRecognitionCheck(cur.id);
+          }
         }, 230);
       },
       undoCard: () => set((s) => (s.deckIndex > 0 ? { deckIndex: s.deckIndex - 1, flipped: false, dx: 0, dy: 0 } : {})),
+
+      advanceDeck: () => {
+        const s = get();
+        const next = s.deckIndex + 1;
+        set({
+          deckIndex: next,
+          flipped: false,
+          dx: 0,
+          dy: 0,
+          recognitionChunkId: null,
+          productionChunkId: null,
+          screen: next >= s.activeDeckChunks.length ? 'deckdone' : 'deck',
+        });
+      },
+
+      startRecognitionCheck: async (chunkId) => {
+        try {
+          const check = await getRecognitionCheck(chunkId);
+          set({
+            screen: 'recognitioncheck',
+            recognitionChunkId: check.chunkId,
+            recognitionPrompt: check.prompt,
+            recognitionOptions: check.options,
+            recognitionSelectedId: null,
+            recognitionResult: null,
+          });
+        } catch {
+          // Chunk isn't actually eligible (state changed) or the request
+          // failed — just move on rather than blocking the deck.
+          get().advanceDeck();
+        }
+      },
+
+      answerRecognitionCheck: async (optionId) => {
+        const s = get();
+        const chunkId = s.recognitionChunkId;
+        if (!chunkId) return;
+        try {
+          const { correct, progress } = await postRecognitionCheck(chunkId, optionId, s.recognitionOptions);
+          set((st) => ({
+            recognitionSelectedId: optionId,
+            recognitionResult: correct,
+            chunkProgress: { ...st.chunkProgress, [chunkId]: progress },
+          }));
+          setTimeout(() => {
+            if (correct) void get().startProductionCheck(chunkId);
+            else get().advanceDeck();
+          }, 900);
+        } catch {
+          get().advanceDeck();
+        }
+      },
+
+      startProductionCheck: async (chunkId) => {
+        try {
+          const check = await getProductionCheck(chunkId);
+          if (!check.available) {
+            get().advanceDeck();
+            return;
+          }
+          set({
+            screen: 'productioncheck',
+            productionChunkId: check.chunkId,
+            productionSituation: check.situationPrompt,
+            productionAnswer: '',
+            productionChecking: false,
+            productionCheckError: null,
+            productionResult: null,
+          });
+        } catch {
+          get().advanceDeck();
+        }
+      },
+
+      setProductionAnswer: (v) => set({ productionAnswer: v }),
+
+      submitProductionCheck: async () => {
+        const s = get();
+        const chunkId = s.productionChunkId;
+        if (!chunkId) return;
+        set({ productionChecking: true, productionCheckError: null });
+        try {
+          const { verdict, feedback, progress } = await postProductionCheck(chunkId, s.productionAnswer);
+          set((st) => ({
+            productionChecking: false,
+            productionResult: { verdict, feedback },
+            chunkProgress: { ...st.chunkProgress, [chunkId]: progress },
+          }));
+          setTimeout(() => get().advanceDeck(), 1400);
+        } catch (err) {
+          set({ productionChecking: false, productionCheckError: err instanceof Error ? err.message : String(err) });
+        }
+      },
     }),
     {
       name: 'chunki/v1',
@@ -449,6 +623,8 @@ export const useAppStore = create<AppState>()(
         // collections/collectionDetails likewise come fresh from the
         // backend on every load (see loadCollections) — persisting them
         // would show stale content after it changes server-side.
+        // chunkProgress is the same story — server-sourced mastery state,
+        // refetched by goDeck(); persisting it risks showing stale rings.
         const {
           dx,
           dy,
@@ -464,6 +640,7 @@ export const useAppStore = create<AppState>()(
           collectionDetails,
           collectionsStatus,
           collectionsError,
+          chunkProgress,
           ...rest
         } = s;
         void dx;
@@ -480,6 +657,7 @@ export const useAppStore = create<AppState>()(
         void collectionDetails;
         void collectionsStatus;
         void collectionsError;
+        void chunkProgress;
         return rest;
       },
     },

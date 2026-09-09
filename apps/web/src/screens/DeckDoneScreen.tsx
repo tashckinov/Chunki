@@ -3,8 +3,8 @@ import { deckTallyView } from '../store/derived';
 import { Button } from '../components/ui/Button';
 
 export function DeckDoneScreen() {
-  const { verdicts, goCardsLib } = useAppStore();
-  const tally = deckTallyView(verdicts);
+  const { sessionVerdicts, goCardsLib } = useAppStore();
+  const tally = deckTallyView(sessionVerdicts);
 
   return (
     <div className="flex-1 min-h-0 px-5 py-8 flex flex-col gap-8 anim-rise">
@@ -19,7 +19,7 @@ export function DeckDoneScreen() {
           </div>
         ))}
       </div>
-      <div className="text-body-secondary">Чанки, которые вы не знали, вернутся в упражнения темы и в колоду через день.</div>
+      <div className="text-body-secondary">Чанки, которые вы не знали, можно повторить в этой же колоде.</div>
       <div className="flex-1" />
       <Button size="lg" onClick={goCardsLib} className="w-full">
         Готово

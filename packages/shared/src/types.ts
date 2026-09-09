@@ -97,3 +97,25 @@ export interface GradingProvider {
   gradePlacementTest(input: PlacementTestSubmission): Promise<PlacementGradeResult>;
   gradeExercises(input: ExercisesSubmission): Promise<ExercisesGradeResult>;
 }
+
+// ---- production check: does a free-text answer show active use of a chunk? ----
+
+export interface ProductionCheckInput {
+  chunkText: string;
+  chunkTranslation: string;
+  chunkExample: string | null;
+  situationPrompt: string;
+  userAnswer: string;
+}
+
+export type ProductionCheckVerdict = 'chunk_used' | 'meaning_only' | 'not_conveyed';
+
+export interface ProductionCheckResult {
+  verdict: ProductionCheckVerdict;
+  feedback: string;
+}
+
+export interface ProductionJudgeProvider {
+  name: string;
+  judgeProduction(input: ProductionCheckInput): Promise<ProductionCheckResult>;
+}

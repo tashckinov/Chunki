@@ -21,6 +21,8 @@ import { ExtrasScreen } from './screens/ExtrasScreen';
 import { CardsScreen } from './screens/CardsScreen';
 import { DeckScreen } from './screens/DeckScreen';
 import { DeckDoneScreen } from './screens/DeckDoneScreen';
+import { RecognitionCheckScreen } from './screens/RecognitionCheckScreen';
+import { ProductionCheckScreen } from './screens/ProductionCheckScreen';
 
 const SIDEBAR_ITEMS: { label: string; icon: IconName }[] = [
   { label: 'Главная', icon: 'Today' },
@@ -79,6 +81,10 @@ function CurrentScreen() {
       return <DeckScreen />;
     case 'deckdone':
       return <DeckDoneScreen />;
+    case 'recognitioncheck':
+      return <RecognitionCheckScreen />;
+    case 'productioncheck':
+      return <ProductionCheckScreen />;
     default:
       return <HomeScreen />;
   }
@@ -124,6 +130,8 @@ function navTabForScreen(screen: string): number {
     case 'cardslib':
     case 'deck':
     case 'deckdone':
+    case 'recognitioncheck':
+    case 'productioncheck':
       return 2;
     case 'extras':
       return 3;
