@@ -293,10 +293,15 @@ describe('collections CRUD', () => {
   });
 });
 
+// A real (not just signature-only) 1x1 transparent PNG — needed because the
+// route now actually decodes the upload (to resize it), so a truncated/fake
+// image no longer makes it past the sharp() step.
+const TINY_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
+
 describe('POST /api/admin/uploads/banner', () => {
-  it('saves the uploaded image and returns its URL', async () => {
+  it('resizes+re-encodes the uploaded image to JPEG and returns its URL', async () => {
     vi.mocked(session.getSession).mockResolvedValue(adminSession);
-    const { body, boundary } = buildMultipartBody('banner.png', 'image/png', Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    const { body, boundary } = buildMultipartBody('banner.png', 'image/png', TINY_PNG);
 
     const res = await app.inject({
       method: 'POST',
@@ -308,9 +313,10 @@ describe('POST /api/admin/uploads/banner', () => {
 
     expect(res.statusCode).toBe(200);
     const { url } = res.json();
-    expect(url).toMatch(/^\/uploads\/banners\/[0-9a-f-]+\.png$/);
+    expect(url).toMatch(/^\/uploads\/banners\/[0-9a-f-]+\.jpg$/);
     const saved = fs.readFileSync(path.join(TEST_UPLOADS_DIR, url.replace('/uploads/', '')));
-    expect(saved).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    expect(saved.length).toBeGreaterThan(0);
+    expect(saved.subarray(0, 2)).toEqual(Buffer.from([0xff, 0xd8])); // JPEG magic bytes — confirms it was actually re-encoded, not just copied
   });
 
   it('rejects an unsupported file type', async () => {

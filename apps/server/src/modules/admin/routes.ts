@@ -1,9 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { pipeline } from 'node:stream/promises';
 import { randomUUID } from 'node:crypto';
 import type { FastifyPluginAsync } from 'fastify';
 import multipart from '@fastify/multipart';
+import sharp from 'sharp';
 import { z } from 'zod';
 import { requireAdmin } from '../auth/requireAuth.js';
 import { UPLOADS_DIR } from '../../config/uploads.js';
@@ -25,9 +25,11 @@ import {
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const;
 const SLUG_REGEX = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
-// Collection banners: ~800x600 (4:3), shown in the Cards library.
-const BANNER_MIME_EXTENSIONS: Record<string, string> = { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp' };
-const MAX_BANNER_BYTES = 5 * 1024 * 1024;
+// Collection banners: ~800x600 (4:3), shown in the Cards library. Resized
+// server-side (see the upload route below) so an unedited phone photo
+// doesn't get stored — and served — at full size for a small card image.
+const MAX_BANNER_BYTES = 10 * 1024 * 1024; // raw upload cap, before resizing
+const BANNER_MAX_DIMENSION = 1600; // ~2x an 800x600 display size, comfortable for retina
 
 const idParamSchema = z.object({ id: z.string().uuid() });
 const collectionChunkParamSchema = z.object({ id: z.string().uuid(), chunkId: z.string().uuid() });
@@ -140,33 +142,40 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
 
   app.post('/uploads/banner', async (request, reply) => {
     const file = await request.file();
-    if (!file) {
+    if (!file || !file.mimetype.startsWith('image/')) {
       reply.code(400);
       return { error: 'invalid_request' };
     }
-    const ext = BANNER_MIME_EXTENSIONS[file.mimetype];
-    if (!ext) {
-      reply.code(400);
-      return { error: 'invalid_file_type' };
-    }
 
-    const filename = `${randomUUID()}${ext}`;
-    const bannersDir = path.join(UPLOADS_DIR, 'banners');
-    await fs.promises.mkdir(bannersDir, { recursive: true });
-    const dest = path.join(bannersDir, filename);
+    let original: Buffer;
     try {
-      await pipeline(file.file, fs.createWriteStream(dest));
+      original = await file.toBuffer();
     } catch (err) {
-      // @fastify/multipart throws FST_REQ_FILE_TOO_LARGE once a stream
+      // @fastify/multipart throws FST_REQ_FILE_TOO_LARGE once the stream
       // exceeds the configured fileSize limit — surface that as a normal
-      // 400 instead of a generic write failure.
-      await fs.promises.rm(dest, { force: true });
+      // 400 instead of a generic failure.
       if (err instanceof Error && 'code' in err && err.code === 'FST_REQ_FILE_TOO_LARGE') {
         reply.code(400);
         return { error: 'file_too_large' };
       }
       throw err;
     }
+
+    let resized: Buffer;
+    try {
+      resized = await sharp(original)
+        .resize({ width: BANNER_MAX_DIMENSION, height: BANNER_MAX_DIMENSION, fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 82 })
+        .toBuffer();
+    } catch {
+      reply.code(400);
+      return { error: 'invalid_file_type' };
+    }
+
+    const filename = `${randomUUID()}.jpg`;
+    const bannersDir = path.join(UPLOADS_DIR, 'banners');
+    await fs.promises.mkdir(bannersDir, { recursive: true });
+    await fs.promises.writeFile(path.join(bannersDir, filename), resized);
 
     return { url: `/uploads/banners/${filename}` };
   });

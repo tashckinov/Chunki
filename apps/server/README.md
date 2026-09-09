@@ -120,6 +120,13 @@ different ports), which changes a few things vs. local dev:
    plain HTTP; something like Caddy (auto-HTTPS, one-line config) or nginx + certbot needs to
    terminate HTTPS and forward to `127.0.0.1:8787` (or the `backend` container). This is
    required, not optional — see point 3.
+   - **Raise the proxy's request-body size limit.** Admin image uploads (e.g. collection
+     banners, `POST /api/admin/uploads/banner`) can be several MB before the backend resizes
+     them — well past nginx's compiled-in default `client_max_body_size` of 1MB, which shows
+     up as a `413 Request Entity Too Large` before the request ever reaches the app. Add
+     `client_max_body_size 15m;` inside the relevant `server`/`location` block (nginx) or
+     `request_body { max_size 15MB }` (Caddy), then reload the proxy
+     (`nginx -s reload` / `systemctl reload caddy`).
 2. **Point a domain at the VPS** (e.g. `api.yourdomain.com`) and use that (over HTTPS) as
    `GOOGLE_REDIRECT_URI`. Add the same URL as an Authorized redirect URI on the Google OAuth
    client (Google Cloud Console → Credentials) — it has to match exactly.
