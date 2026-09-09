@@ -55,7 +55,7 @@ export class OpenRouterProductionJudgeProvider implements ProductionJudgeProvide
         {
           role: 'system',
           content:
-            'You are judging whether a Russian-speaking English learner actively produced a specific target chunk/collocation in their free-text answer to a situational prompt, versus only conveying the meaning some other way, versus not conveying it at all. Always respond only via the provided tool.',
+            'You are judging whether a Russian-speaking English learner actively produced a specific target chunk/collocation in their free-text answer to a situational prompt, versus only conveying the meaning some other way, versus not conveying it at all. Allow common adverbs or intensifiers inserted inside the chunk (e.g. "really", "so", "just") — "sounds really good" still counts as using "sounds good". Always respond only via the provided tool.',
         },
         { role: 'user', content: user },
       ],
