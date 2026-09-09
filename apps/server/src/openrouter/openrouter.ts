@@ -46,7 +46,11 @@ export class OpenRouterProductionJudgeProvider implements ProductionJudgeProvide
 
     const response = await client.chat.completions.create({
       model: this.#model(),
-      max_tokens: 512,
+      // Generous headroom: reasoning-capable models (e.g. the gpt-5 family)
+      // spend part of this budget on internal reasoning tokens before ever
+      // emitting the tool call, so a tight limit here can cut them off with
+      // finish_reason "length" and no tool_calls at all.
+      max_tokens: 2048,
       messages: [
         {
           role: 'system',
@@ -81,7 +85,14 @@ export class OpenRouterProductionJudgeProvider implements ProductionJudgeProvide
     });
 
     const toolCall = response.choices[0]?.message.tool_calls?.[0];
-    if (!toolCall || toolCall.type !== 'function') throw new Error('OpenRouter response did not include the expected tool call.');
+    if (!toolCall || toolCall.type !== 'function') {
+      const choice = response.choices[0];
+      throw new Error(
+        `OpenRouter response did not include the expected tool call ` +
+          `(model=${this.#model()}, finish_reason=${choice?.finish_reason ?? 'unknown'}, ` +
+          `hasContent=${Boolean(choice?.message.content)}, refusal=${Boolean((choice?.message as { refusal?: unknown } | undefined)?.refusal)}).`,
+      );
+    }
 
     let parsed: unknown;
     try {
