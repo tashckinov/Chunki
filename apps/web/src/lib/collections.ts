@@ -94,6 +94,24 @@ export async function fetchCollectionBySlug(slug: string): Promise<CollectionDet
   return data.collection;
 }
 
+export interface LearnerDialogueMessage {
+  characterName: string;
+  imageUrl: string;
+  side: 'left' | 'right';
+  text: string;
+}
+
+export interface LearnerDialogue {
+  chunkId: string;
+  messages: LearnerDialogueMessage[];
+}
+
+/** A chunk without a dialogue is the common case — `null` is a normal response, not an error. */
+export async function fetchLearnerDialogue(chunkId: string): Promise<LearnerDialogue | null> {
+  const data = await getJson<{ dialogue: LearnerDialogue | null }>(`/api/chunks/${chunkId}/dialogue`);
+  return data.dialogue;
+}
+
 /** Every chunk across the given collections, deduped by id (a chunk can belong to more than one). */
 export function flattenChunks(details: CollectionDetail[]): ChunkSummary[] {
   const seen = new Map<string, ChunkSummary>();

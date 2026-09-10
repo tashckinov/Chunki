@@ -19,6 +19,14 @@ import {
   type ChunkPatch,
 } from './repository.js';
 import { listAiCallLogs as repoListAiCallLogs, type AiCallLogRow } from '../aiLogs/repository.js';
+import {
+  getDialogueForChunk as dialoguesGetDialogueForChunk,
+  saveDialogue as dialoguesSaveDialogue,
+  deleteDialogueForChunk as dialoguesDeleteDialogueForChunk,
+  type DialogueSummary,
+  type SaveDialogueResult,
+} from '../dialogues/service.js';
+import type { DialogueInput } from '../dialogues/repository.js';
 
 export interface AdminUserSummary {
   id: string;
@@ -182,4 +190,17 @@ function toAiCallLogSummary(row: AiCallLogRow): AiCallLogSummary {
 
 export async function listAiCallLogsForAdmin(limit: number): Promise<AiCallLogSummary[]> {
   return (await repoListAiCallLogs(limit)).map(toAiCallLogSummary);
+}
+
+export async function getDialogueForChunk(chunkId: string): Promise<DialogueSummary | null> {
+  return dialoguesGetDialogueForChunk(chunkId);
+}
+
+/** Save/upsert — a chunk has at most one dialogue; calling this again replaces it, it never creates a second one. */
+export async function saveDialogueForChunk(chunkId: string, input: DialogueInput): Promise<SaveDialogueResult> {
+  return dialoguesSaveDialogue(chunkId, input);
+}
+
+export async function deleteDialogueForChunk(chunkId: string): Promise<boolean> {
+  return dialoguesDeleteDialogueForChunk(chunkId);
 }

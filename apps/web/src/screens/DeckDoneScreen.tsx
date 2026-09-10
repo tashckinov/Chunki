@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useAppStore } from '../store/appStore';
+import type { ProductionVerdict } from '../lib/progress';
+import type { LearnerDialogue } from '../lib/collections';
 import { deckTallyView } from '../store/derived';
 import { plural } from '../lib/plural';
 import { Button } from '../components/ui/Button';
@@ -11,8 +13,70 @@ const VERDICT_COPY: Record<string, { label: string; className: string }> = {
   not_conveyed: { label: 'Не получилось', className: 'text-negative' },
 };
 
+/**
+ * For a failed production check, the comic is a mandatory step before the
+ * verdict/feedback reveal — three deterministic states, never a fallback
+ * to showing the result ungated while the dialogue lookup is still in
+ * flight (that would break the confirmed "comic first" rule).
+ */
+function ProductionResultRow({
+  chunkText,
+  result,
+  dialogue,
+  viewed,
+  onOpenDialogue,
+}: {
+  chunkText: string;
+  result: { kind: 'ok'; verdict: ProductionVerdict; feedback: string } | { kind: 'error'; message: string };
+  dialogue: LearnerDialogue | null | undefined;
+  viewed: boolean;
+  onOpenDialogue: () => void;
+}) {
+  const gated = result.kind === 'ok' && result.verdict !== 'chunk_used' && dialogue !== null && !viewed;
+
+  return (
+    <div className="rounded-[var(--radius-md)] border border-border p-3.5 flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-[14.5px] font-medium">{chunkText}</div>
+        {!gated &&
+          (result.kind === 'ok' ? (
+            <span className={`text-[12px] font-medium ${VERDICT_COPY[result.verdict]?.className ?? ''}`}>
+              {VERDICT_COPY[result.verdict]?.label ?? result.verdict}
+            </span>
+          ) : (
+            <span className="text-[12px] font-medium text-negative">Не удалось проверить</span>
+          ))}
+      </div>
+      {gated ? (
+        dialogue === undefined ? (
+          <div className="flex items-center gap-2 text-body-secondary text-[13.5px]">
+            <Spinner size={14} borderWidth={2} />
+            Готовим комикс…
+          </div>
+        ) : (
+          <Button size="sm" variant="secondary" onClick={onOpenDialogue} className="self-start">
+            Посмотреть комикс
+          </Button>
+        )
+      ) : (
+        <div className="text-body-secondary text-[13.5px]">{result.kind === 'ok' ? result.feedback : result.message}</div>
+      )}
+    </div>
+  );
+}
+
 export function DeckDoneScreen() {
-  const { sessionVerdicts, sessionProductionResults, sessionProductionPending, productionLimitReached, activeDeckChunks, goCardsLib } = useAppStore();
+  const {
+    sessionVerdicts,
+    sessionProductionResults,
+    sessionProductionPending,
+    productionLimitReached,
+    activeDeckChunks,
+    learnerDialogueByChunk,
+    viewedProductionDialogueChunks,
+    openDialogueFromSummary,
+    goCardsLib,
+  } = useAppStore();
   const tally = deckTallyView(sessionVerdicts);
   const productionEntries = Object.entries(sessionProductionResults);
   const pendingCount = Object.keys(sessionProductionPending).length;
@@ -39,19 +103,14 @@ export function DeckDoneScreen() {
           {productionEntries.map(([chunkId, result]) => {
             const chunk = activeDeckChunks.find((c) => c.id === chunkId);
             return (
-              <div key={chunkId} className="rounded-[var(--radius-md)] border border-border p-3.5 flex flex-col gap-1">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="text-[14.5px] font-medium">{chunk?.text ?? '—'}</div>
-                  {result.kind === 'ok' ? (
-                    <span className={`text-[12px] font-medium ${VERDICT_COPY[result.verdict]?.className ?? ''}`}>
-                      {VERDICT_COPY[result.verdict]?.label ?? result.verdict}
-                    </span>
-                  ) : (
-                    <span className="text-[12px] font-medium text-negative">Не удалось проверить</span>
-                  )}
-                </div>
-                <div className="text-body-secondary text-[13.5px]">{result.kind === 'ok' ? result.feedback : result.message}</div>
-              </div>
+              <ProductionResultRow
+                key={chunkId}
+                chunkText={chunk?.text ?? '—'}
+                result={result}
+                dialogue={learnerDialogueByChunk[chunkId]}
+                viewed={!!viewedProductionDialogueChunks[chunkId]}
+                onOpenDialogue={() => openDialogueFromSummary(chunkId)}
+              />
             );
           })}
           {pendingCount > 0 && (

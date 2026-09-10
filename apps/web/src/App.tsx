@@ -23,6 +23,7 @@ import { DeckScreen } from './screens/DeckScreen';
 import { DeckDoneScreen } from './screens/DeckDoneScreen';
 import { RecognitionCheckScreen } from './screens/RecognitionCheckScreen';
 import { ProductionCheckScreen } from './screens/ProductionCheckScreen';
+import { DialogueScreen } from './screens/DialogueScreen';
 import { AdminScreen } from './screens/admin/AdminScreen';
 
 const SIDEBAR_ITEMS: { label: string; icon: IconName }[] = [
@@ -93,6 +94,8 @@ function CurrentScreen() {
       return <RecognitionCheckScreen />;
     case 'productioncheck':
       return <ProductionCheckScreen />;
+    case 'dialogue':
+      return <DialogueScreen />;
     case 'admin':
       return <AdminScreen />;
     default:
@@ -173,6 +176,7 @@ function navTabForScreen(screen: string): number {
     case 'deckdone':
     case 'recognitioncheck':
     case 'productioncheck':
+    case 'dialogue':
       return 2;
     case 'extras':
       return 3;

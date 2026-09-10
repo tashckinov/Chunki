@@ -20,6 +20,9 @@ import {
   deleteChunk,
   removeChunkFromCollection,
   listAiCallLogsForAdmin,
+  getDialogueForChunk,
+  saveDialogueForChunk,
+  deleteDialogueForChunk,
 } from './service.js';
 
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const;
@@ -71,6 +74,11 @@ const chunkCreateSchema = z.object({
   situationPrompts: z.array(z.string().min(1)).optional(),
 });
 const chunkPatchSchema = chunkCreateSchema.partial();
+
+const dialogueSaveSchema = z.object({
+  participants: z.array(z.object({ characterId: z.string().uuid(), side: z.enum(['left', 'right']) })).min(1),
+  messages: z.array(z.object({ characterId: z.string().uuid(), characterImageId: z.string().uuid(), text: z.string().min(1) })).min(1),
+});
 
 /**
  * Every route here is admin-only, unlike the other modules (which mix
@@ -231,6 +239,46 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       return { error: 'not_found' };
     }
     const deleted = await deleteChunk(params.data.id);
+    if (!deleted) {
+      reply.code(404);
+      return { error: 'not_found' };
+    }
+    return { ok: true };
+  });
+
+  app.get('/chunks/:id/dialogue', async (request, reply) => {
+    const params = idParamSchema.safeParse(request.params);
+    if (!params.success) {
+      reply.code(404);
+      return { error: 'not_found' };
+    }
+    return { dialogue: await getDialogueForChunk(params.data.id) };
+  });
+
+  // Save/upsert — a chunk has at most one dialogue, so a repeat POST
+  // replaces its participants+messages rather than creating a second one.
+  app.post('/chunks/:id/dialogue', async (request, reply) => {
+    const params = idParamSchema.safeParse(request.params);
+    const body = dialogueSaveSchema.safeParse(request.body);
+    if (!params.success || !body.success) {
+      reply.code(400);
+      return { error: 'invalid_request' };
+    }
+    const result = await saveDialogueForChunk(params.data.id, body.data);
+    if (result.kind === 'invalid_reference') {
+      reply.code(400);
+      return { error: 'invalid_reference' };
+    }
+    return { dialogue: result.dialogue };
+  });
+
+  app.delete('/chunks/:id/dialogue', async (request, reply) => {
+    const params = idParamSchema.safeParse(request.params);
+    if (!params.success) {
+      reply.code(404);
+      return { error: 'not_found' };
+    }
+    const deleted = await deleteDialogueForChunk(params.data.id);
     if (!deleted) {
       reply.code(404);
       return { error: 'not_found' };

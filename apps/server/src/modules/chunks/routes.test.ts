@@ -7,9 +7,11 @@ vi.mock('../auth/session.js', async () => {
   return { SESSION_COOKIE_NAME: actual.SESSION_COOKIE_NAME, extractSessionToken: actual.extractSessionToken, getSession: vi.fn() };
 });
 vi.mock('./service.js', () => ({ getChunkById: vi.fn() }));
+vi.mock('../dialogues/service.js', () => ({ findLearnerDialogue: vi.fn() }));
 
 const session = await import('../auth/session.js');
 const service = await import('./service.js');
+const dialogues = await import('../dialogues/service.js');
 const { chunksRoutes } = await import('./routes.js');
 
 const authenticatedSession = {
@@ -27,6 +29,7 @@ let app: FastifyInstance;
 beforeEach(async () => {
   vi.mocked(session.getSession).mockReset();
   vi.mocked(service.getChunkById).mockReset();
+  vi.mocked(dialogues.findLearnerDialogue).mockReset();
 
   app = Fastify();
   await app.register(cookie, { secret: process.env.SESSION_SECRET });
@@ -97,5 +100,60 @@ describe('GET /api/chunks/:id', () => {
     expect(res.statusCode).toBe(404);
     expect(res.json()).toEqual({ error: 'not_found' });
     expect(service.getChunkById).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/chunks/:id/dialogue', () => {
+  it('returns 401 when unauthenticated', async () => {
+    const res = await app.inject({ method: 'GET', url: `/api/chunks/${validId}/dialogue` });
+
+    expect(res.statusCode).toBe(401);
+    expect(dialogues.findLearnerDialogue).not.toHaveBeenCalled();
+  });
+
+  it('returns {dialogue: null} as a normal 200 when the chunk has no dialogue', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(authenticatedSession);
+    vi.mocked(dialogues.findLearnerDialogue).mockResolvedValue(null);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/chunks/${validId}/dialogue`,
+      cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ dialogue: null });
+    expect(dialogues.findLearnerDialogue).toHaveBeenCalledWith(validId);
+  });
+
+  it('returns the resolved dialogue when one exists', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(authenticatedSession);
+    const dialogue = {
+      chunkId: validId,
+      messages: [{ characterName: 'Mia', imageUrl: '/uploads/characters/a.jpg', side: 'left' as const, text: 'Sounds good!' }],
+    };
+    vi.mocked(dialogues.findLearnerDialogue).mockResolvedValue(dialogue);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/chunks/${validId}/dialogue`,
+      cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ dialogue });
+  });
+
+  it('returns 404 for a malformed id, without querying the service', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(authenticatedSession);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/chunks/not-a-uuid/dialogue',
+      cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' },
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(dialogues.findLearnerDialogue).not.toHaveBeenCalled();
   });
 });

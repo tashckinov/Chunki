@@ -25,30 +25,7 @@ import {
   type Character,
   type CharacterImage,
 } from '../../lib/characters';
-
-const EMOTION_LABELS: Record<string, string> = {
-  happy: 'Счастье',
-  laughing: 'Смех',
-  confused: 'Растерянность',
-  surprised: 'Удивление',
-  neutral: 'Нейтрально',
-  annoyed: 'Раздражение',
-};
-const EMOTION_SUGGESTIONS = ['happy', 'laughing', 'confused', 'surprised', 'neutral', 'annoyed'];
-
-function emotionLabel(emotion: string): string {
-  return EMOTION_LABELS[emotion] ?? emotion;
-}
-
-function groupImagesByEmotion(images: CharacterImage[]): [string, CharacterImage[]][] {
-  const groups = new Map<string, CharacterImage[]>();
-  for (const image of [...images].sort((a, b) => a.position - b.position)) {
-    const list = groups.get(image.emotion) ?? [];
-    list.push(image);
-    groups.set(image.emotion, list);
-  }
-  return [...groups.entries()];
-}
+import { EMOTION_SUGGESTIONS, emotionLabel, groupImagesByEmotion } from '../../lib/characterEmotions';
 
 /** Persistent label + optional hint — same convention as ContentSection.tsx's Field. */
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {

@@ -8,10 +8,12 @@ import {
   fetchCollectionBySlug,
   fetchCollections,
   flattenChunks,
+  fetchLearnerDialogue,
   ApiError,
   type ChunkSummary,
   type CollectionDetail,
   type CollectionSummary,
+  type LearnerDialogue,
 } from '../lib/collections';
 import {
   postSort,
@@ -43,6 +45,7 @@ export type Screen =
   | 'deckdone'
   | 'recognitioncheck'
   | 'productioncheck'
+  | 'dialogue'
   | 'admin';
 
 export type DeckVerdict = 'know' | 'dont' | 'bury';
@@ -62,6 +65,10 @@ const BACK_MAP: Partial<Record<Screen, Screen>> = {
   deckdone: 'cardslib',
   recognitioncheck: 'deck',
   productioncheck: 'deck',
+  // Fallback only — the screen's own close button always calls the
+  // dedicated closeDialogue() action, since the real return destination
+  // (deck vs deckdone) is dynamic and BACK_MAP can't express that.
+  dialogue: 'deck',
   admin: 'home',
 };
 
@@ -131,6 +138,15 @@ interface AppState {
   productionLimitReached: boolean;
   /** Chunks already sent to a recognition check this session, so a repeat "don't know"/"unsure" doesn't loop. */
   recognitionAttemptedThisSession: Record<string, true>;
+
+  /** Dialogue-comic fetch cache, keyed by chunk id. Key absent = not yet fetched (still loading); null = confirmed no dialogue; an object = a real one. */
+  learnerDialogueByChunk: Record<string, LearnerDialogue | null>;
+  /** Chunks whose comic has already been viewed via the production-check gate on DeckDoneScreen this session — the ONLY viewed-tracking in this feature. The "не знаю" trigger never reads or writes this: it shows the comic every time, unconditionally. */
+  viewedProductionDialogueChunks: Record<string, true>;
+  dialogueChunkId: string | null;
+  /** What to do once the learner closes the comic — mirrors exactly what would have happened at the trigger point if the comic hadn't been shown. */
+  dialogueContinuation: 'advance' | 'recognitioncheck' | 'deckdone' | null;
+  learnerDialogue: LearnerDialogue | null;
 
   recognitionChunkId: string | null;
   recognitionPrompt: string;
@@ -224,6 +240,11 @@ interface AppState {
   startProductionCheck: (chunkId: string) => Promise<void>;
   setProductionAnswer: (v: string) => void;
   submitProductionCheck: () => void;
+
+  ensureLearnerDialogue: (chunkId: string) => Promise<LearnerDialogue | null>;
+  handleDontKnow: (chunkId: string) => Promise<void>;
+  closeDialogue: () => void;
+  openDialogueFromSummary: (chunkId: string) => void;
 }
 
 let dragStart: { x: number; y: number } | null = null;
@@ -286,6 +307,12 @@ export const useAppStore = create<AppState>()(
       sessionProductionPending: {},
       productionLimitReached: false,
       recognitionAttemptedThisSession: {},
+
+      learnerDialogueByChunk: {},
+      viewedProductionDialogueChunks: {},
+      dialogueChunkId: null,
+      dialogueContinuation: null,
+      learnerDialogue: null,
 
       recognitionChunkId: null,
       recognitionPrompt: '',
@@ -396,6 +423,11 @@ export const useAppStore = create<AppState>()(
           sessionProductionPending: {},
           productionLimitReached: false,
           recognitionAttemptedThisSession: {},
+          learnerDialogueByChunk: {},
+          viewedProductionDialogueChunks: {},
+          dialogueChunkId: null,
+          dialogueContinuation: null,
+          learnerDialogue: null,
         });
         const chunkIds = resolved.map((c) => c.id);
         getProgressForChunks(chunkIds)
@@ -547,6 +579,8 @@ export const useAppStore = create<AppState>()(
 
           if (dir === 'know') {
             await get().startProductionCheck(cur.id);
+          } else if (dir === 'dont') {
+            await get().handleDontKnow(cur.id);
           } else if (get().recognitionAttemptedThisSession[cur.id]) {
             get().advanceDeck();
           } else {
@@ -569,6 +603,70 @@ export const useAppStore = create<AppState>()(
           productionChunkId: null,
           screen: next >= s.activeDeckChunks.length ? 'deckdone' : 'deck',
         });
+      },
+
+      ensureLearnerDialogue: async (chunkId) => {
+        const cached = get().learnerDialogueByChunk[chunkId];
+        if (cached !== undefined) return cached;
+        try {
+          const dialogue = await fetchLearnerDialogue(chunkId);
+          set((st) => ({ learnerDialogueByChunk: { ...st.learnerDialogueByChunk, [chunkId]: dialogue } }));
+          return dialogue;
+        } catch {
+          // A failed fetch reaches the same terminal "no dialogue" state as
+          // a confirmed-empty one — this cache must never hang on `undefined`.
+          set((st) => ({ learnerDialogueByChunk: { ...st.learnerDialogueByChunk, [chunkId]: null } }));
+          return null;
+        }
+      },
+
+      // "не знаю" always shows the comic when one exists — confirmed
+      // directly with the user, no suppression/viewed-tracking of any kind
+      // here (unlike the production-check gate below).
+      handleDontKnow: async (chunkId) => {
+        const dialogue = await get().ensureLearnerDialogue(chunkId);
+        const alreadyAttempted = get().recognitionAttemptedThisSession[chunkId];
+        if (dialogue) {
+          if (!alreadyAttempted) set((st) => ({ recognitionAttemptedThisSession: { ...st.recognitionAttemptedThisSession, [chunkId]: true } }));
+          set({
+            screen: 'dialogue',
+            dialogueChunkId: chunkId,
+            dialogueContinuation: alreadyAttempted ? 'advance' : 'recognitioncheck',
+            learnerDialogue: dialogue,
+          });
+          return;
+        }
+        if (alreadyAttempted) {
+          get().advanceDeck();
+        } else {
+          set((st) => ({ recognitionAttemptedThisSession: { ...st.recognitionAttemptedThisSession, [chunkId]: true } }));
+          await get().startRecognitionCheck(chunkId);
+        }
+      },
+
+      closeDialogue: () => {
+        const { dialogueChunkId, dialogueContinuation } = get();
+        set((st) => ({
+          dialogueChunkId: null,
+          dialogueContinuation: null,
+          learnerDialogue: null,
+          // Only the production-check gate's "viewed" state is ever set —
+          // the "не знаю" path never touches it, so having seen the same
+          // dialogue via "не знаю" can never unlock that gate later.
+          viewedProductionDialogueChunks:
+            dialogueContinuation === 'deckdone' && dialogueChunkId
+              ? { ...st.viewedProductionDialogueChunks, [dialogueChunkId]: true }
+              : st.viewedProductionDialogueChunks,
+        }));
+        if (dialogueContinuation === 'advance') get().advanceDeck();
+        else if (dialogueContinuation === 'recognitioncheck' && dialogueChunkId) void get().startRecognitionCheck(dialogueChunkId);
+        else set({ screen: 'deckdone' });
+      },
+
+      openDialogueFromSummary: (chunkId) => {
+        const dialogue = get().learnerDialogueByChunk[chunkId];
+        if (!dialogue) return;
+        set({ screen: 'dialogue', dialogueChunkId: chunkId, dialogueContinuation: 'deckdone', learnerDialogue: dialogue });
       },
 
       startRecognitionCheck: async (chunkId) => {
@@ -657,6 +755,10 @@ export const useAppStore = create<AppState>()(
                 chunkProgress: { ...st.chunkProgress, [chunkId]: progress },
               };
             });
+            // Kick off the dialogue lookup as soon as a failed verdict lands,
+            // so it's already resolved (or in flight) by the time the user
+            // reaches DeckDoneScreen's gated reveal — see closeDialogue().
+            if (verdict !== 'chunk_used') void get().ensureLearnerDialogue(chunkId);
           })
           .catch((err) => {
             set((st) => {

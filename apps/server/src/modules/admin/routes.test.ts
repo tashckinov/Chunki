@@ -25,6 +25,9 @@ vi.mock('./service.js', () => ({
   deleteChunk: vi.fn(),
   removeChunkFromCollection: vi.fn(),
   listAiCallLogsForAdmin: vi.fn(),
+  getDialogueForChunk: vi.fn(),
+  saveDialogueForChunk: vi.fn(),
+  deleteDialogueForChunk: vi.fn(),
 }));
 
 const session = await import('../auth/session.js');
@@ -492,5 +495,89 @@ describe('GET /api/admin/ai-logs', () => {
 
     expect(res.statusCode).toBe(400);
     expect(service.listAiCallLogsForAdmin).not.toHaveBeenCalled();
+  });
+});
+
+describe('chunk dialogue', () => {
+  const characterId = '33333333-3333-4333-8333-333333333333';
+  const imageId = '44444444-4444-4444-8444-444444444444';
+
+  it('GET /api/admin/chunks/:id/dialogue returns null when none exists', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(adminSession);
+    vi.mocked(service.getDialogueForChunk).mockResolvedValue(null);
+
+    const res = await app.inject({ method: 'GET', url: `/api/admin/chunks/${validId}/dialogue`, cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' } });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ dialogue: null });
+  });
+
+  it('POST /api/admin/chunks/:id/dialogue saves (upserts) the dialogue', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(adminSession);
+    const dialogue = {
+      participants: [{ characterId, side: 'left' as const }],
+      messages: [{ characterId, characterImageId: imageId, text: 'Sounds good!' }],
+    };
+    vi.mocked(service.saveDialogueForChunk).mockResolvedValue({ kind: 'ok', dialogue });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/admin/chunks/${validId}/dialogue`,
+      cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' },
+      payload: dialogue,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ dialogue });
+    expect(service.saveDialogueForChunk).toHaveBeenCalledWith(validId, dialogue);
+  });
+
+  it('POST /api/admin/chunks/:id/dialogue rejects a message from a character not in participants', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(adminSession);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/admin/chunks/${validId}/dialogue`,
+      cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' },
+      payload: { participants: [], messages: [{ characterId, characterImageId: imageId, text: 'x' }] },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: 'invalid_request' });
+    expect(service.saveDialogueForChunk).not.toHaveBeenCalled();
+  });
+
+  it('POST /api/admin/chunks/:id/dialogue surfaces a service-level invalid_reference as 400', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(adminSession);
+    vi.mocked(service.saveDialogueForChunk).mockResolvedValue({ kind: 'invalid_reference' });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/admin/chunks/${validId}/dialogue`,
+      cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' },
+      payload: { participants: [{ characterId, side: 'left' }], messages: [{ characterId, characterImageId: imageId, text: 'x' }] },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: 'invalid_reference' });
+  });
+
+  it('DELETE /api/admin/chunks/:id/dialogue deletes it', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(adminSession);
+    vi.mocked(service.deleteDialogueForChunk).mockResolvedValue(true);
+
+    const res = await app.inject({ method: 'DELETE', url: `/api/admin/chunks/${validId}/dialogue`, cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' } });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ ok: true });
+  });
+
+  it('DELETE /api/admin/chunks/:id/dialogue returns 404 when none exists', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(adminSession);
+    vi.mocked(service.deleteDialogueForChunk).mockResolvedValue(false);
+
+    const res = await app.inject({ method: 'DELETE', url: `/api/admin/chunks/${validId}/dialogue`, cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' } });
+
+    expect(res.statusCode).toBe(404);
   });
 });
