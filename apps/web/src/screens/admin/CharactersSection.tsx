@@ -204,8 +204,12 @@ function CharacterDetailView({
   const [nameSaving, setNameSaving] = useState(false);
   const [fullBodyUploading, setFullBodyUploading] = useState(false);
   const [fullBodyError, setFullBodyError] = useState<string | null>(null);
+  const [fullBodyDragOver, setFullBodyDragOver] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[] | null>(null);
-  const [pendingEmotion, setPendingEmotion] = useState('');
+  const [pendingPreviews, setPendingPreviews] = useState<string[]>([]);
+  const [pendingEmotions, setPendingEmotions] = useState<(string | null)[]>([]);
+  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
+  const [assignEmotion, setAssignEmotion] = useState('');
   const [uploadingBatch, setUploadingBatch] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [movingImage, setMovingImage] = useState<CharacterImage | null>(null);
@@ -215,6 +219,8 @@ function CharacterDetailView({
 
   useEffect(() => setName(character.name), [character.id, character.name]);
   useEffect(() => setMoveEmotion(movingImage?.emotion ?? ''), [movingImage]);
+  // Revokes the previous batch's object URLs whenever a new one replaces them, and on unmount.
+  useEffect(() => () => pendingPreviews.forEach((url) => URL.revokeObjectURL(url)), [pendingPreviews]);
 
   async function saveName() {
     if (!name.trim() || name.trim() === character.name) return;
@@ -245,18 +251,55 @@ function CharacterDetailView({
   function handleFilesPicked(files: File[]) {
     if (files.length === 0) return;
     setPendingFiles(files);
-    setPendingEmotion('');
+    setPendingPreviews(files.map((f) => URL.createObjectURL(f)));
+    setPendingEmotions(files.map(() => null));
+    setSelectedIndices(new Set());
+    setAssignEmotion('');
     setUploadError(null);
   }
 
+  function clearPendingBatch() {
+    setPendingFiles(null);
+    setPendingPreviews([]);
+    setPendingEmotions([]);
+    setSelectedIndices(new Set());
+  }
+
+  function toggleSelected(index: number) {
+    setSelectedIndices((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  }
+
+  /** Assigns one emotion to every currently-selected pending photo at once — select a group, tap an emotion, repeat for the next group. */
+  function assignToSelected(emotion: string) {
+    if (selectedIndices.size === 0 || !emotion.trim()) return;
+    setPendingEmotions((prev) => prev.map((e, i) => (selectedIndices.has(i) ? emotion.trim() : e)));
+    setSelectedIndices(new Set());
+    setAssignEmotion('');
+  }
+
   async function confirmBatchUpload() {
-    if (!pendingFiles || !pendingEmotion.trim()) return;
+    if (!pendingFiles || pendingEmotions.some((e) => !e)) return;
     setUploadingBatch(true);
     setUploadError(null);
     try {
-      const images = await uploadCharacterImages(character.id, pendingEmotion.trim(), pendingFiles);
-      onUpdate({ ...character, images: [...character.images, ...images] });
-      setPendingFiles(null);
+      const groups = new Map<string, File[]>();
+      pendingFiles.forEach((file, i) => {
+        const emotion = pendingEmotions[i]!;
+        const list = groups.get(emotion) ?? [];
+        list.push(file);
+        groups.set(emotion, list);
+      });
+      const newImages: CharacterImage[] = [];
+      for (const [emotion, files] of groups) {
+        newImages.push(...(await uploadCharacterImages(character.id, emotion, files)));
+      }
+      onUpdate({ ...character, images: [...character.images, ...newImages] });
+      clearPendingBatch();
     } catch {
       setUploadError('Не удалось загрузить изображения.');
     } finally {
@@ -320,11 +363,26 @@ function CharacterDetailView({
 
           <Field label="Фото в полный рост">
             <div className="flex flex-col gap-2">
-              <div className="aspect-[3/4] w-full max-w-[200px] rounded-[var(--radius-md)] bg-surface-subtle overflow-hidden flex items-center justify-center">
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setFullBodyDragOver(true);
+                }}
+                onDragLeave={() => setFullBodyDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setFullBodyDragOver(false);
+                  const file = Array.from(e.dataTransfer.files).find((f) => f.type.startsWith('image/'));
+                  if (file) void handleFullBodyFile(file);
+                }}
+                className={`aspect-[3/4] w-full max-w-[200px] rounded-[var(--radius-md)] bg-surface-subtle overflow-hidden flex items-center justify-center transition-colors ${
+                  fullBodyDragOver ? 'ring-2 ring-accent' : ''
+                }`}
+              >
                 {character.fullBodyImageUrl ? (
                   <img src={apiUrl(character.fullBodyImageUrl)} alt="" className="w-full h-full object-cover" />
                 ) : (
-                  <span className="text-meta">Нет фото</span>
+                  <span className="text-meta px-3 text-center">Нет фото — перетащите сюда или выберите файл</span>
                 )}
               </div>
               <label className="pressable inline-flex items-center self-start rounded-[var(--radius-md)] bg-surface-subtle px-4 py-2 text-[13.5px] font-medium cursor-pointer">
@@ -381,23 +439,71 @@ function CharacterDetailView({
 
           {pendingFiles && (
             <div className="rounded-[var(--radius-md)] border border-border p-4 flex flex-col gap-3">
-              <div className="text-[13.5px] font-medium">
-                {pendingFiles.length} {plural(pendingFiles.length, 'изображение', 'изображения', 'изображений')} — какая эмоция?
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-[13.5px] font-medium">
+                  {pendingFiles.length} {plural(pendingFiles.length, 'изображение', 'изображения', 'изображений')}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedIndices(selectedIndices.size === pendingFiles.length ? new Set() : new Set(pendingFiles.map((_, i) => i)))}
+                  className="text-[13px] text-accent underline"
+                >
+                  {selectedIndices.size === pendingFiles.length ? 'Снять выделение' : 'Выбрать все'}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-4 min-[480px]:grid-cols-5 gap-2">
+                {pendingPreviews.map((src, i) => {
+                  const selected = selectedIndices.has(i);
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => toggleSelected(i)}
+                      className={`relative aspect-square rounded-[var(--radius-md)] overflow-hidden ${selected ? 'ring-2 ring-accent' : ''}`}
+                    >
+                      <img src={src} alt="" className="w-full h-full object-cover" />
+                      {selected && (
+                        <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-accent text-on-accent flex items-center justify-center">
+                          <Icon name="Check" size={10} />
+                        </span>
+                      )}
+                      {pendingEmotions[i] && (
+                        <span className="absolute bottom-0 inset-x-0 bg-surface/90 text-[10px] leading-tight text-center truncate px-0.5 py-0.5">
+                          {emotionLabel(pendingEmotions[i]!)}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="text-[13px] text-text-secondary">
+                {selectedIndices.size > 0 ? `Выбрано: ${selectedIndices.size} — нажмите эмоцию, чтобы присвоить` : 'Выделите несколько фото, затем нажмите эмоцию — она присвоится всем выбранным.'}
               </div>
               <div className="flex gap-2 flex-wrap">
                 {emotionChoices.map((e) => (
-                  <Chip key={e} selected={pendingEmotion === e} onClick={() => setPendingEmotion(e)}>
+                  <Chip key={e} selected={false} onClick={() => assignToSelected(e)}>
                     {emotionLabel(e)}
                   </Chip>
                 ))}
               </div>
-              <Input value={pendingEmotion} onChange={setPendingEmotion} placeholder="Или впишите свою эмоцию" />
+              <div className="flex items-center gap-2">
+                <Input value={assignEmotion} onChange={setAssignEmotion} placeholder="Своя эмоция" />
+                <Button size="sm" variant="secondary" onClick={() => assignToSelected(assignEmotion)} disabled={!assignEmotion.trim() || selectedIndices.size === 0}>
+                  Присвоить
+                </Button>
+              </div>
+
               {uploadError && <div className="text-negative text-[13px]">{uploadError}</div>}
+              {pendingEmotions.some((e) => !e) && (
+                <div className="text-meta">Без эмоции осталось: {pendingEmotions.filter((e) => !e).length}</div>
+              )}
               <div className="flex gap-2">
-                <Button size="sm" onClick={confirmBatchUpload} disabled={uploadingBatch || !pendingEmotion.trim()}>
+                <Button size="sm" onClick={confirmBatchUpload} disabled={uploadingBatch || pendingEmotions.some((e) => !e)}>
                   {uploadingBatch ? 'Загружаем…' : 'Добавить'}
                 </Button>
-                <Button size="sm" variant="ghost" onClick={() => setPendingFiles(null)}>
+                <Button size="sm" variant="ghost" onClick={clearPendingBatch}>
                   Отмена
                 </Button>
               </div>
