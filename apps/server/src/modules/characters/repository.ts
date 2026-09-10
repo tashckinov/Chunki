@@ -13,6 +13,7 @@ export interface CharacterImageRow {
   character_id: string;
   emotion: string;
   image_url: string;
+  description: string | null;
   position: number;
   created_at: Date;
 }
@@ -37,7 +38,7 @@ export async function listCharacters(): Promise<CharacterWithImages[]> {
     `SELECT id, name, full_body_image_url, position, created_at FROM characters ORDER BY position, name`,
   );
   const { rows: imageRows } = await pool.query<CharacterImageRow>(
-    `SELECT id, character_id, emotion, image_url, position, created_at FROM character_images ORDER BY character_id, emotion, position`,
+    `SELECT id, character_id, emotion, image_url, description, position, created_at FROM character_images ORDER BY character_id, emotion, position`,
   );
   return groupByCharacter(characterRows, imageRows);
 }
@@ -49,7 +50,7 @@ export async function findCharacterById(id: string): Promise<CharacterWithImages
   );
   if (!characterRows[0]) return null;
   const { rows: imageRows } = await pool.query<CharacterImageRow>(
-    `SELECT id, character_id, emotion, image_url, position, created_at FROM character_images WHERE character_id = $1 ORDER BY emotion, position`,
+    `SELECT id, character_id, emotion, image_url, description, position, created_at FROM character_images WHERE character_id = $1 ORDER BY emotion, position`,
     [id],
   );
   return { character: characterRows[0], images: imageRows };
@@ -104,34 +105,57 @@ export async function deleteCharacter(id: string): Promise<boolean> {
 }
 
 /** Appends a new image at the end of its (character, emotion) group. */
-export async function addCharacterImage(characterId: string, input: { emotion: string; imageUrl: string }): Promise<CharacterImageRow> {
+export async function addCharacterImage(characterId: string, input: { emotion: string; imageUrl: string; description?: string | null }): Promise<CharacterImageRow> {
   const { rows: posRows } = await pool.query<{ next_position: number }>(
     `SELECT COALESCE(MAX(position), -1) + 1 AS next_position FROM character_images WHERE character_id = $1 AND emotion = $2`,
     [characterId, input.emotion],
   );
   const { rows } = await pool.query<CharacterImageRow>(
-    `INSERT INTO character_images (character_id, emotion, image_url, position) VALUES ($1, $2, $3, $4)
-     RETURNING id, character_id, emotion, image_url, position, created_at`,
-    [characterId, input.emotion, input.imageUrl, posRows[0].next_position],
+    `INSERT INTO character_images (character_id, emotion, image_url, description, position) VALUES ($1, $2, $3, $4, $5)
+     RETURNING id, character_id, emotion, image_url, description, position, created_at`,
+    [characterId, input.emotion, input.imageUrl, input.description ?? null, posRows[0].next_position],
   );
   return rows[0];
 }
 
+export interface CharacterImagePatch {
+  emotion?: string;
+  description?: string | null;
+}
+
 /**
- * Relabels an image to a different emotion, appending it at the end of the
- * target group — this is what "drag a thumbnail into a different emotion's
- * section" (spec's "moved to a different emotion") does under the hood; no
- * separate move-vs-relabel distinction needed since emotion is just a label
- * column, not a separate entity.
+ * Generalized image patch: relabeling to a different emotion appends the
+ * image at the end of the target group — this is what "drag a thumbnail
+ * into a different emotion's section" does under the hood, no separate
+ * move-vs-relabel distinction needed since emotion is just a label column.
+ * A description-only patch never touches emotion/position.
  */
-export async function moveCharacterImageToEmotion(id: string, emotion: string): Promise<CharacterImageRow | null> {
+export async function updateCharacterImage(id: string, patch: CharacterImagePatch): Promise<CharacterImageRow | null> {
+  const values: unknown[] = [id];
+  const sets: string[] = [];
+  if (patch.description !== undefined) {
+    values.push(patch.description);
+    sets.push(`description = $${values.length}`);
+  }
+  if (patch.emotion !== undefined) {
+    values.push(patch.emotion);
+    const emotionParam = values.length;
+    sets.push(`emotion = $${emotionParam}`);
+    sets.push(
+      `position = (SELECT COALESCE(MAX(position), -1) + 1 FROM character_images WHERE character_id = (SELECT character_id FROM character_images WHERE id = $1) AND emotion = $${emotionParam})`,
+    );
+  }
+  if (sets.length === 0) {
+    const { rows } = await pool.query<CharacterImageRow>(
+      `SELECT id, character_id, emotion, image_url, description, position, created_at FROM character_images WHERE id = $1`,
+      [id],
+    );
+    return rows[0] ?? null;
+  }
   const { rows } = await pool.query<CharacterImageRow>(
-    `UPDATE character_images
-     SET emotion = $2,
-         position = (SELECT COALESCE(MAX(position), -1) + 1 FROM character_images WHERE character_id = (SELECT character_id FROM character_images WHERE id = $1) AND emotion = $2)
-     WHERE id = $1
-     RETURNING id, character_id, emotion, image_url, position, created_at`,
-    [id, emotion],
+    `UPDATE character_images SET ${sets.join(', ')} WHERE id = $1
+     RETURNING id, character_id, emotion, image_url, description, position, created_at`,
+    values,
   );
   return rows[0] ?? null;
 }

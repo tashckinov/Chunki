@@ -19,7 +19,7 @@ vi.mock('./service.js', () => ({
   updateCharacter: vi.fn(),
   deleteCharacter: vi.fn(),
   addCharacterImage: vi.fn(),
-  moveCharacterImageToEmotion: vi.fn(),
+  updateCharacterImage: vi.fn(),
   reorderCharacterImages: vi.fn(),
   deleteCharacterImage: vi.fn(),
   findChunksUsingCharacter: vi.fn(),
@@ -253,8 +253,8 @@ describe('POST /api/admin/characters/:id/images', () => {
   it('uploads multiple files under one shared emotion and creates one image row each', async () => {
     vi.mocked(session.getSession).mockResolvedValue(adminSession);
     vi.mocked(service.addCharacterImage)
-      .mockResolvedValueOnce({ id: 'img-1', emotion: 'happy', imageUrl: '/uploads/characters/a.jpg', position: 0 })
-      .mockResolvedValueOnce({ id: 'img-2', emotion: 'happy', imageUrl: '/uploads/characters/b.jpg', position: 1 });
+      .mockResolvedValueOnce({ id: 'img-1', emotion: 'happy', imageUrl: '/uploads/characters/a.jpg', description: null, position: 0 })
+      .mockResolvedValueOnce({ id: 'img-2', emotion: 'happy', imageUrl: '/uploads/characters/b.jpg', description: null, position: 1 });
 
     const body = buildMultipartBody([
       fieldPart('emotion', 'happy'),
@@ -296,8 +296,8 @@ describe('POST /api/admin/characters/:id/images', () => {
 describe('PATCH /api/admin/characters/:id/images/:imageId', () => {
   it('moves an image to a different emotion', async () => {
     vi.mocked(session.getSession).mockResolvedValue(adminSession);
-    const moved = { id: imageId, emotion: 'confused', imageUrl: '/uploads/characters/a.jpg', position: 2 };
-    vi.mocked(service.moveCharacterImageToEmotion).mockResolvedValue(moved);
+    const moved = { id: imageId, emotion: 'confused', imageUrl: '/uploads/characters/a.jpg', description: null, position: 2 };
+    vi.mocked(service.updateCharacterImage).mockResolvedValue(moved);
 
     const res = await app.inject({
       method: 'PATCH',
@@ -308,12 +308,43 @@ describe('PATCH /api/admin/characters/:id/images/:imageId', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ image: moved });
-    expect(service.moveCharacterImageToEmotion).toHaveBeenCalledWith(imageId, 'confused');
+    expect(service.updateCharacterImage).toHaveBeenCalledWith(imageId, { emotion: 'confused' });
+  });
+
+  it('sets a description without requiring emotion', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(adminSession);
+    const updated = { id: imageId, emotion: 'happy', imageUrl: '/uploads/characters/a.jpg', description: 'good', position: 0 };
+    vi.mocked(service.updateCharacterImage).mockResolvedValue(updated);
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/admin/characters/${validId}/images/${imageId}`,
+      cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' },
+      payload: { description: 'good' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ image: updated });
+    expect(service.updateCharacterImage).toHaveBeenCalledWith(imageId, { description: 'good' });
+  });
+
+  it('rejects a patch with neither emotion nor description', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(adminSession);
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/admin/characters/${validId}/images/${imageId}`,
+      cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' },
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(service.updateCharacterImage).not.toHaveBeenCalled();
   });
 
   it('returns 404 for an unknown image', async () => {
     vi.mocked(session.getSession).mockResolvedValue(adminSession);
-    vi.mocked(service.moveCharacterImageToEmotion).mockResolvedValue(null);
+    vi.mocked(service.updateCharacterImage).mockResolvedValue(null);
 
     const res = await app.inject({
       method: 'PATCH',

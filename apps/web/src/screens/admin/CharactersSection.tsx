@@ -20,6 +20,7 @@ import {
   uploadFullBodyImage,
   uploadCharacterImages,
   moveCharacterImageToEmotion,
+  updateCharacterImageDescription,
   reorderCharacterImages,
   deleteCharacterImage,
   fetchCharacterUsage,
@@ -114,42 +115,55 @@ function EmotionImageTile({
   image,
   onMove,
   onDelete,
+  onEditDescription,
 }: {
   image: CharacterImage;
   onMove: () => void;
   onDelete: () => void;
+  onEditDescription: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: image.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
 
   return (
-    <div ref={setNodeRef} style={style} className="relative flex-none w-20 h-20 rounded-[var(--radius-md)] overflow-hidden bg-surface-subtle">
-      <img src={apiUrl(image.imageUrl)} alt="" className="w-full h-full object-cover" />
-      <button
-        type="button"
-        {...attributes}
-        {...listeners}
-        className="absolute top-1 left-1 w-5 h-5 rounded-full bg-surface/90 flex items-center justify-center touch-none cursor-grab text-text-secondary"
-        aria-label="Перетащить"
-      >
-        <Icon name="Grip" size={12} />
-      </button>
-      <button
-        type="button"
-        onClick={onMove}
-        className="absolute bottom-1 left-1 w-5 h-5 rounded-full bg-surface/90 flex items-center justify-center text-[11px] text-text-secondary"
-        aria-label="Переместить в другую эмоцию"
-      >
-        ⇄
-      </button>
-      <button
-        type="button"
-        onClick={onDelete}
-        className="absolute top-1 right-1 w-5 h-5 rounded-full bg-surface/90 flex items-center justify-center text-text-secondary"
-        aria-label="Удалить изображение"
-      >
-        <Icon name="Close" size={12} />
-      </button>
+    <div className="flex flex-col items-center gap-0.5 flex-none w-20">
+      <div ref={setNodeRef} style={style} className="relative w-20 h-20 rounded-[var(--radius-md)] overflow-hidden bg-surface-subtle">
+        <img src={apiUrl(image.imageUrl)} alt="" className="w-full h-full object-cover" />
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          className="absolute top-1 left-1 w-5 h-5 rounded-full bg-surface/90 flex items-center justify-center touch-none cursor-grab text-text-secondary"
+          aria-label="Перетащить"
+        >
+          <Icon name="Grip" size={12} />
+        </button>
+        <button
+          type="button"
+          onClick={onMove}
+          className="absolute bottom-1 left-1 w-5 h-5 rounded-full bg-surface/90 flex items-center justify-center text-[11px] text-text-secondary"
+          aria-label="Переместить в другую эмоцию"
+        >
+          ⇄
+        </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          className="absolute top-1 right-1 w-5 h-5 rounded-full bg-surface/90 flex items-center justify-center text-text-secondary"
+          aria-label="Удалить изображение"
+        >
+          <Icon name="Close" size={12} />
+        </button>
+        <button
+          type="button"
+          onClick={onEditDescription}
+          className="absolute bottom-1 right-1 w-5 h-5 rounded-full bg-surface/90 flex items-center justify-center text-text-secondary"
+          aria-label="Описание изображения"
+        >
+          <Icon name="Edit" size={11} />
+        </button>
+      </div>
+      {image.description && <div className="text-[10px] text-text-tertiary text-center truncate w-full">{image.description}</div>}
     </div>
   );
 }
@@ -160,12 +174,14 @@ function EmotionGroup({
   onReordered,
   onMove,
   onDelete,
+  onEditDescription,
 }: {
   emotion: string;
   images: CharacterImage[];
   onReordered: (emotion: string, imageIds: string[]) => void;
   onMove: (image: CharacterImage) => void;
   onDelete: (image: CharacterImage) => void;
+  onEditDescription: (image: CharacterImage) => void;
 }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -187,7 +203,7 @@ function EmotionGroup({
         <SortableContext items={images.map((i) => i.id)} strategy={horizontalListSortingStrategy}>
           <div className="flex gap-2 overflow-x-auto pb-1">
             {images.map((image) => (
-              <EmotionImageTile key={image.id} image={image} onMove={() => onMove(image)} onDelete={() => onDelete(image)} />
+              <EmotionImageTile key={image.id} image={image} onMove={() => onMove(image)} onDelete={() => onDelete(image)} onEditDescription={() => onEditDescription(image)} />
             ))}
           </div>
         </SortableContext>
@@ -260,9 +276,17 @@ function CharacterDetailView({
   const [moveEmotion, setMoveEmotion] = useState('');
   const [moveError, setMoveError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [editingDescriptionImage, setEditingDescriptionImage] = useState<CharacterImage | null>(null);
+  const [descriptionDraft, setDescriptionDraft] = useState('');
+  const [descriptionSaving, setDescriptionSaving] = useState(false);
+  const [descriptionError, setDescriptionError] = useState<string | null>(null);
 
   useEffect(() => setName(character.name), [character.id, character.name]);
   useEffect(() => setMoveEmotion(movingImage?.emotion ?? ''), [movingImage]);
+  useEffect(() => {
+    setDescriptionDraft(editingDescriptionImage?.description ?? '');
+    setDescriptionError(null);
+  }, [editingDescriptionImage]);
   // Revokes the previous batch's object URLs whenever a new one replaces them, and on unmount.
   useEffect(() => () => pendingPreviews.forEach((url) => URL.revokeObjectURL(url)), [pendingPreviews]);
 
@@ -377,6 +401,21 @@ function CharacterDetailView({
     }
   }
 
+  async function confirmDescription() {
+    if (!editingDescriptionImage) return;
+    setDescriptionSaving(true);
+    setDescriptionError(null);
+    try {
+      const updated = await updateCharacterImageDescription(character.id, editingDescriptionImage.id, descriptionDraft.trim() || null);
+      onUpdate({ ...character, images: character.images.map((i) => (i.id === updated.id ? updated : i)) });
+      setEditingDescriptionImage(null);
+    } catch {
+      setDescriptionError('Не удалось сохранить описание.');
+    } finally {
+      setDescriptionSaving(false);
+    }
+  }
+
   async function handleDeleteImage(image: CharacterImage) {
     setDeleteError(null);
     try {
@@ -452,7 +491,15 @@ function CharacterDetailView({
             {deleteError && <div className="text-negative text-[13px]">{deleteError}</div>}
             {groups.length === 0 && <div className="text-body-secondary text-[13.5px]">Пока нет ни одной эмоции — добавьте изображения ниже.</div>}
             {groups.map(([emotion, images]) => (
-              <EmotionGroup key={emotion} emotion={emotion} images={images} onReordered={handleReordered} onMove={setMovingImage} onDelete={handleDeleteImage} />
+              <EmotionGroup
+                key={emotion}
+                emotion={emotion}
+                images={images}
+                onReordered={handleReordered}
+                onMove={setMovingImage}
+                onDelete={handleDeleteImage}
+                onEditDescription={setEditingDescriptionImage}
+              />
             ))}
           </div>
 
@@ -577,6 +624,17 @@ function CharacterDetailView({
           {moveError && <div className="text-negative text-[13px]">{moveError}</div>}
           <Button size="sm" onClick={confirmMove} disabled={!moveEmotion.trim()}>
             Переместить
+          </Button>
+        </div>
+      </Sheet>
+
+      <Sheet open={!!editingDescriptionImage} onOpenChange={(open) => !open && setEditingDescriptionImage(null)} title="Описание изображения">
+        <div className="flex flex-col gap-3">
+          <div className="text-meta">Помогает ИИ выбрать нужный вариант, когда у одной эмоции несколько изображений (например «good» и «bad»).</div>
+          <Input value={descriptionDraft} onChange={setDescriptionDraft} placeholder="Например: искренне рада" />
+          {descriptionError && <div className="text-negative text-[13px]">{descriptionError}</div>}
+          <Button size="sm" onClick={confirmDescription} disabled={descriptionSaving}>
+            {descriptionSaving ? 'Сохраняем…' : 'Сохранить'}
           </Button>
         </div>
       </Sheet>

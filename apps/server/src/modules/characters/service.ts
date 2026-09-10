@@ -5,13 +5,14 @@ import {
   updateCharacter as repoUpdateCharacter,
   deleteCharacter as repoDeleteCharacter,
   addCharacterImage as repoAddCharacterImage,
-  moveCharacterImageToEmotion as repoMoveCharacterImageToEmotion,
+  updateCharacterImage as repoUpdateCharacterImage,
   reorderCharacterImages as repoReorderCharacterImages,
   deleteCharacterImage as repoDeleteCharacterImage,
   type CharacterRow,
   type CharacterImageRow,
   type CharacterWithImages,
   type CharacterPatch,
+  type CharacterImagePatch,
 } from './repository.js';
 import { findChunksUsingCharacter as findChunksUsingCharacterDialogues, type ChunkUsingCharacter } from '../dialogues/service.js';
 
@@ -19,6 +20,7 @@ export interface CharacterImageSummary {
   id: string;
   emotion: string;
   imageUrl: string;
+  description: string | null;
   position: number;
 }
 
@@ -31,7 +33,7 @@ export interface CharacterSummary {
 }
 
 function toImageSummary(row: CharacterImageRow): CharacterImageSummary {
-  return { id: row.id, emotion: row.emotion, imageUrl: row.image_url, position: row.position };
+  return { id: row.id, emotion: row.emotion, imageUrl: row.image_url, description: row.description, position: row.position };
 }
 
 function toCharacterSummary({ character, images }: CharacterWithImages): CharacterSummary {
@@ -73,12 +75,12 @@ export async function deleteCharacter(id: string): Promise<boolean> {
   return repoDeleteCharacter(id);
 }
 
-export async function addCharacterImage(characterId: string, input: { emotion: string; imageUrl: string }): Promise<CharacterImageSummary> {
+export async function addCharacterImage(characterId: string, input: { emotion: string; imageUrl: string; description?: string | null }): Promise<CharacterImageSummary> {
   return toImageSummary(await repoAddCharacterImage(characterId, input));
 }
 
-export async function moveCharacterImageToEmotion(id: string, emotion: string): Promise<CharacterImageSummary | null> {
-  const row = await repoMoveCharacterImageToEmotion(id, emotion);
+export async function updateCharacterImage(id: string, patch: CharacterImagePatch): Promise<CharacterImageSummary | null> {
+  const row = await repoUpdateCharacterImage(id, patch);
   return row ? toImageSummary(row) : null;
 }
 

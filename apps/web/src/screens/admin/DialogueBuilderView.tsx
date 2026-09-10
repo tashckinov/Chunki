@@ -8,12 +8,15 @@ import { emotionLabel, groupImagesByEmotion } from '../../lib/characterEmotions'
 import { fetchCharacters, type Character } from '../../lib/characters';
 import { fetchAdminDialogue, saveAdminDialogue, deleteAdminDialogue, type AdminDialogueParticipant } from '../../lib/dialogues';
 import type { AdminChunk } from '../../lib/admin';
+import { buildDialogueAiPrompt } from '../../lib/dialogueAiPrompt';
+import { parseDialogueImport } from '../../lib/dialogueImport';
 
 /** The builder only ever reads id/text/translation — any caller with just these three can open it (e.g. a chunk reached via a character's usage list, which doesn't carry the rest of AdminChunk's fields). */
 export type DialogueBuilderChunk = Pick<AdminChunk, 'id' | 'text' | 'translation'>;
 import { NavigationBar } from '../../components/ui/NavigationBar';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
+import { Textarea } from '../../components/ui/Textarea';
 import { IconButton } from '../../components/ui/IconButton';
 import { Icon } from '../../components/ui/Icon';
 import { Sheet } from '../../components/ui/Sheet';
@@ -43,6 +46,20 @@ function SaveButton({ onClick, disabled, saving, justSaved }: { onClick: () => v
       {saving ? 'Сохраняем…' : justSaved ? 'Сохранено' : 'Сохранить'}
     </button>
   );
+}
+
+/** Copies an AI instruction (chunk + full character/emotion/image library) to the clipboard, for composing a dialogue in an external AI chat. */
+function CopyPromptButton({ chunk, characters }: { chunk: DialogueBuilderChunk; characters: Character[] | null }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    if (!characters) return;
+    await navigator.clipboard.writeText(buildDialogueAiPrompt(chunk, characters));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  return <IconButton icon={copied ? 'Check' : 'Copy'} label="Скопировать инструкцию для ИИ" onClick={copy} disabled={!characters} />;
 }
 
 function CharacterPickerStep({ characters, onPick }: { characters: Character[]; onPick: (characterId: string) => void }) {
@@ -168,6 +185,9 @@ export function DialogueBuilderView({ chunk, onBack }: { chunk: DialogueBuilderC
   const [mode, setMode] = useState<'editor' | 'preview'>('editor');
   const [wizard, setWizard] = useState<WizardState | null>(null);
   const [sceneSettingsOpen, setSceneSettingsOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [importError, setImportError] = useState<string | null>(null);
 
   useEffect(() => {
     setLoaded(false);
@@ -248,6 +268,22 @@ export function DialogueBuilderView({ chunk, onBack }: { chunk: DialogueBuilderC
     setParticipants((p) => p.map((x) => (x.characterId === characterId ? { ...x, side } : x)));
   }
 
+  /** Loads a pasted AI reply into the same local state the manual wizard populates, then flips to Предпросмотр — "Сохранить" (below) is the existing, already-validated approval step. */
+  function applyImport() {
+    const result = parseDialogueImport(importText, characters ?? []);
+    if (result.kind === 'error') {
+      setImportError(result.message);
+      return;
+    }
+    if (messages.length > 0 && !window.confirm('Заменить текущий диалог вставленным?')) return;
+    setParticipants(result.dialogue.participants);
+    setMessages(result.dialogue.messages.map((m) => ({ id: crypto.randomUUID(), ...m })));
+    setMode('preview');
+    setImportOpen(false);
+    setImportText('');
+    setImportError(null);
+  }
+
   async function save() {
     setSaving(true);
     setSaveError(null);
@@ -307,7 +343,17 @@ export function DialogueBuilderView({ chunk, onBack }: { chunk: DialogueBuilderC
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      <NavigationBar title={chunk.text} onBack={onBack} trailing={<SaveButton onClick={save} saving={saving} justSaved={justSaved} disabled={saving || messages.length === 0} />} />
+      <NavigationBar
+        title={chunk.text}
+        onBack={onBack}
+        trailing={
+          <div className="flex items-center gap-1">
+            <CopyPromptButton chunk={chunk} characters={characters} />
+            <IconButton icon="Paste" label="Вставить диалог от ИИ" onClick={() => setImportOpen(true)} />
+            <SaveButton onClick={save} saving={saving} justSaved={justSaved} disabled={saving || messages.length === 0} />
+          </div>
+        }
+      />
       <div className="px-5 pt-1 pb-2 text-meta">
         Диалог для «{chunk.text}» / {chunk.translation}
       </div>
@@ -442,6 +488,17 @@ export function DialogueBuilderView({ chunk, onBack }: { chunk: DialogueBuilderC
               </div>
             );
           })}
+        </div>
+      </Sheet>
+
+      <Sheet open={importOpen} onOpenChange={(open) => !open && setImportOpen(false)} title="Вставить диалог от ИИ">
+        <div className="flex flex-col gap-3">
+          <div className="text-[13.5px] text-body-secondary">Вставьте JSON-ответ ИИ (полученный по скопированной инструкции). После вставки диалог откроется в предпросмотре — сохраните его, если всё устраивает.</div>
+          <Textarea value={importText} onChange={(v) => { setImportText(v); setImportError(null); }} placeholder='{"participants": [...], "messages": [...]}' rows={10} />
+          {importError && <div className="text-negative text-[13px]">{importError}</div>}
+          <Button size="sm" onClick={applyImport} disabled={!importText.trim()}>
+            Вставить и посмотреть
+          </Button>
         </div>
       </Sheet>
     </div>

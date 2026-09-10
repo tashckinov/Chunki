@@ -13,7 +13,7 @@ import {
   updateCharacter,
   deleteCharacter,
   addCharacterImage,
-  moveCharacterImageToEmotion,
+  updateCharacterImage,
   reorderCharacterImages,
   deleteCharacterImage,
   findChunksUsingCharacter,
@@ -31,7 +31,9 @@ const imageParamSchema = z.object({ id: z.string().uuid(), imageId: z.string().u
 
 const characterCreateSchema = z.object({ name: z.string().min(1) });
 const characterPatchSchema = z.object({ name: z.string().min(1).optional() });
-const imagePatchSchema = z.object({ emotion: z.string().min(1) });
+const imagePatchSchema = z
+  .object({ emotion: z.string().min(1).optional(), description: z.string().max(300).nullable().optional() })
+  .refine((v) => v.emotion !== undefined || v.description !== undefined, { message: 'at least one field required' });
 const reorderSchema = z.object({ emotion: z.string().min(1), imageIds: z.array(z.string().uuid()).min(1) });
 
 // JPEG has no alpha channel — sharp flattens transparent source pixels onto
@@ -215,7 +217,7 @@ export const charactersRoutes: FastifyPluginAsync = async (app) => {
       reply.code(400);
       return { error: 'invalid_request' };
     }
-    const image = await moveCharacterImageToEmotion(params.data.imageId, body.data.emotion);
+    const image = await updateCharacterImage(params.data.imageId, body.data);
     if (!image) {
       reply.code(404);
       return { error: 'not_found' };

@@ -4,6 +4,7 @@ export interface CharacterImage {
   id: string;
   emotion: string;
   imageUrl: string;
+  description: string | null;
   position: number;
 }
 
@@ -53,6 +54,12 @@ export async function uploadCharacterImages(characterId: string, emotion: string
 /** Relabels an image to a different emotion — how "drag into a different emotion group" persists. */
 export async function moveCharacterImageToEmotion(characterId: string, imageId: string, emotion: string): Promise<CharacterImage> {
   const data = await patchJson<{ image: CharacterImage }>(`/api/admin/characters/${characterId}/images/${imageId}`, { emotion });
+  return data.image;
+}
+
+/** Lets an emotion with several image variants (e.g. "good"/"bad") be told apart by a text description an AI-generated dialogue prompt can read. */
+export async function updateCharacterImageDescription(characterId: string, imageId: string, description: string | null): Promise<CharacterImage> {
+  const data = await patchJson<{ image: CharacterImage }>(`/api/admin/characters/${characterId}/images/${imageId}`, { description });
   return data.image;
 }
 

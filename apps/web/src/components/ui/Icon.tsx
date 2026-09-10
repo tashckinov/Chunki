@@ -21,6 +21,9 @@ import {
   Menu,
   Drama,
   GripVertical,
+  Copy,
+  ClipboardPaste,
+  Pencil,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -47,6 +50,9 @@ const ICONS: Record<string, LucideIcon> = {
   Menu,
   Characters: Drama,
   Grip: GripVertical,
+  Copy,
+  Paste: ClipboardPaste,
+  Edit: Pencil,
 };
 
 export type IconName = keyof typeof ICONS;
