@@ -45,11 +45,9 @@ export function DialoguePlayback({
     <div onClick={() => setRevealed(messages.length)} className="flex flex-col gap-4">
       {messages.slice(0, revealed).map((m, i) => (
         <div key={i} className={`flex items-end gap-3 anim-rise max-w-[92%] ${m.side === 'right' ? 'flex-row-reverse self-end' : 'self-start'}`}>
-          <img
-            src={apiUrl(m.imageUrl)}
-            alt={m.characterName}
-            className="w-24 h-24 rounded-[var(--radius-lg)] object-cover object-top flex-none bg-surface-subtle shadow-[var(--shadow-sm)]"
-          />
+          <div className="w-24 h-24 flex-none rounded-[var(--radius-lg)] bg-accent-subtle border border-border shadow-[var(--shadow-xs)] overflow-hidden p-1 flex items-center justify-center">
+            <img src={apiUrl(m.imageUrl)} alt={m.characterName} className="max-w-full max-h-full object-contain object-top" />
+          </div>
           <div className="flex flex-col gap-1 min-w-0">
             <div className={`text-meta px-1 ${m.side === 'right' ? 'text-right' : ''}`}>{m.characterName}</div>
             <div className={`rounded-[var(--radius-lg)] px-4 py-3 ${m.side === 'right' ? 'bg-accent text-on-accent' : 'bg-surface-subtle text-text'}`}>

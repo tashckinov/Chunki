@@ -8,7 +8,10 @@ export function highlightTarget(text: string, targetText?: string | null): React
   return (
     <>
       {text.slice(0, idx)}
-      <mark className="bg-accent-subtle text-inherit rounded px-0.5">{text.slice(idx, idx + targetText.length)}</mark>
+      {/* Fixed dark text, not text-inherit — bg-accent-subtle is always light, but the parent
+          bubble's own text color (e.g. white on the right/accent bubble) would otherwise be
+          inherited here too, making the highlighted text invisible against its own background. */}
+      <mark className="bg-accent-subtle text-text rounded px-0.5">{text.slice(idx, idx + targetText.length)}</mark>
       {text.slice(idx + targetText.length)}
     </>
   );
