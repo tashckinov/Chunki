@@ -1,12 +1,12 @@
 import type { CharacterImage } from './characters';
 
 export const EMOTION_LABELS: Record<string, string> = {
-  happy: 'Счастье',
-  laughing: 'Смех',
-  confused: 'Растерянность',
-  surprised: 'Удивление',
-  neutral: 'Нейтрально',
-  annoyed: 'Раздражение',
+  happy: 'Happy',
+  laughing: 'Laughing',
+  confused: 'Confused',
+  surprised: 'Surprised',
+  neutral: 'Neutral',
+  annoyed: 'Annoyed',
 };
 export const EMOTION_SUGGESTIONS = ['happy', 'laughing', 'confused', 'surprised', 'neutral', 'annoyed'];
 
