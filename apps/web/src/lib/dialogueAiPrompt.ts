@@ -2,13 +2,8 @@ import type { Character } from './characters';
 import type { DialogueBuilderChunk } from '../screens/admin/DialogueBuilderView';
 import { groupImagesByEmotion } from './characterEmotions';
 
-/**
- * One self-contained instruction block an admin can paste into an external
- * AI chat: which chunk the dialogue is for, the full character library, and
- * every emotion image's id (+ description, when set) so the AI can pick a
- * specific character/emotion/image combination by id rather than guessing.
- */
-export function buildDialogueAiPrompt(chunk: DialogueBuilderChunk, characters: Character[]): string {
+/** The character-library portion shared by both the single-chunk and bulk prompts: every emotion image's id (+ description, when set) so the AI can pick a specific combination by id rather than guessing. */
+export function buildCharacterLibraryBlock(characters: Character[]): string {
   const characterBlocks = characters.map((c) => {
     if (c.images.length === 0) {
       return `- ${c.name} (characterId: ${c.id}) — нет загруженных эмоций, использовать нельзя.`;
@@ -28,14 +23,23 @@ export function buildDialogueAiPrompt(chunk: DialogueBuilderChunk, characters: C
     });
     return `- ${c.name} (characterId: ${c.id})\n${lines.join('\n')}`;
   });
+  return characterBlocks.join('\n');
+}
 
+/**
+ * One self-contained instruction block an admin can paste into an external
+ * AI chat: which chunk the dialogue is for, the full character library, and
+ * every emotion image's id (+ description, when set) so the AI can pick a
+ * specific character/emotion/image combination by id rather than guessing.
+ */
+export function buildDialogueAiPrompt(chunk: DialogueBuilderChunk, characters: Character[]): string {
   return `Ты помогаешь создать короткий диалог-комикс для приложения изучения английского языка.
 
 Чанк (фраза, которую диалог должен естественно использовать):
 "${chunk.text}" — "${chunk.translation}"
 
 Библиотека персонажей (используй только эти id):
-${characterBlocks.join('\n')}
+${buildCharacterLibraryBlock(characters)}
 
 Задача: придумай короткий диалог (2-6 реплик) между 1-3 персонажами из списка выше, в котором кто-то естественно использует фразу "${chunk.text}". У каждого персонажа в диалоге должна быть сторона экрана: "left" или "right".
 
@@ -48,6 +52,40 @@ ${characterBlocks.join('\n')}
 Правила:
 - Каждый characterId, использованный в messages, обязательно должен присутствовать в participants.
 - characterImageId обязательно должен принадлежать тому же персонажу, что указан в этом сообщении (смотри список изображений персонажа выше).
+- side — только "left" или "right".
+- Не добавляй никаких полей, кроме перечисленных.`;
+}
+
+/**
+ * Same idea as buildDialogueAiPrompt, but for an entire collection at once —
+ * one dialogue per chunk, in a single copy/paste round trip. Lets an admin
+ * redo every chunk's comic with a newly-expanded cast without repeating the
+ * copy/paste cycle chunk by chunk.
+ */
+export function buildBulkDialogueAiPrompt(chunks: DialogueBuilderChunk[], characters: Character[]): string {
+  const chunkLines = chunks.map((c) => `- chunkId ${c.id}: "${c.text}" — "${c.translation}"`).join('\n');
+
+  return `Ты помогаешь создать короткие диалоги-комиксы для приложения изучения английского языка — по одному диалогу на каждый чанк ниже.
+
+Чанки (для каждого нужен отдельный диалог, использующий именно его фразу):
+${chunkLines}
+
+Библиотека персонажей (используй только эти id):
+${buildCharacterLibraryBlock(characters)}
+
+Задача: для каждого чанка придумай короткий диалог (2-6 реплик) между 1-3 персонажами из списка выше, в котором кто-то естественно использует фразу этого чанка. У каждого персонажа в диалоге должна быть сторона экрана: "left" или "right". Можно свободно переиспользовать одних и тех же персонажей в разных чанках.
+
+Ответь СТРОГО валидным JSON, без markdown-обёртки и без каких-либо пояснений до или после, в точности в этом формате:
+{
+  "dialogues": [
+    { "chunkId": "...", "participants": [{ "characterId": "...", "side": "left" }], "messages": [{ "characterId": "...", "characterImageId": "...", "text": "..." }] }
+  ]
+}
+
+Правила:
+- Один объект в dialogues на каждый чанк из списка выше (используй его chunkId как есть).
+- Каждый characterId, использованный в messages, обязательно должен присутствовать в participants этого же диалога.
+- characterImageId обязательно должен принадлежать тому же персонажу, что указан в этом сообщении.
 - side — только "left" или "right".
 - Не добавляй никаких полей, кроме перечисленных.`;
 }

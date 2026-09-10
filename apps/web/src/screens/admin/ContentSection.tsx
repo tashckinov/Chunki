@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { plural } from '../../lib/plural';
 import { NavigationBar } from '../../components/ui/NavigationBar';
 import { Button } from '../../components/ui/Button';
@@ -24,10 +24,10 @@ import {
 } from '../../lib/admin';
 import { fetchCharacters, type Character } from '../../lib/characters';
 import { saveAdminDialogue } from '../../lib/dialogues';
-import { buildDialogueAiPrompt } from '../../lib/dialogueAiPrompt';
-import { parseDialogueImport, type ParsedDialogue } from '../../lib/dialogueImport';
+import { buildDialogueAiPrompt, buildBulkDialogueAiPrompt } from '../../lib/dialogueAiPrompt';
+import { parseDialogueImport, parseBulkDialogueImport, toPlaybackMessages, type ParsedDialogue, type BulkParsedDialogue } from '../../lib/dialogueImport';
 import { Sheet } from '../../components/ui/Sheet';
-import { DialoguePlayback, type PlaybackMessage } from '../../components/dialogue/DialoguePlayback';
+import { DialoguePlayback } from '../../components/dialogue/DialoguePlayback';
 import { DialogueBuilderView } from './DialogueBuilderView';
 
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const;
@@ -395,16 +395,7 @@ function DialogueQuickActions({ chunk, characters, onSaved }: { chunk: AdminChun
     setSaveError(null);
   }
 
-  const playbackMessages: PlaybackMessage[] = (preview?.messages ?? []).map((m) => {
-    const character = characters?.find((c) => c.id === m.characterId);
-    const image = character?.images.find((i) => i.id === m.characterImageId);
-    return {
-      characterName: character?.name ?? '?',
-      imageUrl: image?.imageUrl ?? '',
-      side: preview?.participants.find((p) => p.characterId === m.characterId)?.side ?? 'left',
-      text: m.text,
-    };
-  });
+  const playbackMessages = preview ? toPlaybackMessages(preview, characters ?? []) : [];
 
   return (
     <>
@@ -448,12 +439,161 @@ function DialogueQuickActions({ chunk, characters, onSaved }: { chunk: AdminChun
   );
 }
 
+/** Row of one entry in the bulk-import preview list — collapsed by default, expands to the full DialoguePlayback preview. */
+function BulkPreviewRow({ item, chunkText, characters }: { item: BulkParsedDialogue; chunkText: string; characters: Character[] }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="rounded-[var(--radius-md)] border border-border p-3 flex flex-col gap-2">
+      <button type="button" onClick={() => setExpanded((v) => !v)} className="pressable flex items-center justify-between gap-2 text-left">
+        <span className="text-[14px] truncate">{chunkText}</span>
+        <span className="text-meta flex-none">
+          {item.dialogue.messages.length} {plural(item.dialogue.messages.length, 'реплика', 'реплики', 'реплик')}
+        </span>
+      </button>
+      {expanded && <DialoguePlayback messages={toPlaybackMessages(item.dialogue, characters)} targetText={chunkText} autoPlay={false} />}
+    </div>
+  );
+}
+
+/**
+ * The same copy/paste-and-preview/approve loop as DialogueQuickActions, but
+ * for an entire collection at once — one copy/paste round trip covers every
+ * chunk, letting the admin redo a whole collection's comics (e.g. with a
+ * newly-expanded cast of characters) without repeating the cycle per chunk.
+ */
+function BulkDialogueAiSheet({
+  open,
+  onOpenChange,
+  collectionTitle,
+  chunks,
+  characters,
+  onSaved,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  collectionTitle: string;
+  chunks: AdminChunk[];
+  characters: Character[] | null;
+  onSaved: (chunkId: string) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [importError, setImportError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<BulkParsedDialogue[] | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveSummary, setSaveSummary] = useState<{ okCount: number; total: number; failedChunkTexts: string[] } | null>(null);
+  // Tracks which chunkIds already saved successfully so a retry after a
+  // partial failure only re-attempts the ones that actually failed.
+  const savedChunkIdsRef = useRef<Set<string>>(new Set());
+
+  async function copy() {
+    if (!characters) return;
+    await navigator.clipboard.writeText(buildBulkDialogueAiPrompt(chunks, characters));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  function handleParse() {
+    const result = parseBulkDialogueImport(importText, chunks, characters ?? []);
+    if (result.kind === 'error') {
+      setImportError(result.message);
+      return;
+    }
+    setImportError(null);
+    setSaveSummary(null);
+    savedChunkIdsRef.current = new Set();
+    setPreview(result.dialogues);
+  }
+
+  async function saveAll() {
+    if (!preview) return;
+    setSaving(true);
+    const pending = preview.filter((item) => !savedChunkIdsRef.current.has(item.chunkId));
+    const failedChunkTexts: string[] = [];
+    for (const item of pending) {
+      try {
+        await saveAdminDialogue(item.chunkId, item.dialogue);
+        savedChunkIdsRef.current.add(item.chunkId);
+        onSaved(item.chunkId);
+      } catch {
+        failedChunkTexts.push(chunks.find((c) => c.id === item.chunkId)?.text ?? item.chunkId);
+      }
+    }
+    setSaveSummary({ okCount: savedChunkIdsRef.current.size, total: preview.length, failedChunkTexts });
+    setSaving(false);
+  }
+
+  function closeSheet(next: boolean) {
+    if (next) {
+      onOpenChange(true);
+      return;
+    }
+    onOpenChange(false);
+    setImportText('');
+    setImportError(null);
+    setPreview(null);
+    setSaveSummary(null);
+    savedChunkIdsRef.current = new Set();
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={closeSheet} title={`Диалоги через ИИ — «${collectionTitle}»`}>
+      {!preview ? (
+        <div className="flex flex-col gap-3">
+          <div className="text-[13.5px] text-body-secondary">
+            Скопируйте инструкцию для всей коллекции, сгенерируйте диалоги во внешнем ИИ-чате, затем вставьте ответ ниже.
+          </div>
+          <Button size="sm" variant="secondary" onClick={copy} disabled={!characters}>
+            {copied ? 'Скопировано' : `Копировать инструкцию (${chunks.length} ${plural(chunks.length, 'чанк', 'чанка', 'чанков')})`}
+          </Button>
+          <Textarea
+            value={importText}
+            onChange={(v) => {
+              setImportText(v);
+              setImportError(null);
+            }}
+            placeholder='{"dialogues": [...]}'
+            rows={10}
+          />
+          {importError && <div className="text-negative text-[13px]">{importError}</div>}
+          <Button size="sm" onClick={handleParse} disabled={!importText.trim()}>
+            Вставить и посмотреть
+          </Button>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2 max-h-[45vh] overflow-y-auto">
+            {preview.map((item) => (
+              <BulkPreviewRow key={item.chunkId} item={item} chunkText={chunks.find((c) => c.id === item.chunkId)?.text ?? item.chunkId} characters={characters ?? []} />
+            ))}
+          </div>
+          {saveSummary && (
+            <div className={saveSummary.failedChunkTexts.length > 0 ? 'text-negative text-[13px]' : 'text-[13px] text-body-secondary'}>
+              Сохранено {saveSummary.okCount} из {saveSummary.total}
+              {saveSummary.failedChunkTexts.length > 0 ? ` — не удалось: ${saveSummary.failedChunkTexts.join(', ')}` : ''}
+            </div>
+          )}
+          <div className="flex gap-2">
+            <Button size="sm" onClick={saveAll} disabled={saving}>
+              {saving ? 'Сохраняем…' : `Сохранить все (${preview.length})`}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setPreview(null)}>
+              Назад
+            </Button>
+          </div>
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
 export function ContentSection({ onOpenMenu }: { onOpenMenu: () => void }) {
   const [collections, setCollections] = useState<AdminCollection[] | null>(null);
   const [chunks, setChunks] = useState<AdminChunk[] | null>(null);
   const [characters, setCharacters] = useState<Character[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<ContentView>({ kind: 'collections' });
+  const [bulkAiOpen, setBulkAiOpen] = useState(false);
 
   useEffect(() => {
     fetchAdminCollections()
@@ -595,11 +735,18 @@ export function ContentSection({ onOpenMenu }: { onOpenMenu: () => void }) {
                 </Button>
               </div>
             )}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <div className="text-[14.5px] font-medium">Чанки</div>
-              <Button size="sm" variant="secondary" onClick={() => setView({ kind: 'editChunk', collectionId, chunk: 'new' })}>
-                + Чанк
-              </Button>
+              <div className="flex items-center gap-2">
+                {chunks && chunks.length > 0 && (
+                  <Button size="sm" variant="ghost" onClick={() => setBulkAiOpen(true)}>
+                    Массово через ИИ
+                  </Button>
+                )}
+                <Button size="sm" variant="secondary" onClick={() => setView({ kind: 'editChunk', collectionId, chunk: 'new' })}>
+                  + Чанк
+                </Button>
+              </div>
             </div>
             <div className="flex flex-col">
               {chunks === null && <div className="text-body-secondary py-2">Загрузка…</div>}
@@ -630,6 +777,15 @@ export function ContentSection({ onOpenMenu }: { onOpenMenu: () => void }) {
             </div>
           </div>
         </div>
+
+        <BulkDialogueAiSheet
+          open={bulkAiOpen}
+          onOpenChange={setBulkAiOpen}
+          collectionTitle={selected?.title ?? 'Чанки'}
+          chunks={chunks ?? []}
+          characters={characters}
+          onSaved={markChunkHasDialogue}
+        />
       </div>
     );
   }
