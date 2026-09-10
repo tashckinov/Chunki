@@ -144,8 +144,18 @@ export interface AdminChunkRow {
   example_translation: string | null;
   level: string;
   situation_prompts: string[];
+  has_dialogue: boolean;
   position: number;
 }
+
+// A dialogue row with zero messages counts as "no dialogue" here too — matches
+// how dialogues/repository.ts's findLearnerDialogueRows treats an empty
+// message set as "no dialogue" for the learner side.
+const HAS_DIALOGUE_SUBQUERY = `EXISTS (
+              SELECT 1 FROM chunk_dialogues d
+              JOIN chunk_dialogue_messages m ON m.dialogue_id = d.id
+              WHERE d.chunk_id = c.id
+            ) AS has_dialogue`;
 
 export async function listChunksForCollectionAdmin(collectionId: string): Promise<AdminChunkRow[]> {
   const { rows } = await pool.query<AdminChunkRow>(
@@ -153,7 +163,8 @@ export async function listChunksForCollectionAdmin(collectionId: string): Promis
             COALESCE(
               (SELECT array_agg(p.prompt ORDER BY p.position) FROM chunk_situation_prompts p WHERE p.chunk_id = c.id),
               ARRAY[]::text[]
-            ) AS situation_prompts
+            ) AS situation_prompts,
+            ${HAS_DIALOGUE_SUBQUERY}
      FROM collection_chunks cc
      JOIN chunks c ON c.id = cc.chunk_id
      WHERE cc.collection_id = $1
@@ -171,7 +182,8 @@ async function findChunkByIdAdmin(id: string, client: pg.PoolClient | pg.Pool = 
             COALESCE(
               (SELECT array_agg(p.prompt ORDER BY p.position) FROM chunk_situation_prompts p WHERE p.chunk_id = c.id),
               ARRAY[]::text[]
-            ) AS situation_prompts
+            ) AS situation_prompts,
+            ${HAS_DIALOGUE_SUBQUERY}
      FROM chunks c WHERE c.id = $1`,
     [id],
   );
@@ -216,7 +228,7 @@ export async function createChunkInCollection(collectionId: string, input: Chunk
     const position = posRows[0].next_position;
     await client.query(`INSERT INTO collection_chunks (collection_id, chunk_id, position) VALUES ($1, $2, $3)`, [collectionId, chunk.id, position]);
     await client.query('COMMIT');
-    return { ...chunk, situation_prompts: input.situationPrompts, position };
+    return { ...chunk, situation_prompts: input.situationPrompts, has_dialogue: false, position };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;

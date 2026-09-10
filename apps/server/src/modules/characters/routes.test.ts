@@ -22,6 +22,7 @@ vi.mock('./service.js', () => ({
   moveCharacterImageToEmotion: vi.fn(),
   reorderCharacterImages: vi.fn(),
   deleteCharacterImage: vi.fn(),
+  findChunksUsingCharacter: vi.fn(),
 }));
 
 const session = await import('../auth/session.js');
@@ -191,6 +192,20 @@ describe('DELETE /api/admin/characters/:id', () => {
     const res = await app.inject({ method: 'DELETE', url: `/api/admin/characters/${validId}`, cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' } });
 
     expect(res.statusCode).toBe(404);
+  });
+});
+
+describe('GET /api/admin/characters/:id/chunks', () => {
+  it('returns the chunks whose dialogue uses this character', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(adminSession);
+    const chunks = [{ chunkId: validId, chunkText: 'sounds good', collectionTitles: ['Travel Basics'] }];
+    vi.mocked(service.findChunksUsingCharacter).mockResolvedValue(chunks);
+
+    const res = await app.inject({ method: 'GET', url: `/api/admin/characters/${validId}/chunks`, cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' } });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ chunks });
+    expect(service.findChunksUsingCharacter).toHaveBeenCalledWith(validId);
   });
 });
 

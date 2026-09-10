@@ -63,3 +63,15 @@ export async function reorderCharacterImages(characterId: string, emotion: strin
 export async function deleteCharacterImage(characterId: string, imageId: string): Promise<void> {
   await deleteJson(`/api/admin/characters/${characterId}/images/${imageId}`);
 }
+
+export interface CharacterChunkUsage {
+  chunkId: string;
+  chunkText: string;
+  collectionTitles: string[];
+}
+
+/** Every chunk whose dialogue actually uses this character — lets the admin see the impact before deleting one. */
+export async function fetchCharacterUsage(characterId: string): Promise<CharacterChunkUsage[]> {
+  const data = await getJson<{ chunks: CharacterChunkUsage[] }>(`/api/admin/characters/${characterId}/chunks`);
+  return data.chunks;
+}

@@ -22,8 +22,10 @@ import {
   moveCharacterImageToEmotion,
   reorderCharacterImages,
   deleteCharacterImage,
+  fetchCharacterUsage,
   type Character,
   type CharacterImage,
+  type CharacterChunkUsage,
 } from '../../lib/characters';
 import { EMOTION_SUGGESTIONS, emotionLabel, groupImagesByEmotion } from '../../lib/characterEmotions';
 
@@ -185,6 +187,35 @@ function EmotionGroup({
           </div>
         </SortableContext>
       </DndContext>
+    </div>
+  );
+}
+
+/** Fetches once which chunks' dialogues actually use this character — surfaced so the admin can see the impact before deleting one. */
+function CharacterUsageRow({ characterId }: { characterId: string }) {
+  const [usage, setUsage] = useState<CharacterChunkUsage[] | 'loading'>('loading');
+
+  useEffect(() => {
+    setUsage('loading');
+    fetchCharacterUsage(characterId)
+      .then(setUsage)
+      .catch(() => setUsage([]));
+  }, [characterId]);
+
+  if (usage === 'loading') return <div className="text-body-secondary text-[13.5px]">Загрузка…</div>;
+
+  if (usage.length === 0) {
+    return <div className="text-meta">Не используется ни в одном диалоге.</div>;
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      {usage.map((u) => (
+        <div key={u.chunkId} className="text-[13.5px]">
+          {u.chunkText}
+          {u.collectionTitles.length > 0 && <span className="text-meta"> · {u.collectionTitles.join(', ')}</span>}
+        </div>
+      ))}
     </div>
   );
 }
@@ -509,6 +540,10 @@ function CharacterDetailView({
               </div>
             </div>
           )}
+
+          <Field label="Используется в чанках" hint="Диалоги, в которых участвует этот персонаж — проверьте перед удалением.">
+            <CharacterUsageRow characterId={character.id} />
+          </Field>
 
           <Button variant="ghost" size="sm" onClick={onDelete} className="self-start text-negative">
             Удалить персонажа

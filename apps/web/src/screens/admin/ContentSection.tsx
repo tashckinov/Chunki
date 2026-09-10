@@ -22,7 +22,6 @@ import {
   type AdminChunk,
   type NewChunkInput,
 } from '../../lib/admin';
-import { fetchAdminDialogue, type AdminDialogue } from '../../lib/dialogues';
 import { DialogueBuilderView } from './DialogueBuilderView';
 
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const;
@@ -60,40 +59,6 @@ function SaveButton({ onClick, disabled, saving }: { onClick: () => void; disabl
     <button type="button" onClick={onClick} disabled={disabled} className="pressable flex-none text-[14.5px] font-semibold text-accent disabled:opacity-50 px-2">
       {saving ? 'Сохраняем…' : 'Сохранить'}
     </button>
-  );
-}
-
-/** Fetches once whether this chunk already has a dialogue, and shows a preview or a "create" prompt accordingly. */
-function DialoguePreviewRow({ chunkId, onOpen }: { chunkId: string; onOpen: () => void }) {
-  const [dialogue, setDialogue] = useState<AdminDialogue | null | 'loading'>('loading');
-
-  useEffect(() => {
-    setDialogue('loading');
-    fetchAdminDialogue(chunkId)
-      .then(setDialogue)
-      .catch(() => setDialogue(null));
-  }, [chunkId]);
-
-  if (dialogue === 'loading') return <div className="text-body-secondary text-[13.5px]">Загрузка…</div>;
-
-  if (!dialogue) {
-    return (
-      <Button variant="secondary" size="sm" onClick={onOpen} className="self-start">
-        Создать диалог
-      </Button>
-    );
-  }
-
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <div className="text-[13.5px] text-body-secondary truncate">
-        {dialogue.participants.length} {plural(dialogue.participants.length, 'персонаж', 'персонажа', 'персонажей')} ·{' '}
-        {dialogue.messages.length} {plural(dialogue.messages.length, 'сообщение', 'сообщения', 'сообщений')}
-      </div>
-      <Button variant="ghost" size="sm" onClick={onOpen}>
-        Редактировать
-      </Button>
-    </div>
   );
 }
 
@@ -144,12 +109,10 @@ function ChunkEditView({
   chunk,
   onCancel,
   onSubmit,
-  onOpenDialogue,
 }: {
   chunk: AdminChunk | 'new';
   onCancel: () => void;
   onSubmit: (value: ChunkFormValue) => Promise<void>;
-  onOpenDialogue: () => void;
 }) {
   const [form, setForm] = useState<ChunkFormValue>(chunk !== 'new' ? chunkToForm(chunk) : EMPTY_CHUNK_FORM);
   const [saving, setSaving] = useState(false);
@@ -229,13 +192,6 @@ function ChunkEditView({
                 + Добавить вопрос
               </Button>
             </div>
-          </Field>
-          <Field label="Диалог-ситуация" hint="Мини-комикс с персонажами, который увидит ученик после ошибки на этом чанке.">
-            {chunk === 'new' ? (
-              <div className="text-meta">Сохраните чанк, чтобы добавить диалог.</div>
-            ) : (
-              <DialoguePreviewRow chunkId={chunk.id} onOpen={onOpenDialogue} />
-            )}
           </Field>
         </div>
       </div>
@@ -472,14 +428,13 @@ export function ContentSection({ onOpenMenu }: { onOpenMenu: () => void }) {
         chunk={chunk}
         onCancel={() => setView({ kind: 'chunks', collectionId })}
         onSubmit={(value) => (chunk === 'new' ? handleCreateChunk(collectionId, value) : handleUpdateChunk(collectionId, chunk.id, value))}
-        onOpenDialogue={() => chunk !== 'new' && setView({ kind: 'editDialogue', collectionId, chunk })}
       />
     );
   }
 
   if (view.kind === 'editDialogue') {
     const { collectionId, chunk } = view;
-    return <DialogueBuilderView chunk={chunk} onBack={() => setView({ kind: 'editChunk', collectionId, chunk })} />;
+    return <DialogueBuilderView chunk={chunk} onBack={() => setView({ kind: 'chunks', collectionId })} />;
   }
 
   if (view.kind === 'editCollection') {
@@ -528,9 +483,13 @@ export function ContentSection({ onOpenMenu }: { onOpenMenu: () => void }) {
                     <div className="text-meta truncate">
                       {chunk.translation} · {chunk.level}
                       {chunk.situationPrompts.length > 0 ? ` · ${chunk.situationPrompts.length} ${plural(chunk.situationPrompts.length, 'ситуация', 'ситуации', 'ситуаций')}` : ''}
+                      {chunk.hasDialogue ? ' · есть диалог' : ''}
                     </div>
                   </div>
                   <IconButton icon="Delete" label="Убрать из коллекции" size="sm" tone="muted" onClick={() => handleDetachChunk(collectionId, chunk)} />
+                  <Button size="sm" variant="ghost" onClick={() => setView({ kind: 'editDialogue', collectionId, chunk })}>
+                    {chunk.hasDialogue ? 'Диалог' : '+ Диалог'}
+                  </Button>
                   <Button size="sm" variant="ghost" onClick={() => setView({ kind: 'editChunk', collectionId, chunk })}>
                     Изменить
                   </Button>

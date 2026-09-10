@@ -16,6 +16,7 @@ import {
   moveCharacterImageToEmotion,
   reorderCharacterImages,
   deleteCharacterImage,
+  findChunksUsingCharacter,
 } from './service.js';
 
 // Full-body portraits are taller than wide; emotion thumbnails render small
@@ -91,6 +92,16 @@ export const charactersRoutes: FastifyPluginAsync = async (app) => {
       return { error: 'not_found' };
     }
     return { ok: true };
+  });
+
+  // Lets the admin see, before deleting a character, which chunks' dialogues actually use it.
+  app.get('/:id/chunks', async (request, reply) => {
+    const params = idParamSchema.safeParse(request.params);
+    if (!params.success) {
+      reply.code(404);
+      return { error: 'not_found' };
+    }
+    return { chunks: await findChunksUsingCharacter(params.data.id) };
   });
 
   app.post('/:id/full-body-image', async (request, reply) => {

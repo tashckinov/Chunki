@@ -117,6 +117,30 @@ export async function deleteDialogueForChunk(chunkId: string): Promise<boolean> 
   return (result.rowCount ?? 0) > 0;
 }
 
+export interface ChunkUsingCharacterRow {
+  chunk_id: string;
+  chunk_text: string;
+  collection_titles: string[];
+}
+
+/** Every chunk whose dialogue includes this character as a participant — lets the admin see the impact before deleting a character. */
+export async function findChunksUsingCharacter(characterId: string): Promise<ChunkUsingCharacterRow[]> {
+  const { rows } = await pool.query<ChunkUsingCharacterRow>(
+    `SELECT c.id AS chunk_id, c.text AS chunk_text,
+            COALESCE(array_agg(DISTINCT col.title) FILTER (WHERE col.id IS NOT NULL), ARRAY[]::text[]) AS collection_titles
+     FROM chunk_dialogue_participants p
+     JOIN chunk_dialogues d ON d.id = p.dialogue_id
+     JOIN chunks c ON c.id = d.chunk_id
+     LEFT JOIN collection_chunks cc ON cc.chunk_id = c.id
+     LEFT JOIN collections col ON col.id = cc.collection_id
+     WHERE p.character_id = $1
+     GROUP BY c.id, c.text
+     ORDER BY c.text`,
+    [characterId],
+  );
+  return rows;
+}
+
 export interface LearnerDialogueMessageRow {
   character_name: string;
   image_url: string;

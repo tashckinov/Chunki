@@ -13,6 +13,7 @@ import {
   type CharacterWithImages,
   type CharacterPatch,
 } from './repository.js';
+import { findChunksUsingCharacter as findChunksUsingCharacterDialogues, type ChunkUsingCharacter } from '../dialogues/service.js';
 
 export interface CharacterImageSummary {
   id: string;
@@ -89,4 +90,8 @@ export type DeleteImageResult = 'ok' | 'not_found' | 'in_use';
 
 export async function deleteCharacterImage(id: string): Promise<DeleteImageResult> {
   return repoDeleteCharacterImage(id);
+}
+
+export async function findChunksUsingCharacter(characterId: string): Promise<ChunkUsingCharacter[]> {
+  return findChunksUsingCharacterDialogues(characterId);
 }

@@ -3,6 +3,7 @@ import {
   saveDialogue as repoSaveDialogue,
   deleteDialogueForChunk as repoDeleteDialogueForChunk,
   findLearnerDialogueRows,
+  findChunksUsingCharacter as repoFindChunksUsingCharacter,
   type DialogueInput,
   type DialogueWithContent,
 } from './repository.js';
@@ -66,4 +67,15 @@ export async function findLearnerDialogue(chunkId: string): Promise<LearnerDialo
     chunkId,
     messages: rows.map((r) => ({ characterName: r.character_name, imageUrl: r.image_url, side: r.side, text: r.text })),
   };
+}
+
+export interface ChunkUsingCharacter {
+  chunkId: string;
+  chunkText: string;
+  collectionTitles: string[];
+}
+
+export async function findChunksUsingCharacter(characterId: string): Promise<ChunkUsingCharacter[]> {
+  const rows = await repoFindChunksUsingCharacter(characterId);
+  return rows.map((r) => ({ chunkId: r.chunk_id, chunkText: r.chunk_text, collectionTitles: r.collection_titles }));
 }

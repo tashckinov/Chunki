@@ -32,6 +32,7 @@ export interface AdminChunk {
   exampleTranslation: string | null;
   level: string;
   situationPrompts: string[];
+  hasDialogue: boolean;
   position: number;
 }
 

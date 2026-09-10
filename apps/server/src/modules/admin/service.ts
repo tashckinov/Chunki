@@ -118,6 +118,7 @@ export interface AdminChunkSummary {
   exampleTranslation: string | null;
   level: string;
   situationPrompts: string[];
+  hasDialogue: boolean;
   position: number;
 }
 
@@ -131,6 +132,7 @@ function toChunkSummary(row: AdminChunkRow): AdminChunkSummary {
     exampleTranslation: row.example_translation,
     level: row.level,
     situationPrompts: row.situation_prompts,
+    hasDialogue: row.has_dialogue,
     position: row.position,
   };
 }
