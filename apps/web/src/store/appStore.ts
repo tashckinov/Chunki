@@ -418,6 +418,7 @@ export const useAppStore = create<AppState>()(
           flipped: false,
           dx: 0,
           dy: 0,
+          flying: null,
           sessionVerdicts: {},
           sessionProductionResults: {},
           sessionProductionPending: {},
@@ -522,6 +523,7 @@ export const useAppStore = create<AppState>()(
         ),
 
       onCardPointerDown: (x, y) => {
+        if (get().flying) return; // a swipe is still being processed — the card stays off-screen until its destination screen is known
         dragStart = { x, y };
         set({ dragging: true });
       },
@@ -540,19 +542,27 @@ export const useAppStore = create<AppState>()(
       flipCard: () => set((s) => ({ flipped: !s.flipped })),
       swipe: (dir) => {
         const s = get();
+        if (s.flying) return; // a previous swipe is still being processed — ignore re-entry (button mash / repeat gesture)
         const deck = s.activeDeckChunks;
         const cur = deck[s.deckIndex];
         if (!cur) return;
         set({ flying: dir, dragging: false });
         setTimeout(async () => {
+          // Deliberately NOT resetting flipped/dx/dy/flying here: deckIndex
+          // hasn't advanced yet, so resetting them would snap the same card
+          // back into full view (unflipped) for however long the following
+          // awaits take — reading to the user as "a new card already
+          // appeared" right before the comic/check screen replaces it,
+          // i.e. exactly the confusing flash this is avoiding. Leaving
+          // `flying` set keeps the card visually off-screen (see
+          // derived.ts's flyOffsets override) until either advanceDeck()
+          // resets it atomically with moving to a genuinely new card, or
+          // the screen changes away from 'deck' entirely (unmounting this
+          // card, so the stale transform never becomes visible again).
           set((st) => {
             const prev = st.chunkProgress[cur.id];
             const optimisticState = dir === 'know' ? 'self_known' : dir === 'dont' ? 'unknown' : 'unsure';
             return {
-              flipped: false,
-              dx: 0,
-              dy: 0,
-              flying: null,
               sessionVerdicts: { ...st.sessionVerdicts, [cur.id]: dir },
               chunkProgress: {
                 ...st.chunkProgress,
@@ -589,7 +599,7 @@ export const useAppStore = create<AppState>()(
           }
         }, 230);
       },
-      undoCard: () => set((s) => (s.deckIndex > 0 ? { deckIndex: s.deckIndex - 1, flipped: false, dx: 0, dy: 0 } : {})),
+      undoCard: () => set((s) => (s.deckIndex > 0 && !s.flying ? { deckIndex: s.deckIndex - 1, flipped: false, dx: 0, dy: 0 } : {})),
 
       advanceDeck: () => {
         const s = get();
@@ -599,6 +609,7 @@ export const useAppStore = create<AppState>()(
           flipped: false,
           dx: 0,
           dy: 0,
+          flying: null,
           recognitionChunkId: null,
           productionChunkId: null,
           screen: next >= s.activeDeckChunks.length ? 'deckdone' : 'deck',
