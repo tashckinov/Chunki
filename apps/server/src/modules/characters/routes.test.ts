@@ -195,9 +195,9 @@ describe('DELETE /api/admin/characters/:id', () => {
 });
 
 describe('POST /api/admin/characters/:id/full-body-image', () => {
-  it('resizes+re-encodes the upload and persists it on the character', async () => {
+  it('resizes+re-encodes a transparent upload as PNG to preserve alpha', async () => {
     vi.mocked(session.getSession).mockResolvedValue(adminSession);
-    const updated = { id: validId, name: 'Mia', fullBodyImageUrl: '/uploads/characters/whatever.jpg', position: 0, images: [] };
+    const updated = { id: validId, name: 'Mia', fullBodyImageUrl: '/uploads/characters/whatever.png', position: 0, images: [] };
     vi.mocked(service.updateCharacter).mockResolvedValue({ kind: 'ok', character: updated });
 
     const body = buildMultipartBody([filePart('file', 'mia.png', 'image/png', TINY_PNG)]);
@@ -212,9 +212,9 @@ describe('POST /api/admin/characters/:id/full-body-image', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ character: updated });
     const [, patch] = vi.mocked(service.updateCharacter).mock.calls[0];
-    expect(patch.fullBodyImageUrl).toMatch(/^\/uploads\/characters\/[0-9a-f-]+\.jpg$/);
+    expect(patch.fullBodyImageUrl).toMatch(/^\/uploads\/characters\/[0-9a-f-]+\.png$/);
     const saved = fs.readFileSync(path.join(TEST_UPLOADS_DIR, patch.fullBodyImageUrl!.replace('/uploads/', '')));
-    expect(saved.subarray(0, 2)).toEqual(Buffer.from([0xff, 0xd8]));
+    expect(saved.subarray(0, 4)).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
   });
 
   it('rejects an unsupported file type', async () => {

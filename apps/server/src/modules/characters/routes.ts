@@ -33,11 +33,17 @@ const characterPatchSchema = z.object({ name: z.string().min(1).optional() });
 const imagePatchSchema = z.object({ emotion: z.string().min(1) });
 const reorderSchema = z.object({ emotion: z.string().min(1), imageIds: z.array(z.string().uuid()).min(1) });
 
-async function bufferToResizedJpeg(original: Buffer, maxDimension: number): Promise<Buffer> {
-  return sharp(original)
-    .resize({ width: maxDimension, height: maxDimension, fit: 'inside', withoutEnlargement: true })
-    .jpeg({ quality: 82 })
-    .toBuffer();
+// JPEG has no alpha channel — sharp flattens transparent source pixels onto
+// black by default, which silently destroys transparency on PNG uploads.
+// Preserve it by keeping alpha-bearing images as PNG; only genuinely opaque
+// images get re-encoded to the smaller JPEG.
+async function resizeImage(original: Buffer, maxDimension: number): Promise<{ buffer: Buffer; extension: 'png' | 'jpg' }> {
+  const image = sharp(original).resize({ width: maxDimension, height: maxDimension, fit: 'inside', withoutEnlargement: true });
+  const { hasAlpha } = await sharp(original).metadata();
+  if (hasAlpha) {
+    return { buffer: await image.png({ compressionLevel: 8 }).toBuffer(), extension: 'png' };
+  }
+  return { buffer: await image.jpeg({ quality: 82 }).toBuffer(), extension: 'jpg' };
 }
 
 /** Every route here is admin-only — same plugin-wide preHandler pattern as admin/routes.ts. */
@@ -111,18 +117,18 @@ export const charactersRoutes: FastifyPluginAsync = async (app) => {
       throw err;
     }
 
-    let resized: Buffer;
+    let resized: { buffer: Buffer; extension: 'png' | 'jpg' };
     try {
-      resized = await bufferToResizedJpeg(original, FULL_BODY_MAX_DIMENSION);
+      resized = await resizeImage(original, FULL_BODY_MAX_DIMENSION);
     } catch {
       reply.code(400);
       return { error: 'invalid_file_type' };
     }
 
-    const filename = `${randomUUID()}.jpg`;
+    const filename = `${randomUUID()}.${resized.extension}`;
     const dir = path.join(UPLOADS_DIR, 'characters');
     await fs.promises.mkdir(dir, { recursive: true });
-    await fs.promises.writeFile(path.join(dir, filename), resized);
+    await fs.promises.writeFile(path.join(dir, filename), resized.buffer);
 
     const result = await updateCharacter(params.data.id, { fullBodyImageUrl: `/uploads/characters/${filename}` });
     if (result.kind === 'not_found') {
@@ -163,17 +169,17 @@ export const charactersRoutes: FastifyPluginAsync = async (app) => {
         }
         throw err;
       }
-      let resized: Buffer;
+      let resized: { buffer: Buffer; extension: 'png' | 'jpg' };
       try {
-        resized = await bufferToResizedJpeg(original, EMOTION_IMAGE_MAX_DIMENSION);
+        resized = await resizeImage(original, EMOTION_IMAGE_MAX_DIMENSION);
       } catch {
         reply.code(400);
         return { error: 'invalid_file_type' };
       }
-      const filename = `${randomUUID()}.jpg`;
+      const filename = `${randomUUID()}.${resized.extension}`;
       const dir = path.join(UPLOADS_DIR, 'characters');
       await fs.promises.mkdir(dir, { recursive: true });
-      await fs.promises.writeFile(path.join(dir, filename), resized);
+      await fs.promises.writeFile(path.join(dir, filename), resized.buffer);
       images.push({ imageUrl: `/uploads/characters/${filename}` });
     }
 
