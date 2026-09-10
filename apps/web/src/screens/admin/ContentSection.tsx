@@ -22,6 +22,12 @@ import {
   type AdminChunk,
   type NewChunkInput,
 } from '../../lib/admin';
+import { fetchCharacters, type Character } from '../../lib/characters';
+import { saveAdminDialogue } from '../../lib/dialogues';
+import { buildDialogueAiPrompt } from '../../lib/dialogueAiPrompt';
+import { parseDialogueImport, type ParsedDialogue } from '../../lib/dialogueImport';
+import { Sheet } from '../../components/ui/Sheet';
+import { DialoguePlayback, type PlaybackMessage } from '../../components/dialogue/DialoguePlayback';
 import { DialogueBuilderView } from './DialogueBuilderView';
 
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const;
@@ -330,9 +336,122 @@ function CollectionEditView({
   );
 }
 
+/**
+ * The same copy-prompt / paste-and-preview / approve loop DialogueBuilderView
+ * offers, but reachable directly from a chunk row — a quick round-trip
+ * through an external AI without opening the full editor. Approving calls
+ * the same save endpoint the builder uses, so the result is identical either way.
+ */
+function DialogueQuickActions({ chunk, characters, onSaved }: { chunk: AdminChunk; characters: Character[] | null; onSaved: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [importError, setImportError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<ParsedDialogue | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  async function copy() {
+    if (!characters) return;
+    await navigator.clipboard.writeText(buildDialogueAiPrompt(chunk, characters));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  function handleParse() {
+    const result = parseDialogueImport(importText, characters ?? []);
+    if (result.kind === 'error') {
+      setImportError(result.message);
+      return;
+    }
+    setImportError(null);
+    setPreview(result.dialogue);
+  }
+
+  async function approve() {
+    if (!preview) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await saveAdminDialogue(chunk.id, preview);
+      closeSheet(false);
+      onSaved();
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function closeSheet(open: boolean) {
+    if (open) {
+      setImportOpen(true);
+      return;
+    }
+    setImportOpen(false);
+    setImportText('');
+    setImportError(null);
+    setPreview(null);
+    setSaveError(null);
+  }
+
+  const playbackMessages: PlaybackMessage[] = (preview?.messages ?? []).map((m) => {
+    const character = characters?.find((c) => c.id === m.characterId);
+    const image = character?.images.find((i) => i.id === m.characterImageId);
+    return {
+      characterName: character?.name ?? '?',
+      imageUrl: image?.imageUrl ?? '',
+      side: preview?.participants.find((p) => p.characterId === m.characterId)?.side ?? 'left',
+      text: m.text,
+    };
+  });
+
+  return (
+    <>
+      <IconButton icon={copied ? 'Check' : 'Copy'} label="Скопировать инструкцию для ИИ" size="sm" onClick={copy} disabled={!characters} />
+      <IconButton icon="Paste" label="Вставить диалог от ИИ" size="sm" onClick={() => closeSheet(true)} disabled={!characters} />
+
+      <Sheet open={importOpen} onOpenChange={closeSheet} title={`Диалог через ИИ — «${chunk.text}»`}>
+        {!preview ? (
+          <div className="flex flex-col gap-3">
+            <div className="text-[13.5px] text-body-secondary">Вставьте JSON-ответ ИИ, полученный по скопированной инструкции.</div>
+            <Textarea
+              value={importText}
+              onChange={(v) => {
+                setImportText(v);
+                setImportError(null);
+              }}
+              placeholder='{"participants": [...], "messages": [...]}'
+              rows={10}
+            />
+            {importError && <div className="text-negative text-[13px]">{importError}</div>}
+            <Button size="sm" onClick={handleParse} disabled={!importText.trim()}>
+              Вставить и посмотреть
+            </Button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <DialoguePlayback messages={playbackMessages} targetText={chunk.text} autoPlay={false} />
+            {saveError && <div className="text-negative text-[13px]">Не удалось сохранить: {saveError}</div>}
+            <div className="flex gap-2">
+              <Button size="sm" onClick={approve} disabled={saving}>
+                {saving ? 'Сохраняем…' : 'Сохранить'}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setPreview(null)}>
+                Назад
+              </Button>
+            </div>
+          </div>
+        )}
+      </Sheet>
+    </>
+  );
+}
+
 export function ContentSection({ onOpenMenu }: { onOpenMenu: () => void }) {
   const [collections, setCollections] = useState<AdminCollection[] | null>(null);
   const [chunks, setChunks] = useState<AdminChunk[] | null>(null);
+  const [characters, setCharacters] = useState<Character[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<ContentView>({ kind: 'collections' });
 
@@ -340,7 +459,16 @@ export function ContentSection({ onOpenMenu }: { onOpenMenu: () => void }) {
     fetchAdminCollections()
       .then(setCollections)
       .catch(() => setError('Не удалось загрузить коллекции.'));
+    // Best-effort — only needed for the quick copy/paste-AI actions on the
+    // chunks list; those buttons just stay disabled if this fails.
+    fetchCharacters()
+      .then(setCharacters)
+      .catch(() => {});
   }, []);
+
+  function markChunkHasDialogue(chunkId: string) {
+    setChunks((prev) => prev?.map((c) => (c.id === chunkId ? { ...c, hasDialogue: true } : c)) ?? prev);
+  }
 
   const activeCollectionId = view.kind === 'chunks' || view.kind === 'editChunk' ? view.collectionId : null;
 
@@ -487,6 +615,7 @@ export function ContentSection({ onOpenMenu }: { onOpenMenu: () => void }) {
                     </div>
                   </div>
                   <IconButton icon="Delete" label="Убрать из коллекции" size="sm" tone="muted" onClick={() => handleDetachChunk(collectionId, chunk)} />
+                  <DialogueQuickActions chunk={chunk} characters={characters} onSaved={() => markChunkHasDialogue(chunk.id)} />
                   <Button size="sm" variant="ghost" onClick={() => setView({ kind: 'editDialogue', collectionId, chunk })}>
                     {chunk.hasDialogue ? 'Диалог' : '+ Диалог'}
                   </Button>
