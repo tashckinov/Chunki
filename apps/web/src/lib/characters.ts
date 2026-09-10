@@ -67,6 +67,7 @@ export async function deleteCharacterImage(characterId: string, imageId: string)
 export interface CharacterChunkUsage {
   chunkId: string;
   chunkText: string;
+  chunkTranslation: string;
   collectionTitles: string[];
 }
 

@@ -72,10 +72,11 @@ export async function findLearnerDialogue(chunkId: string): Promise<LearnerDialo
 export interface ChunkUsingCharacter {
   chunkId: string;
   chunkText: string;
+  chunkTranslation: string;
   collectionTitles: string[];
 }
 
 export async function findChunksUsingCharacter(characterId: string): Promise<ChunkUsingCharacter[]> {
   const rows = await repoFindChunksUsingCharacter(characterId);
-  return rows.map((r) => ({ chunkId: r.chunk_id, chunkText: r.chunk_text, collectionTitles: r.collection_titles }));
+  return rows.map((r) => ({ chunkId: r.chunk_id, chunkText: r.chunk_text, chunkTranslation: r.chunk_translation, collectionTitles: r.collection_titles }));
 }

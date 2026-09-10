@@ -120,6 +120,7 @@ export async function deleteDialogueForChunk(chunkId: string): Promise<boolean> 
 export interface ChunkUsingCharacterRow {
   chunk_id: string;
   chunk_text: string;
+  chunk_translation: string;
   collection_titles: string[];
 }
 
@@ -134,7 +135,7 @@ export interface ChunkUsingCharacterRow {
  */
 export async function findChunksUsingCharacter(characterId: string): Promise<ChunkUsingCharacterRow[]> {
   const { rows } = await pool.query<ChunkUsingCharacterRow>(
-    `SELECT c.id AS chunk_id, c.text AS chunk_text,
+    `SELECT c.id AS chunk_id, c.text AS chunk_text, c.translation AS chunk_translation,
             COALESCE(array_agg(DISTINCT col.title) FILTER (WHERE col.id IS NOT NULL), ARRAY[]::text[]) AS collection_titles
      FROM chunk_dialogue_messages m
      JOIN chunk_dialogues d ON d.id = m.dialogue_id
@@ -142,7 +143,7 @@ export async function findChunksUsingCharacter(characterId: string): Promise<Chu
      LEFT JOIN collection_chunks cc ON cc.chunk_id = c.id
      LEFT JOIN collections col ON col.id = cc.collection_id
      WHERE m.character_id = $1
-     GROUP BY c.id, c.text
+     GROUP BY c.id, c.text, c.translation
      ORDER BY c.text`,
     [characterId],
   );

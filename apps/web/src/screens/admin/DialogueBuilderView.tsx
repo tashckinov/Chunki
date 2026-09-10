@@ -8,6 +8,9 @@ import { emotionLabel, groupImagesByEmotion } from '../../lib/characterEmotions'
 import { fetchCharacters, type Character } from '../../lib/characters';
 import { fetchAdminDialogue, saveAdminDialogue, deleteAdminDialogue, type AdminDialogueParticipant } from '../../lib/dialogues';
 import type { AdminChunk } from '../../lib/admin';
+
+/** The builder only ever reads id/text/translation — any caller with just these three can open it (e.g. a chunk reached via a character's usage list, which doesn't carry the rest of AdminChunk's fields). */
+export type DialogueBuilderChunk = Pick<AdminChunk, 'id' | 'text' | 'translation'>;
 import { NavigationBar } from '../../components/ui/NavigationBar';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -153,7 +156,7 @@ function EditableMessageRow({
   );
 }
 
-export function DialogueBuilderView({ chunk, onBack }: { chunk: AdminChunk; onBack: () => void }) {
+export function DialogueBuilderView({ chunk, onBack }: { chunk: DialogueBuilderChunk; onBack: () => void }) {
   const [characters, setCharacters] = useState<Character[] | null>(null);
   const [participants, setParticipants] = useState<AdminDialogueParticipant[]>([]);
   const [messages, setMessages] = useState<BuilderMessage[]>([]);

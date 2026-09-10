@@ -28,6 +28,7 @@ import {
   type CharacterChunkUsage,
 } from '../../lib/characters';
 import { EMOTION_SUGGESTIONS, emotionLabel, groupImagesByEmotion } from '../../lib/characterEmotions';
+import { DialogueBuilderView } from './DialogueBuilderView';
 
 /** Persistent label + optional hint — same convention as ContentSection.tsx's Field. */
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
@@ -49,7 +50,11 @@ function SaveButton({ onClick, disabled, saving }: { onClick: () => void; disabl
   );
 }
 
-type CharactersView = { kind: 'list' } | { kind: 'detail'; characterId: string } | { kind: 'create' };
+type CharactersView =
+  | { kind: 'list' }
+  | { kind: 'detail'; characterId: string }
+  | { kind: 'create' }
+  | { kind: 'dialogue'; characterId: string; chunkId: string; chunkText: string; chunkTranslation: string };
 
 function CharacterCreateView({ onCancel, onSubmit }: { onCancel: () => void; onSubmit: (name: string) => Promise<void> }) {
   const [name, setName] = useState('');
@@ -191,8 +196,8 @@ function EmotionGroup({
   );
 }
 
-/** Fetches once which chunks' dialogues actually use this character — surfaced so the admin can see the impact before deleting one. */
-function CharacterUsageRow({ characterId }: { characterId: string }) {
+/** Fetches once which chunks' dialogues actually use this character — surfaced so the admin can see the impact before deleting one, and jump straight into editing that dialogue. */
+function CharacterUsageRow({ characterId, onOpen }: { characterId: string; onOpen: (usage: CharacterChunkUsage) => void }) {
   const [usage, setUsage] = useState<CharacterChunkUsage[] | 'loading' | 'error'>('loading');
 
   useEffect(() => {
@@ -217,10 +222,10 @@ function CharacterUsageRow({ characterId }: { characterId: string }) {
   return (
     <div className="flex flex-col gap-1.5">
       {usage.map((u) => (
-        <div key={u.chunkId} className="text-[13.5px]">
+        <button key={u.chunkId} type="button" onClick={() => onOpen(u)} className="pressable text-[13.5px] text-left text-accent underline underline-offset-2">
           {u.chunkText}
-          {u.collectionTitles.length > 0 && <span className="text-meta"> · {u.collectionTitles.join(', ')}</span>}
-        </div>
+          {u.collectionTitles.length > 0 && <span className="text-meta no-underline"> · {u.collectionTitles.join(', ')}</span>}
+        </button>
       ))}
     </div>
   );
@@ -231,11 +236,13 @@ function CharacterDetailView({
   onBack,
   onUpdate,
   onDelete,
+  onOpenDialogue,
 }: {
   character: Character;
   onBack: () => void;
   onUpdate: (character: Character) => void;
   onDelete: () => void;
+  onOpenDialogue: (usage: CharacterChunkUsage) => void;
 }) {
   const [name, setName] = useState(character.name);
   const [nameSaving, setNameSaving] = useState(false);
@@ -548,7 +555,7 @@ function CharacterDetailView({
           )}
 
           <Field label="Используется в чанках" hint="Диалоги, в которых участвует этот персонаж — проверьте перед удалением.">
-            <CharacterUsageRow characterId={character.id} />
+            <CharacterUsageRow characterId={character.id} onOpen={onOpenDialogue} />
           </Field>
 
           <Button variant="ghost" size="sm" onClick={onDelete} className="self-start text-negative">
@@ -634,7 +641,17 @@ export function CharactersSection({ onOpenMenu }: { onOpenMenu: () => void }) {
         onBack={() => setView({ kind: 'list' })}
         onUpdate={upsertCharacter}
         onDelete={() => handleDelete(character)}
+        onOpenDialogue={(usage) =>
+          setView({ kind: 'dialogue', characterId: character.id, chunkId: usage.chunkId, chunkText: usage.chunkText, chunkTranslation: usage.chunkTranslation })
+        }
       />
+    );
+  }
+
+  if (view.kind === 'dialogue') {
+    const { characterId, chunkId, chunkText, chunkTranslation } = view;
+    return (
+      <DialogueBuilderView chunk={{ id: chunkId, text: chunkText, translation: chunkTranslation }} onBack={() => setView({ kind: 'detail', characterId })} />
     );
   }
 
