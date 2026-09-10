@@ -7,6 +7,7 @@ import { Textarea } from '../../components/ui/Textarea';
 import { Switch } from '../../components/ui/Switch';
 import { IconButton } from '../../components/ui/IconButton';
 import { Icon } from '../../components/ui/Icon';
+import { RetryImage } from '../../components/ui/RetryImage';
 import { apiUrl } from '../../lib/collections';
 import {
   fetchAdminCollections,
@@ -294,7 +295,7 @@ function CollectionEditView({
             <div className="flex flex-col gap-2">
               <div className="aspect-[4/3] w-full max-w-[280px] rounded-[var(--radius-md)] bg-surface-subtle overflow-hidden flex items-center justify-center">
                 {form.bannerUrl ? (
-                  <img src={apiUrl(form.bannerUrl)} alt="" className="w-full h-full object-cover" />
+                  <RetryImage src={apiUrl(form.bannerUrl)} alt="" className="w-full h-full object-cover" />
                 ) : (
                   <span className="text-meta">Нет баннера</span>
                 )}
@@ -812,7 +813,7 @@ export function ContentSection({ onOpenMenu }: { onOpenMenu: () => void }) {
                 className="pressable flex items-center gap-3 py-3 border-b border-border last:border-b-0 text-left"
               >
                 {c.bannerUrl ? (
-                  <img src={apiUrl(c.bannerUrl)} alt="" className="w-12 h-9 flex-none rounded-[var(--radius-md)] object-cover" />
+                  <RetryImage src={apiUrl(c.bannerUrl)} alt="" className="w-12 h-9 flex-none rounded-[var(--radius-md)] object-cover" />
                 ) : (
                   <div className="w-12 h-9 flex-none rounded-[var(--radius-md)] bg-surface-subtle" />
                 )}

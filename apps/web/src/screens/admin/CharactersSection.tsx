@@ -12,6 +12,7 @@ import { Icon } from '../../components/ui/Icon';
 import { Chip } from '../../components/ui/Chip';
 import { Card } from '../../components/ui/Card';
 import { Sheet } from '../../components/ui/Sheet';
+import { RetryImage } from '../../components/ui/RetryImage';
 import {
   fetchCharacters,
   createCharacter,
@@ -96,7 +97,7 @@ function CharacterListCard({ character, onClick }: { character: Character; onCli
     <Card variant="surface" onClick={onClick} className="border border-border overflow-hidden flex flex-col">
       <div className="aspect-[3/4] w-full bg-surface-subtle overflow-hidden flex items-center justify-center">
         {character.fullBodyImageUrl ? (
-          <img src={apiUrl(character.fullBodyImageUrl)} alt="" className="w-full h-full object-cover" />
+          <RetryImage src={apiUrl(character.fullBodyImageUrl)} alt="" className="w-full h-full object-cover" />
         ) : (
           <Icon name="Characters" size={36} className="text-text-tertiary" />
         )}
@@ -128,7 +129,7 @@ function EmotionImageTile({
   return (
     <div className="flex flex-col items-center gap-0.5 flex-none w-20">
       <div ref={setNodeRef} style={style} className="relative w-20 h-20 rounded-[var(--radius-md)] overflow-hidden bg-surface-subtle">
-        <img src={apiUrl(image.imageUrl)} alt="" className="w-full h-full object-cover" />
+        <RetryImage src={apiUrl(image.imageUrl)} alt="" className="w-full h-full object-cover" />
         <button
           type="button"
           {...attributes}
@@ -463,7 +464,7 @@ function CharacterDetailView({
                 }`}
               >
                 {character.fullBodyImageUrl ? (
-                  <img src={apiUrl(character.fullBodyImageUrl)} alt="" className="w-full h-full object-cover" />
+                  <RetryImage src={apiUrl(character.fullBodyImageUrl)} alt="" className="w-full h-full object-cover" />
                 ) : (
                   <span className="text-meta px-3 text-center">Нет фото — перетащите сюда или выберите файл</span>
                 )}

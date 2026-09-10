@@ -4,6 +4,7 @@ import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } 
 import { CSS } from '@dnd-kit/utilities';
 import { apiUrl } from '../../lib/collections';
 import { highlightTarget } from '../../lib/textHighlight';
+import { RetryImage } from '../../components/ui/RetryImage';
 import { emotionLabel, groupImagesByEmotion } from '../../lib/characterEmotions';
 import { fetchCharacters, type Character } from '../../lib/characters';
 import { fetchAdminDialogue, saveAdminDialogue, deleteAdminDialogue, type AdminDialogueParticipant } from '../../lib/dialogues';
@@ -68,7 +69,7 @@ function CharacterPickerStep({ characters, onPick }: { characters: Character[]; 
       {characters.map((c) => (
         <button key={c.id} type="button" onClick={() => onPick(c.id)} className="pressable flex flex-col gap-1.5 items-center">
           <div className="aspect-[3/4] w-full rounded-[var(--radius-md)] bg-surface-subtle overflow-hidden flex items-center justify-center">
-            {c.fullBodyImageUrl ? <img src={apiUrl(c.fullBodyImageUrl)} alt="" className="w-full h-full object-cover" /> : <Icon name="Characters" size={26} className="text-text-tertiary" />}
+            {c.fullBodyImageUrl ? <RetryImage src={apiUrl(c.fullBodyImageUrl)} alt="" className="w-full h-full object-cover" /> : <Icon name="Characters" size={26} className="text-text-tertiary" />}
           </div>
           <div className="text-[13px] font-medium truncate w-full text-center">{c.name}</div>
         </button>
@@ -105,7 +106,7 @@ function EmotionPickerStep({ character, onPick }: { character: Character | undef
           <div className="flex gap-2 flex-wrap">
             {images.map((img) => (
               <button key={img.id} type="button" onClick={() => onPick(img.id)} className="pressable w-16 h-16 rounded-[var(--radius-md)] overflow-hidden bg-surface-subtle">
-                <img src={apiUrl(img.imageUrl)} alt="" className="w-full h-full object-cover" />
+                <RetryImage src={apiUrl(img.imageUrl)} alt="" className="w-full h-full object-cover" />
               </button>
             ))}
           </div>
@@ -160,7 +161,7 @@ function EditableMessageRow({
         <Icon name="Grip" size={14} />
       </button>
       <button type="button" onClick={onEditPortrait} className="flex-none" aria-label="Изменить эмоцию/персонажа">
-        {imageUrl ? <img src={apiUrl(imageUrl)} alt="" className="w-9 h-9 rounded-full object-cover bg-surface-subtle" /> : <div className="w-9 h-9 rounded-full bg-surface-subtle" />}
+        {imageUrl ? <RetryImage src={apiUrl(imageUrl)} alt="" className="w-9 h-9 rounded-full object-cover bg-surface-subtle" /> : <div className="w-9 h-9 rounded-full bg-surface-subtle" />}
       </button>
       <button type="button" onClick={onEditText} className="flex-1 min-w-0 text-left">
         <div className="text-meta">
@@ -428,7 +429,7 @@ export function DialogueBuilderView({ chunk, onBack }: { chunk: DialogueBuilderC
                         className="pressable flex items-center gap-2 rounded-full bg-surface-subtle pl-1.5 pr-3 py-1.5"
                       >
                         {character.fullBodyImageUrl ? (
-                          <img src={apiUrl(character.fullBodyImageUrl)} alt="" className="w-7 h-7 rounded-full object-cover" />
+                          <RetryImage src={apiUrl(character.fullBodyImageUrl)} alt="" className="w-7 h-7 rounded-full object-cover" />
                         ) : (
                           <div className="w-7 h-7 rounded-full bg-border" />
                         )}

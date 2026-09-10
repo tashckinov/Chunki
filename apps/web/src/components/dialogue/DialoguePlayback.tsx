@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { apiUrl } from '../../lib/collections';
 import { highlightTarget } from '../../lib/textHighlight';
+import { RetryImage } from '../ui/RetryImage';
 
 export interface PlaybackMessage {
   characterName: string;
@@ -46,7 +47,7 @@ export function DialoguePlayback({
       {messages.slice(0, revealed).map((m, i) => (
         <div key={i} className={`flex items-end gap-3 anim-rise max-w-[92%] ${m.side === 'right' ? 'flex-row-reverse self-end' : 'self-start'}`}>
           <div className="w-24 h-24 flex-none rounded-[var(--radius-lg)] bg-accent-subtle border border-border shadow-[var(--shadow-xs)] overflow-hidden p-1 flex items-center justify-center">
-            <img src={apiUrl(m.imageUrl)} alt={m.characterName} className="max-w-full max-h-full object-contain object-top" />
+            <RetryImage src={apiUrl(m.imageUrl)} alt={m.characterName} className="max-w-full max-h-full object-contain object-top" />
           </div>
           <div className="flex flex-col gap-1 min-w-0">
             <div className={`text-meta px-1 ${m.side === 'right' ? 'text-right' : ''}`}>{m.characterName}</div>

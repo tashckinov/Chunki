@@ -5,6 +5,7 @@ import { apiUrl, flattenChunks, type CollectionDetail } from '../lib/collections
 import { MASTERY_SEGMENTS, segmentsForState } from '../store/derived';
 import { plural } from '../lib/plural';
 import { NavigationBar } from '../components/ui/NavigationBar';
+import { RetryImage } from '../components/ui/RetryImage';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { CircularProgress, SegmentedRing } from '../components/ui/Progress';
@@ -25,7 +26,7 @@ function CollectionCardHeader({ detail, progress }: { detail: CollectionDetail; 
       className="pressable flex flex-col min-[768px]:flex-row min-[768px]:items-center text-left"
     >
       {detail.bannerUrl && (
-        <img src={apiUrl(detail.bannerUrl)} alt="" className="w-full aspect-[4/3] object-cover min-[768px]:w-40 min-[768px]:flex-none" />
+        <RetryImage src={apiUrl(detail.bannerUrl)} alt="" className="w-full aspect-[4/3] object-cover min-[768px]:w-40 min-[768px]:flex-none" />
       )}
       <div className="flex items-center gap-4 p-5 min-w-0 flex-1">
         <div className="relative w-12 h-12 flex-none flex items-center justify-center">
