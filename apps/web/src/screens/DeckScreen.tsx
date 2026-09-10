@@ -97,15 +97,14 @@ export function DeckScreen() {
         </div>
       </div>
 
-      <div className="flex-none px-6 pt-4 pb-7 flex items-center justify-center gap-6">
-        <button onClick={() => s.swipe('dont')} className="pressable w-14 h-14 rounded-full flex items-center justify-center border border-border text-negative">
-          <Icon name="Close" size={22} />
+      <div className="flex-none px-6 pt-4 pb-7 flex items-center justify-center gap-4">
+        <button onClick={() => s.swipe('dont')} className="pressable flex-1 max-w-[168px] h-14 rounded-full flex items-center justify-center gap-2 border border-border text-negative">
+          <Icon name="Close" size={20} />
+          <span className="text-[15px] font-medium">Не знаю</span>
         </button>
-        <button onClick={() => s.swipe('bury')} className="pressable w-11 h-11 rounded-full flex items-center justify-center border border-border text-text-secondary">
-          <Icon name="Snooze" size={19} />
-        </button>
-        <button onClick={() => s.swipe('know')} className="pressable w-14 h-14 rounded-full flex items-center justify-center bg-accent text-on-accent">
-          <Icon name="Check" size={22} />
+        <button onClick={() => s.swipe('know')} className="pressable flex-1 max-w-[168px] h-14 rounded-full flex items-center justify-center gap-2 bg-accent text-on-accent">
+          <Icon name="Check" size={20} />
+          <span className="text-[15px] font-medium">Знаю</span>
         </button>
       </div>
     </div>
