@@ -34,13 +34,14 @@ export type Screen =
   | 'result'
   | 'schedule'
   | 'paywall'
-  | 'home'
   | 'program'
   | 'topic'
   | 'exercises'
   | 'topicresult'
   | 'extras'
   | 'cardslib'
+  | 'comics'
+  | 'grammar'
   | 'deck'
   | 'deckdone'
   | 'recognitioncheck'
@@ -51,15 +52,15 @@ export type Screen =
 export type DeckVerdict = 'know' | 'dont' | 'bury';
 
 const BACK_MAP: Partial<Record<Screen, Screen>> = {
-  goals: 'home',
+  goals: 'cardslib',
   test: 'goals',
   result: 'goals',
   schedule: 'result',
   paywall: 'schedule',
-  program: 'home',
-  topic: 'home',
+  program: 'cardslib',
+  topic: 'cardslib',
   exercises: 'topic',
-  extras: 'home',
+  extras: 'cardslib',
   topicresult: 'exercises',
   deck: 'cardslib',
   deckdone: 'cardslib',
@@ -67,9 +68,9 @@ const BACK_MAP: Partial<Record<Screen, Screen>> = {
   productioncheck: 'deck',
   // Fallback only — the screen's own close button always calls the
   // dedicated closeDialogue() action, since the real return destination
-  // (deck vs deckdone) is dynamic and BACK_MAP can't express that.
+  // (deck vs deckdone vs comics) is dynamic and BACK_MAP can't express that.
   dialogue: 'deck',
-  admin: 'home',
+  admin: 'cardslib',
 };
 
 type AdminSection = 'users' | 'content' | 'characters' | 'aiLogs';
@@ -145,7 +146,7 @@ interface AppState {
   viewedProductionDialogueChunks: Record<string, true>;
   dialogueChunkId: string | null;
   /** What to do once the learner closes the comic — mirrors exactly what would have happened at the trigger point if the comic hadn't been shown. */
-  dialogueContinuation: 'advance' | 'recognitioncheck' | 'deckdone' | null;
+  dialogueContinuation: 'advance' | 'recognitioncheck' | 'deckdone' | 'browse' | null;
   learnerDialogue: LearnerDialogue | null;
 
   recognitionChunkId: string | null;
@@ -245,6 +246,7 @@ interface AppState {
   handleDontKnow: (chunkId: string) => Promise<void>;
   closeDialogue: () => void;
   openDialogueFromSummary: (chunkId: string) => void;
+  openDialogueFromBrowse: (chunkId: string) => Promise<void>;
 }
 
 let dragStart: { x: number; y: number } | null = null;
@@ -252,7 +254,7 @@ let dragStart: { x: number; y: number } | null = null;
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
-      screen: 'home',
+      screen: 'cardslib',
       adminSection: 'users',
       user: null,
       authChecked: false,
@@ -335,7 +337,7 @@ export const useAppStore = create<AppState>()(
       flying: null,
 
       go: (screen) => set({ screen }),
-      back: () => set((s) => ({ screen: BACK_MAP[s.screen] ?? 'home' })),
+      back: () => set((s) => ({ screen: BACK_MAP[s.screen] ?? 'cardslib' })),
       signIn: () => startGoogleLogin(),
       signOut: async () => {
         set({ user: null });
@@ -398,14 +400,14 @@ export const useAppStore = create<AppState>()(
       setTime: (t) => set({ time: t }),
       goPaywall: () => set({ screen: 'paywall' }),
       choosePlan: (key) => set({ plan: key }),
-      subscribe: () => set({ subscribed: true, hasProgram: true, screen: 'home' }),
-      skipPaywall: () => set({ hasProgram: true, screen: 'home' }),
+      subscribe: () => set({ subscribed: true, hasProgram: true, screen: 'cardslib' }),
+      skipPaywall: () => set({ hasProgram: true, screen: 'cardslib' }),
 
       toggleCalendar: () => set((s) => ({ calOpen: !s.calOpen })),
       focusCalendarDay: (dayIndex) =>
         set((s) => ({ calOpen: !(s.calOpen && s.calFocusIndex === dayIndex), calFocusIndex: dayIndex })),
 
-      goHome: () => set({ screen: 'home' }),
+      goHome: () => set({ screen: 'cardslib' }),
       goProgram: () => set({ screen: 'program' }),
       goExtras: () => set({ screen: 'extras' }),
       goCardsLib: () => set({ screen: 'cardslib' }),
@@ -456,10 +458,7 @@ export const useAppStore = create<AppState>()(
       },
       openCurrentTopic: () => set({ screen: 'topic' }),
       setNavTab: (v) => {
-        const s = get();
-        if (v === 2) return set({ screen: 'cardslib' });
-        if ((v === 1 || v === 3) && !s.hasProgram) return set({ screen: 'goals' });
-        set({ screen: (['home', 'program', 'cardslib', 'extras'] as Screen[])[v] ?? 'home' });
+        set({ screen: (['cardslib', 'comics', 'grammar'] as Screen[])[v] ?? 'cardslib' });
       },
       setAdminSection: (s) => set({ adminSection: s }),
 
@@ -671,6 +670,7 @@ export const useAppStore = create<AppState>()(
         }));
         if (dialogueContinuation === 'advance') get().advanceDeck();
         else if (dialogueContinuation === 'recognitioncheck' && dialogueChunkId) void get().startRecognitionCheck(dialogueChunkId);
+        else if (dialogueContinuation === 'browse') set({ screen: 'comics' });
         else set({ screen: 'deckdone' });
       },
 
@@ -678,6 +678,15 @@ export const useAppStore = create<AppState>()(
         const dialogue = get().learnerDialogueByChunk[chunkId];
         if (!dialogue) return;
         set({ screen: 'dialogue', dialogueChunkId: chunkId, dialogueContinuation: 'deckdone', learnerDialogue: dialogue });
+      },
+
+      // Browse mode hasn't pre-fetched the dialogue (unlike the summary-screen
+      // path, which prefetches via submitProductionCheck) — await it before
+      // switching screens, so DialogueScreen never renders a blank interim state.
+      openDialogueFromBrowse: async (chunkId) => {
+        const dialogue = await get().ensureLearnerDialogue(chunkId);
+        if (!dialogue) return;
+        set({ screen: 'dialogue', dialogueChunkId: chunkId, dialogueContinuation: 'browse', learnerDialogue: dialogue });
       },
 
       startRecognitionCheck: async (chunkId) => {

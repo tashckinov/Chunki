@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAppStore } from '../store/appStore';
+import { flattenChunks } from '../lib/collections';
 import { IconButton } from '../components/ui/IconButton';
 import { Button } from '../components/ui/Button';
 import { DialoguePlayback } from '../components/dialogue/DialoguePlayback';
@@ -10,7 +11,12 @@ export function DialogueScreen() {
 
   if (!s.learnerDialogue) return null;
 
-  const targetText = s.activeDeckChunks.find((c) => c.id === s.dialogueChunkId)?.text ?? null;
+  // Browse mode (opened from ComicsScreen) has no active deck session, so
+  // fall back to every loaded collection's chunks.
+  const targetText =
+    s.activeDeckChunks.find((c) => c.id === s.dialogueChunkId)?.text ??
+    flattenChunks(Object.values(s.collectionDetails)).find((c) => c.id === s.dialogueChunkId)?.text ??
+    null;
 
   return (
     <div className="flex-1 min-h-0 flex flex-col bg-bg">

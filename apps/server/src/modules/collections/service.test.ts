@@ -36,6 +36,7 @@ function fakeChunk(overrides: Partial<ChunkRow> = {}): ChunkRow {
     example: 'We need to check in.',
     example_translation: 'Нам нужно зарегистрироваться.',
     level: 'A2',
+    has_dialogue: false,
     ...overrides,
   };
 }
@@ -87,6 +88,7 @@ describe('getPublishedCollectionBySlug', () => {
       example: 'We need to check in.',
       exampleTranslation: 'Нам нужно зарегистрироваться.',
       level: 'A2',
+      hasDialogue: false,
     });
   });
 });

@@ -2,7 +2,7 @@ import { EXTRA_TOPIC_DEFS, MCQ, PROGRAM_TOPICS } from '@app/shared';
 import type { CEFRLevel } from '@app/shared';
 import { useAppStore } from './appStore';
 import { plural } from '../lib/plural';
-import { buildSessions, DAY_LABELS, formatDayMonth, startOfDay, weekdayMon0 } from '../lib/schedule';
+import { DAY_LABELS } from '../lib/schedule';
 
 const LEVELS_FROM: CEFRLevel[] = ['A1', 'A2', 'A2+', 'B1', 'B1+', 'B2'];
 const LEVELS_TO: CEFRLevel[] = ['B1', 'B1+', 'B2', 'C1'];
@@ -81,68 +81,6 @@ export function useScheduleView() {
   const weeks = Math.max(4, Math.round((14 * 45) / Math.max(30, perWeek)));
   const scheduleSummary = `${s.days.length} ${plural(s.days.length, 'занятие', 'занятия', 'занятий')} в неделю по ${s.minutes} минут — программа до ${s.to} закроется примерно за ${weeks} ${plural(weeks, 'неделю', 'недели', 'недель')}. Напоминание в ${s.time}.`;
   return { dayPicks, timePicks, scheduleSummary };
-}
-
-export function useCalendarView() {
-  const s = useAppStore();
-  const extrasOn = extraListView(s.extrasEnabled, s.extrasRemoved).filter((e) => e.on).length;
-  const today = startOfDay(new Date());
-  const totalSessions = PROGRAM_TOPICS.length + extrasOn;
-  const sessions = buildSessions(today, s.days, totalSessions);
-
-  const calStrip = Array.from({ length: 28 }, (_, i) => {
-    const date = new Date(today.getTime() + (i - 7) * 86400000);
-    const wd = weekdayMon0(date);
-    const isToday = i === 7;
-    const isPast = i < 7;
-    const sessionIdx = sessions.findIndex((ses) => ses.date.getTime() === date.getTime());
-    const isLesson = sessionIdx >= 0;
-    return {
-      dayIndex: i,
-      day: DAY_LABELS[wd],
-      num: String(date.getDate()),
-      bg: isToday ? 'var(--color-accent)' : isLesson ? 'var(--color-accent-subtle)' : 'transparent',
-      fg: isToday ? 'var(--color-on-accent)' : isLesson ? 'var(--color-accent)' : isPast ? 'var(--color-text-tertiary)' : 'var(--color-text)',
-      dot: isLesson && !isToday ? 'var(--color-accent)' : 'transparent',
-    };
-  });
-
-  const calList = sessions.slice(0, PROGRAM_TOPICS.length).map((ses, n) => {
-    const topic = PROGRAM_TOPICS[n];
-    const past = n < s.currentTopicIndex;
-    const current = n === s.currentTopicIndex;
-    const scoreLabel = past && s.completedTopics[topic.id] ? `${s.completedTopics[topic.id].scoreOutOf10}/10` : current ? 'сейчас' : s.time;
-    return {
-      dayIndex: ses.dayIndex,
-      date: formatDayMonth(ses.date),
-      day: DAY_LABELS[ses.weekday],
-      title: topic.title,
-      meta: topic.category,
-      tag: scoreLabel,
-      dateFg: current ? 'var(--color-accent)' : past ? 'var(--color-text-tertiary)' : 'var(--color-text)',
-      titleFg: past ? 'var(--color-text-secondary)' : 'var(--color-text)',
-      tagFg: current || past ? 'var(--color-accent)' : 'var(--color-text-secondary)',
-      cursor: current ? 'pointer' : 'default',
-      highlight: s.calFocusIndex === ses.dayIndex,
-      go: current ? () => s.openCurrentTopic() : undefined,
-    };
-  });
-
-  const nextSes = sessions[s.currentTopicIndex];
-  const deltaDays = nextSes ? Math.round((nextSes.date.getTime() - today.getTime()) / 86400000) : 0;
-  const deltaLabel = deltaDays <= 0 ? 'сегодня' : `через ${deltaDays} ${plural(deltaDays, 'день', 'дня', 'дней')}`;
-  const nextWhen = nextSes ? `${DAY_LABELS[nextSes.weekday]}, ${formatDayMonth(nextSes.date)}, ${s.time} · ${deltaLabel}` : s.time;
-
-  const lastSes = sessions[sessions.length - 1];
-  const calFooter = lastSes
-    ? `Программа заканчивается ${formatDayMonth(lastSes.date)}. ${
-        extrasOn
-          ? `Доп. ${plural(extrasOn, 'урок', 'урока', 'уроков')} сдвинет даты на ${extrasOn} ${plural(extrasOn, 'занятие', 'занятия', 'занятий')}.`
-          : 'Доп. уроки сдвинут даты, если включить их.'
-      }`
-    : '';
-
-  return { calStrip, calList, calFooter, nextWhen, extrasOn };
 }
 
 /** Segments a per-chunk SegmentedRing shows, by chunk_progress.state. Full ring (4) gets the "mastered" checkmark treatment. */

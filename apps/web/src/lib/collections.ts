@@ -69,6 +69,7 @@ export interface ChunkSummary {
   example: string | null;
   exampleTranslation: string | null;
   level: string;
+  hasDialogue: boolean;
 }
 
 export interface CollectionSummary {

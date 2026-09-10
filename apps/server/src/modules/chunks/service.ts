@@ -8,6 +8,7 @@ export interface ChunkSummary {
   example: string | null;
   exampleTranslation: string | null;
   level: string;
+  hasDialogue: boolean;
 }
 
 export function toChunkSummary(row: ChunkRow): ChunkSummary {
@@ -19,6 +20,7 @@ export function toChunkSummary(row: ChunkRow): ChunkSummary {
     example: row.example,
     exampleTranslation: row.example_translation,
     level: row.level,
+    hasDialogue: row.has_dialogue,
   };
 }
 

@@ -60,6 +60,7 @@ describe('GET /api/chunks/:id', () => {
       example: null,
       exampleTranslation: null,
       level: 'A2',
+      hasDialogue: false,
     };
     vi.mocked(service.getChunkById).mockResolvedValue(chunk);
 

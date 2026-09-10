@@ -12,8 +12,9 @@ import { CheckingScreen } from './screens/CheckingScreen';
 import { ResultScreen } from './screens/ResultScreen';
 import { ScheduleScreen } from './screens/ScheduleScreen';
 import { PaywallScreen } from './screens/PaywallScreen';
-import { HomeScreen } from './screens/HomeScreen';
 import { ProgramScreen } from './screens/ProgramScreen';
+import { GrammarScreen } from './screens/GrammarScreen';
+import { ComicsScreen } from './screens/ComicsScreen';
 import { TopicScreen } from './screens/TopicScreen';
 import { ExercisesScreen } from './screens/ExercisesScreen';
 import { TopicResultScreen } from './screens/TopicResultScreen';
@@ -27,10 +28,9 @@ import { DialogueScreen } from './screens/DialogueScreen';
 import { AdminScreen } from './screens/admin/AdminScreen';
 
 const SIDEBAR_ITEMS: { label: string; icon: IconName }[] = [
-  { label: 'Главная', icon: 'Today' },
-  { label: 'Программа', icon: 'CheckBox' },
   { label: 'Карточки', icon: 'Stars' },
-  { label: 'Доп. уроки', icon: 'Add' },
+  { label: 'Комиксы', icon: 'Characters' },
+  { label: 'Грамматика', icon: 'CheckBox' },
 ];
 
 const ADMIN_SIDEBAR_ITEMS: { label: string; icon: IconName; section: 'users' | 'content' | 'characters' | 'aiLogs' }[] = [
@@ -44,10 +44,9 @@ const ADMIN_SIDEBAR_ITEMS: { label: string; icon: IconName; section: 'users' | '
 // separate logo header (there's no room for both on a small screen), and
 // gets its own "Профиль" tab instead of a row at the top of Home.
 const MOBILE_NAV_ITEMS: NavItem[] = [
-  { label: 'Главная', icon: 'Today' },
-  { label: 'Программа', icon: 'CheckBox' },
   { label: 'Chunki', logo: true },
-  { label: 'Доп. уроки', icon: 'Add' },
+  { label: 'Комиксы', icon: 'Characters' },
+  { label: 'Грамматика', icon: 'CheckBox' },
   { label: 'Профиль', account: true },
 ];
 
@@ -72,8 +71,6 @@ function CurrentScreen() {
       return <ScheduleScreen />;
     case 'paywall':
       return <PaywallScreen />;
-    case 'home':
-      return <HomeScreen />;
     case 'program':
       return <ProgramScreen />;
     case 'topic':
@@ -86,6 +83,10 @@ function CurrentScreen() {
       return <ExtrasScreen />;
     case 'cardslib':
       return <CardsScreen />;
+    case 'comics':
+      return <ComicsScreen />;
+    case 'grammar':
+      return <GrammarScreen />;
     case 'deck':
       return <DeckScreen />;
     case 'deckdone':
@@ -99,7 +100,7 @@ function CurrentScreen() {
     case 'admin':
       return <AdminScreen />;
     default:
-      return <HomeScreen />;
+      return <CardsScreen />;
   }
 }
 
@@ -169,17 +170,18 @@ function SidebarNav({ value, onChange }: { value: number; onChange: (v: number) 
 
 function navTabForScreen(screen: string): number {
   switch (screen) {
-    case 'program':
+    case 'comics':
       return 1;
+    case 'grammar':
+    case 'program':
+    case 'extras':
+      return 2;
     case 'cardslib':
     case 'deck':
     case 'deckdone':
     case 'recognitioncheck':
     case 'productioncheck':
     case 'dialogue':
-      return 2;
-    case 'extras':
-      return 3;
     default:
       return 0;
   }
