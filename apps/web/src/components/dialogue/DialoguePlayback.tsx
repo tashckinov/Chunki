@@ -42,12 +42,19 @@ export function DialoguePlayback({
   }, [revealed, autoPlay, messages.length]);
 
   return (
-    <div onClick={() => setRevealed(messages.length)} className="flex flex-col gap-3">
+    <div onClick={() => setRevealed(messages.length)} className="flex flex-col gap-4">
       {messages.slice(0, revealed).map((m, i) => (
-        <div key={i} className={`flex items-end gap-2 anim-rise max-w-[85%] ${m.side === 'right' ? 'flex-row-reverse self-end' : 'self-start'}`}>
-          <img src={apiUrl(m.imageUrl)} alt={m.characterName} className="w-10 h-10 rounded-full object-cover flex-none bg-surface-subtle" />
-          <div className={`rounded-[var(--radius-md)] px-3.5 py-2.5 ${m.side === 'right' ? 'bg-accent text-on-accent' : 'bg-surface-subtle text-text'}`}>
-            <div className="text-[15px] leading-[21px]">{highlightTarget(m.text, targetText)}</div>
+        <div key={i} className={`flex items-end gap-3 anim-rise max-w-[92%] ${m.side === 'right' ? 'flex-row-reverse self-end' : 'self-start'}`}>
+          <img
+            src={apiUrl(m.imageUrl)}
+            alt={m.characterName}
+            className="w-24 h-24 rounded-[var(--radius-lg)] object-cover object-top flex-none bg-surface-subtle shadow-[var(--shadow-sm)]"
+          />
+          <div className="flex flex-col gap-1 min-w-0">
+            <div className={`text-meta px-1 ${m.side === 'right' ? 'text-right' : ''}`}>{m.characterName}</div>
+            <div className={`rounded-[var(--radius-lg)] px-4 py-3 ${m.side === 'right' ? 'bg-accent text-on-accent' : 'bg-surface-subtle text-text'}`}>
+              <div className="text-[16px] leading-[22px]">{highlightTarget(m.text, targetText)}</div>
+            </div>
           </div>
         </div>
       ))}
