@@ -193,16 +193,22 @@ function EmotionGroup({
 
 /** Fetches once which chunks' dialogues actually use this character — surfaced so the admin can see the impact before deleting one. */
 function CharacterUsageRow({ characterId }: { characterId: string }) {
-  const [usage, setUsage] = useState<CharacterChunkUsage[] | 'loading'>('loading');
+  const [usage, setUsage] = useState<CharacterChunkUsage[] | 'loading' | 'error'>('loading');
 
   useEffect(() => {
     setUsage('loading');
     fetchCharacterUsage(characterId)
       .then(setUsage)
-      .catch(() => setUsage([]));
+      .catch(() => setUsage('error'));
   }, [characterId]);
 
   if (usage === 'loading') return <div className="text-body-secondary text-[13.5px]">Загрузка…</div>;
+
+  // Never render "не используется" for a failed fetch — that would misleadingly
+  // suggest it's safe to delete an image/character that might actually be in use.
+  if (usage === 'error') {
+    return <div className="text-negative text-[13px]">Не удалось проверить использование — не полагайтесь на пустой список ниже.</div>;
+  }
 
   if (usage.length === 0) {
     return <div className="text-meta">Не используется ни в одном диалоге.</div>;

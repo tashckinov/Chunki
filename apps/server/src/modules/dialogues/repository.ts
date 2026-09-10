@@ -123,17 +123,25 @@ export interface ChunkUsingCharacterRow {
   collection_titles: string[];
 }
 
-/** Every chunk whose dialogue includes this character as a participant — lets the admin see the impact before deleting a character. */
+/**
+ * Every chunk whose dialogue actually has a message spoken by this character
+ * — deliberately queries chunk_dialogue_messages, not chunk_dialogue_participants:
+ * the FK that blocks deleting a character's image (character_image_id on this
+ * same table) is keyed off messages, and participants/messages are only kept
+ * in sync by application-level validation (saveDialogue's referencesAreValid),
+ * not a DB constraint — a participant row is not a reliable proxy for "is
+ * this character's own image actually referenced."
+ */
 export async function findChunksUsingCharacter(characterId: string): Promise<ChunkUsingCharacterRow[]> {
   const { rows } = await pool.query<ChunkUsingCharacterRow>(
     `SELECT c.id AS chunk_id, c.text AS chunk_text,
             COALESCE(array_agg(DISTINCT col.title) FILTER (WHERE col.id IS NOT NULL), ARRAY[]::text[]) AS collection_titles
-     FROM chunk_dialogue_participants p
-     JOIN chunk_dialogues d ON d.id = p.dialogue_id
+     FROM chunk_dialogue_messages m
+     JOIN chunk_dialogues d ON d.id = m.dialogue_id
      JOIN chunks c ON c.id = d.chunk_id
      LEFT JOIN collection_chunks cc ON cc.chunk_id = c.id
      LEFT JOIN collections col ON col.id = cc.collection_id
-     WHERE p.character_id = $1
+     WHERE m.character_id = $1
      GROUP BY c.id, c.text
      ORDER BY c.text`,
     [characterId],
