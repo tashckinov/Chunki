@@ -239,6 +239,7 @@ interface AppState {
   startProductionCheck: (chunkId: string) => Promise<void>;
   setProductionAnswer: (v: string) => void;
   submitProductionCheck: () => void;
+  skipProductionCheck: () => void;
 
   ensureLearnerDialogue: (chunkId: string) => Promise<LearnerDialogue | null>;
   handleDontKnow: (chunkId: string) => Promise<void>;
@@ -727,6 +728,13 @@ export const useAppStore = create<AppState>()(
       },
 
       setProductionAnswer: (v) => set({ productionAnswer: v }),
+
+      // No API call, no verdict recorded — advanceDeck() already resets
+      // productionChunkId/productionAnswer and moves the deck on.
+      skipProductionCheck: () => {
+        if (!get().productionChunkId) return;
+        get().advanceDeck();
+      },
 
       // Fire-and-forget: the judge call can take 20+ seconds, so this
       // doesn't block the deck — it marks the chunk pending, advances

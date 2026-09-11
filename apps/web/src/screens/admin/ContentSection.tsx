@@ -423,7 +423,7 @@ function DialogueQuickActions({ chunk, characters, onSaved }: { chunk: AdminChun
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            <DialoguePlayback messages={playbackMessages} targetText={chunk.text} autoPlay={false} />
+            <DialoguePlayback messages={playbackMessages} targetText={chunk.text} />
             {saveError && <div className="text-negative text-[13px]">Не удалось сохранить: {saveError}</div>}
             <div className="flex gap-2">
               <Button size="sm" onClick={approve} disabled={saving}>
@@ -451,7 +451,7 @@ function BulkPreviewRow({ item, chunkText, characters }: { item: BulkParsedDialo
           {item.dialogue.messages.length} {plural(item.dialogue.messages.length, 'реплика', 'реплики', 'реплик')}
         </span>
       </button>
-      {expanded && <DialoguePlayback messages={toPlaybackMessages(item.dialogue, characters)} targetText={chunkText} autoPlay={false} />}
+      {expanded && <DialoguePlayback messages={toPlaybackMessages(item.dialogue, characters)} targetText={chunkText} />}
     </div>
   );
 }

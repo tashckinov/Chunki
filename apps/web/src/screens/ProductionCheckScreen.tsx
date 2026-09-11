@@ -7,6 +7,7 @@ import { Button } from '../components/ui/Button';
 export function ProductionCheckScreen() {
   const s = useAppStore();
   const remaining = PRODUCTION_ANSWER_MAX_LENGTH - s.productionAnswer.length;
+  const chunkText = s.activeDeckChunks.find((c) => c.id === s.productionChunkId)?.text;
 
   return (
     <div className="flex-1 min-h-0 flex flex-col bg-bg">
@@ -19,6 +20,12 @@ export function ProductionCheckScreen() {
           <div className="text-meta mb-2">Ситуация</div>
           <div className="text-[19px] leading-[26px] font-medium">{s.productionSituation}</div>
         </div>
+
+        {chunkText && (
+          <div className="text-meta">
+            Подсказка: используйте фразу «{chunkText}»
+          </div>
+        )}
 
         <div className="flex flex-col gap-1.5">
           <Textarea
@@ -34,6 +41,9 @@ export function ProductionCheckScreen() {
         </div>
         <Button onClick={s.submitProductionCheck} disabled={!s.productionAnswer.trim()}>
           Проверить
+        </Button>
+        <Button variant="ghost" onClick={s.skipProductionCheck}>
+          Пропустить
         </Button>
       </div>
     </div>

@@ -374,7 +374,7 @@ export function DialogueBuilderView({ chunk, onBack }: { chunk: DialogueBuilderC
           messages.length === 0 ? (
             <div className="text-body-secondary text-[13.5px]">Добавьте сообщения в редакторе, чтобы увидеть предпросмотр.</div>
           ) : (
-            <DialoguePlayback messages={playbackMessages} targetText={chunk.text} autoPlay={false} />
+            <DialoguePlayback messages={playbackMessages} targetText={chunk.text} />
           )
         ) : (
           <div className="flex flex-col gap-5">

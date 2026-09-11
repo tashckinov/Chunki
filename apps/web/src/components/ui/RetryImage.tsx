@@ -11,15 +11,18 @@ const MAX_ATTEMPTS = 20; // a handful of fast retries, then slow retries for a f
  * (or fully broken) image forever, with nothing to do about it. This is a
  * drop-in replacement that changes `src` to retry a few times with backoff,
  * then keeps retrying slowly in the background, hiding the ugly native
- * broken-image glyph while a retry is pending.
+ * broken-image glyph while a retry is pending. It also shows a pulsing
+ * skeleton fill before the first successful load, instead of a blank box.
  */
 export function RetryImage({ src, alt, className }: { src: string; alt: string; className?: string }) {
   const [attempt, setAttempt] = useState(0);
   const [broken, setBroken] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     setAttempt(0);
     setBroken(false);
+    setLoaded(false);
   }, [src]);
 
   function handleError() {
@@ -31,17 +34,21 @@ export function RetryImage({ src, alt, className }: { src: string; alt: string; 
 
   // Cache-busting only on a retry — the first attempt should hit the normal browser cache.
   const resolvedSrc = attempt === 0 ? src : `${src}${src.includes('?') ? '&' : '?'}retry=${attempt}`;
+  const skeleton = !loaded && !broken;
 
   return (
     <img
       src={resolvedSrc}
       alt={alt}
-      className={className}
+      className={`${className ?? ''} ${skeleton ? 'animate-pulse bg-surface-subtle' : ''}`}
       style={broken ? { visibility: 'hidden' } : undefined}
       loading="lazy"
       decoding="async"
       onError={handleError}
-      onLoad={() => setBroken(false)}
+      onLoad={() => {
+        setBroken(false);
+        setLoaded(true);
+      }}
     />
   );
 }

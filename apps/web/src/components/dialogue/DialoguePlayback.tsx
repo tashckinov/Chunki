@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import { apiUrl } from '../../lib/collections';
 import { highlightTarget } from '../../lib/textHighlight';
 import { RetryImage } from '../ui/RetryImage';
@@ -12,39 +11,16 @@ export interface PlaybackMessage {
 
 /**
  * The one presentational renderer for "just the clean dialogue" — no
- * editor chrome, ever. Used identically by the learner-facing screen
- * (sequential auto-reveal) and the admin's Learner Preview mode (everything
- * shown at once), so what's previewed and what's actually shown can never
- * drift apart.
+ * editor chrome, ever. Used identically by the learner-facing screen and
+ * the admin's Learner Preview mode, so what's previewed and what's
+ * actually shown can never drift apart. Every message renders immediately
+ * (no top-to-bottom reveal animation) — each avatar shows a pulsing
+ * skeleton via RetryImage until its own image actually loads.
  */
-export function DialoguePlayback({
-  messages,
-  targetText,
-  autoPlay = true,
-  onAllRevealed,
-}: {
-  messages: PlaybackMessage[];
-  targetText?: string | null;
-  autoPlay?: boolean;
-  onAllRevealed?: () => void;
-}) {
-  const [revealed, setRevealed] = useState(autoPlay ? 0 : messages.length);
-
-  useEffect(() => {
-    if (!autoPlay) return;
-    if (revealed >= messages.length) {
-      if (messages.length > 0) onAllRevealed?.();
-      return;
-    }
-    const delay = revealed === 0 ? 300 : 900;
-    const t = setTimeout(() => setRevealed((n) => n + 1), delay);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [revealed, autoPlay, messages.length]);
-
+export function DialoguePlayback({ messages, targetText }: { messages: PlaybackMessage[]; targetText?: string | null }) {
   return (
-    <div onClick={() => setRevealed(messages.length)} className="flex flex-col gap-4">
-      {messages.slice(0, revealed).map((m, i) => (
+    <div className="flex flex-col gap-4">
+      {messages.map((m, i) => (
         <div key={i} className={`flex items-end gap-3 anim-rise max-w-[92%] ${m.side === 'right' ? 'flex-row-reverse self-end' : 'self-start'}`}>
           <div className="w-24 h-24 flex-none rounded-[var(--radius-lg)] bg-accent-subtle border border-border shadow-[var(--shadow-xs)] overflow-hidden p-1 flex items-center justify-center">
             <RetryImage src={apiUrl(m.imageUrl)} alt={m.characterName} className="max-w-full max-h-full object-contain object-top" />
