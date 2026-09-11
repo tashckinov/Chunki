@@ -25,6 +25,7 @@ import {
   type ProgressSummary,
   type RecognitionOption,
   type ProductionVerdict,
+  type SituationPromptPart,
 } from '../lib/progress';
 
 export type Screen =
@@ -155,6 +156,7 @@ interface AppState {
 
   productionChunkId: string | null;
   productionSituation: string;
+  productionSituationParts: SituationPromptPart[];
   productionAnswer: string;
 
   collections: CollectionSummary[];
@@ -321,6 +323,7 @@ export const useAppStore = create<AppState>()(
 
       productionChunkId: null,
       productionSituation: '',
+      productionSituationParts: [],
       productionAnswer: '',
 
       collections: [],
@@ -720,6 +723,7 @@ export const useAppStore = create<AppState>()(
             screen: 'productioncheck',
             productionChunkId: check.chunkId,
             productionSituation: check.situationPrompt,
+            productionSituationParts: check.situationParts,
             productionAnswer: '',
           });
         } catch {

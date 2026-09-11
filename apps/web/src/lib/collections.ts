@@ -73,6 +73,12 @@ export interface ChunkSentence {
   parts: ChunkSentencePart[];
 }
 
+/** Same {text, parts} shape as ChunkSentence — admin-only, so not part of the public ChunkSummary below. */
+export interface SituationPrompt {
+  text: string;
+  parts: ChunkSentencePart[];
+}
+
 export interface ChunkSummary {
   id: string;
   text: string;

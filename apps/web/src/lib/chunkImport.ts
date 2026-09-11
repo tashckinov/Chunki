@@ -1,4 +1,4 @@
-import type { ChunkSentence, ChunkSentencePart } from './collections';
+import type { ChunkSentence, ChunkSentencePart, SituationPrompt } from './collections';
 
 export type ValidateSentencesResult = { kind: 'ok'; sentences: ChunkSentence[] } | { kind: 'error'; message: string };
 
@@ -35,12 +35,92 @@ export function validateSentencesShape(raw: unknown): ValidateSentencesResult {
   return { kind: 'ok', sentences };
 }
 
+export type ValidateSituationsResult = { kind: 'ok'; situations: SituationPrompt[] } | { kind: 'error'; message: string };
+
+/** Same idea as validateSentencesShape above, but for situation prompts (no translation field). */
+export function validateSituationsShape(raw: unknown): ValidateSituationsResult {
+  if (!Array.isArray(raw)) {
+    return { kind: 'error', message: 'situations должно быть массивом.' };
+  }
+  const situations: SituationPrompt[] = [];
+  for (const item of raw) {
+    if (typeof item !== 'object' || item === null) {
+      return { kind: 'error', message: 'Каждая ситуация должна быть объектом.' };
+    }
+    const { text, parts } = item as { text?: unknown; parts?: unknown };
+    if (typeof text !== 'string' || !text.trim()) {
+      return { kind: 'error', message: 'У каждой ситуации должен быть непустой text.' };
+    }
+    if (!Array.isArray(parts) || parts.length === 0) {
+      return { kind: 'error', message: `У ситуации "${text}" должна быть хотя бы одна часть (parts).` };
+    }
+    const validParts: ChunkSentencePart[] = [];
+    for (const p of parts) {
+      if (typeof p !== 'object' || p === null) {
+        return { kind: 'error', message: `Каждая часть ситуации "${text}" должна быть объектом.` };
+      }
+      const { text: partText, explanationRu, explanationEn } = p as { text?: unknown; explanationRu?: unknown; explanationEn?: unknown };
+      if (typeof partText !== 'string' || !partText.trim() || typeof explanationRu !== 'string' || !explanationRu.trim() || typeof explanationEn !== 'string' || !explanationEn.trim()) {
+        return { kind: 'error', message: `У каждой части ситуации "${text}" должны быть непустые text, explanationRu и explanationEn.` };
+      }
+      validParts.push({ text: partText, explanationRu, explanationEn });
+    }
+    situations.push({ text, parts: validParts });
+  }
+  return { kind: 'ok', situations };
+}
+
+export interface BulkParsedSituations {
+  chunkId: string;
+  situations: SituationPrompt[];
+}
+
+export type ParseBulkSituationsResult = { kind: 'ok'; items: BulkParsedSituations[] } | { kind: 'error'; message: string };
+
+/** Parses a { situationsByChunk: [...] } payload for the bulk "regenerate situations" flow, keyed by existing chunk ids. */
+export function parseBulkSituationsImport(text: string, chunks: { id: string; text: string }[]): ParseBulkSituationsResult {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    return { kind: 'error', message: 'Не удалось разобрать JSON.' };
+  }
+  if (typeof raw !== 'object' || raw === null || !Array.isArray((raw as { situationsByChunk?: unknown }).situationsByChunk)) {
+    return { kind: 'error', message: 'Ожидается объект с полем situationsByChunk (массив).' };
+  }
+  const items = (raw as { situationsByChunk: unknown[] }).situationsByChunk;
+  if (items.length === 0) {
+    return { kind: 'error', message: 'В situationsByChunk нет ни одного элемента.' };
+  }
+
+  const chunkIds = new Set(chunks.map((c) => c.id));
+  const seen = new Set<string>();
+  const result: BulkParsedSituations[] = [];
+  for (const item of items) {
+    const chunkId = (item as { chunkId?: unknown })?.chunkId;
+    if (typeof chunkId !== 'string' || !chunkIds.has(chunkId)) {
+      return { kind: 'error', message: `chunkId ${String(chunkId)} не относится к этой коллекции.` };
+    }
+    if (seen.has(chunkId)) {
+      return { kind: 'error', message: `chunkId ${chunkId} встречается в situationsByChunk дважды.` };
+    }
+    seen.add(chunkId);
+    const situationsResult = validateSituationsShape((item as { situations?: unknown }).situations);
+    if (situationsResult.kind === 'error') {
+      const chunkText = chunks.find((c) => c.id === chunkId)?.text ?? chunkId;
+      return { kind: 'error', message: `«${chunkText}»: ${situationsResult.message}` };
+    }
+    result.push({ chunkId, situations: situationsResult.situations });
+  }
+  return { kind: 'ok', items: result };
+}
+
 export interface ParsedChunkCreate {
   text: string;
   translation: string;
   explanation: string | null;
   level: string;
-  situationPrompts: string[];
+  situationPrompts: SituationPrompt[];
   sentences: ChunkSentence[];
 }
 
@@ -75,7 +155,13 @@ export function parseBulkChunkCreateImport(text: string): ParseBulkChunkCreateRe
     if (sentencesResult.kind === 'error') {
       return { kind: 'error', message: `«${chunkText}»: ${sentencesResult.message}` };
     }
-    const prompts = Array.isArray(situationPrompts) ? situationPrompts.filter((p): p is string => typeof p === 'string' && !!p.trim()) : [];
+    // The bulk-create prompt still asks the AI for flat situationPrompts strings (a
+    // minor, optional field here) — wrap each into the {text, parts} shape the admin
+    // API expects, with zero parts (a real breakdown only comes from the dedicated
+    // bulk-situations-regenerate flow, which asks for the full nested shape).
+    const prompts: SituationPrompt[] = Array.isArray(situationPrompts)
+      ? situationPrompts.filter((p): p is string => typeof p === 'string' && !!p.trim()).map((text) => ({ text, parts: [] }))
+      : [];
     result.push({
       text: chunkText,
       translation,

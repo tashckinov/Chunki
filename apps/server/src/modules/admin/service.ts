@@ -14,6 +14,7 @@ import {
   type AdminCollectionRow,
   type AdminChunkRow,
   type AdminChunkSentenceRow,
+  type AdminSituationPrompt,
   type NewCollectionInput,
   type CollectionPatch,
   type ChunkInput,
@@ -116,7 +117,7 @@ export interface AdminChunkSummary {
   translation: string;
   explanation: string | null;
   level: string;
-  situationPrompts: string[];
+  situationPrompts: AdminSituationPrompt[];
   sentences: AdminChunkSentenceRow[];
   hasDialogue: boolean;
   position: number;

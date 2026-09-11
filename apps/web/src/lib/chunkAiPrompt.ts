@@ -78,6 +78,44 @@ ${EXPLANATION_STYLE_GUIDE}
  * already exist — a separate copy/paste round from the dialogue-bulk
  * feature, touching only sentences/parts, never dialogues.
  */
+/**
+ * Same idea as buildBulkSentencesRegeneratePrompt, but for the "Ситуация"
+ * scenarios shown on the production-check screen — a separate copy/paste
+ * round from both the sentences and dialogue bulk flows (confirmed with
+ * the user), touching only chunk_situation_prompts/-parts.
+ */
+export function buildBulkSituationsRegeneratePrompt(chunks: { id: string; text: string; translation: string }[]): string {
+  const chunkLines = chunks.map((c) => `- chunkId ${c.id}: "${c.text}" — "${c.translation}"`).join('\n');
+
+  return `Ты помогаешь обновить ситуации для продакшн-проверки в приложении изучения английского языка — по 2-3 ситуации на каждый чанк ниже.
+
+Каждая ситуация — короткое описание жизненной ситуации на английском (2-3 предложения, заканчивается вопросом вроде "What do you say?"), после прочтения которой пользователь должен естественно ответить, использовав фразу чанка.
+
+Чанки (для каждого нужны 2-3 новые ситуации):
+${chunkLines}
+
+Для каждой ситуации укажи:
+- text — сама ситуация на английском.
+- parts — текст ситуации, разбитый по смыслу на 2-5 частей; части при склеивании через пробел должны в точности давать исходный текст text. Для каждой части:
+  - text — сама часть (кусок текста ситуации).
+  - explanationRu — объяснение значения этой части именно в этой ситуации, на русском.
+  - explanationEn — то же объяснение на английском.
+
+${EXPLANATION_STYLE_GUIDE}
+
+Ответь СТРОГО валидным JSON, без markdown-обёртки и без каких-либо пояснений до или после, в точности в этом формате:
+{
+  "situationsByChunk": [
+    { "chunkId": "...", "situations": [ { "text": "...", "parts": [{ "text": "...", "explanationRu": "...", "explanationEn": "..." }] } ] }
+  ]
+}
+
+Правила:
+- Один объект в situationsByChunk на каждый чанк из списка выше (используй его chunkId как есть), 2-3 ситуации в situations.
+- У каждой ситуации минимум 1 часть; части при склеивании через пробел восстанавливают исходный текст text.
+- Не добавляй никаких полей, кроме перечисленных.`;
+}
+
 export function buildBulkSentencesRegeneratePrompt(chunks: { id: string; text: string; translation: string }[]): string {
   const chunkLines = chunks.map((c) => `- chunkId ${c.id}: "${c.text}" — "${c.translation}"`).join('\n');
 

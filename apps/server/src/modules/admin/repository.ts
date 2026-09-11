@@ -147,13 +147,24 @@ export interface AdminChunkSentenceRow {
   parts: AdminChunkSentencePart[];
 }
 
+export interface AdminSituationPromptPart {
+  text: string;
+  explanationRu: string;
+  explanationEn: string;
+}
+
+export interface AdminSituationPrompt {
+  text: string;
+  parts: AdminSituationPromptPart[];
+}
+
 export interface AdminChunkRow {
   id: string;
   text: string;
   translation: string;
   explanation: string | null;
   level: string;
-  situation_prompts: string[];
+  situation_prompts: AdminSituationPrompt[];
   sentences: AdminChunkSentenceRow[];
   has_dialogue: boolean;
   position: number;
@@ -216,6 +227,50 @@ async function fetchSentencesForChunks(chunkIds: string[], client: pg.PoolClient
   return byChunk;
 }
 
+interface RawSituationPromptRow {
+  chunk_id: string;
+  prompt_id: string;
+  prompt: string;
+}
+
+interface RawSituationPromptPartRow {
+  situation_prompt_id: string;
+  text: string;
+  explanation_ru: string;
+  explanation_en: string;
+}
+
+/** Same batch-fetch-then-group approach as fetchSentencesForChunks above, for situation prompts + their parts. */
+async function fetchSituationPromptsForChunks(chunkIds: string[], client: pg.PoolClient | pg.Pool = pool): Promise<Map<string, AdminSituationPrompt[]>> {
+  if (chunkIds.length === 0) return new Map();
+  const { rows: promptRows } = await client.query<RawSituationPromptRow>(
+    `SELECT chunk_id, id AS prompt_id, prompt
+     FROM chunk_situation_prompts WHERE chunk_id = ANY($1::uuid[]) ORDER BY chunk_id, position`,
+    [chunkIds],
+  );
+  const promptIds = promptRows.map((r) => r.prompt_id);
+  const partsByPrompt = new Map<string, AdminSituationPromptPart[]>();
+  if (promptIds.length > 0) {
+    const { rows: partRows } = await client.query<RawSituationPromptPartRow>(
+      `SELECT situation_prompt_id, text, explanation_ru, explanation_en
+       FROM chunk_situation_prompt_parts WHERE situation_prompt_id = ANY($1::uuid[]) ORDER BY situation_prompt_id, position`,
+      [promptIds],
+    );
+    for (const p of partRows) {
+      const arr = partsByPrompt.get(p.situation_prompt_id) ?? [];
+      arr.push({ text: p.text, explanationRu: p.explanation_ru, explanationEn: p.explanation_en });
+      partsByPrompt.set(p.situation_prompt_id, arr);
+    }
+  }
+  const byChunk = new Map<string, AdminSituationPrompt[]>();
+  for (const p of promptRows) {
+    const arr = byChunk.get(p.chunk_id) ?? [];
+    arr.push({ text: p.prompt, parts: partsByPrompt.get(p.prompt_id) ?? [] });
+    byChunk.set(p.chunk_id, arr);
+  }
+  return byChunk;
+}
+
 /** Full-replace, delete-then-reinsert-in-order — same pattern as replaceSituationPrompts below, just nested one level deeper (each sentence's parts). */
 async function replaceChunkSentences(client: pg.PoolClient, chunkId: string, sentences: AdminChunkSentenceRow[]): Promise<void> {
   await client.query(`DELETE FROM chunk_sentences WHERE chunk_id = $1`, [chunkId]);
@@ -237,12 +292,8 @@ async function replaceChunkSentences(client: pg.PoolClient, chunkId: string, sen
 }
 
 export async function listChunksForCollectionAdmin(collectionId: string): Promise<AdminChunkRow[]> {
-  const { rows } = await pool.query<Omit<AdminChunkRow, 'sentences'>>(
+  const { rows } = await pool.query<Omit<AdminChunkRow, 'sentences' | 'situation_prompts'>>(
     `SELECT c.id, c.text, c.translation, c.explanation, c.level, cc.position,
-            COALESCE(
-              (SELECT array_agg(p.prompt ORDER BY p.position) FROM chunk_situation_prompts p WHERE p.chunk_id = c.id),
-              ARRAY[]::text[]
-            ) AS situation_prompts,
             ${HAS_DIALOGUE_SUBQUERY}
      FROM collection_chunks cc
      JOIN chunks c ON c.id = cc.chunk_id
@@ -250,33 +301,44 @@ export async function listChunksForCollectionAdmin(collectionId: string): Promis
      ORDER BY cc.position`,
     [collectionId],
   );
-  const sentencesByChunk = await fetchSentencesForChunks(rows.map((r) => r.id));
-  return rows.map((r) => ({ ...r, sentences: sentencesByChunk.get(r.id) ?? [] }));
+  const chunkIds = rows.map((r) => r.id);
+  const sentencesByChunk = await fetchSentencesForChunks(chunkIds);
+  const situationPromptsByChunk = await fetchSituationPromptsForChunks(chunkIds);
+  return rows.map((r) => ({ ...r, sentences: sentencesByChunk.get(r.id) ?? [], situation_prompts: situationPromptsByChunk.get(r.id) ?? [] }));
 }
 
 type ChunkRowNoPosition = Omit<AdminChunkRow, 'position'>;
 
 async function findChunkByIdAdmin(id: string, client: pg.PoolClient | pg.Pool = pool): Promise<ChunkRowNoPosition | null> {
-  const { rows } = await client.query<Omit<ChunkRowNoPosition, 'sentences'>>(
+  const { rows } = await client.query<Omit<ChunkRowNoPosition, 'sentences' | 'situation_prompts'>>(
     `SELECT c.id, c.text, c.translation, c.explanation, c.level,
-            COALESCE(
-              (SELECT array_agg(p.prompt ORDER BY p.position) FROM chunk_situation_prompts p WHERE p.chunk_id = c.id),
-              ARRAY[]::text[]
-            ) AS situation_prompts,
             ${HAS_DIALOGUE_SUBQUERY}
      FROM chunks c WHERE c.id = $1`,
     [id],
   );
   if (!rows[0]) return null;
   const sentencesByChunk = await fetchSentencesForChunks([rows[0].id], client);
-  return { ...rows[0], sentences: sentencesByChunk.get(rows[0].id) ?? [] };
+  const situationPromptsByChunk = await fetchSituationPromptsForChunks([rows[0].id], client);
+  return { ...rows[0], sentences: sentencesByChunk.get(rows[0].id) ?? [], situation_prompts: situationPromptsByChunk.get(rows[0].id) ?? [] };
 }
 
-/** Replaces the full set of situation prompts for a chunk, in order — mirrors how every other chunk field is a full-replace patch, not an incremental diff. */
-async function replaceSituationPrompts(client: pg.PoolClient, chunkId: string, prompts: string[]): Promise<void> {
+/** Full-replace, delete-then-reinsert-in-order — same pattern as replaceChunkSentences above, mirrored for situation prompts + their parts. */
+async function replaceSituationPrompts(client: pg.PoolClient, chunkId: string, prompts: AdminSituationPrompt[]): Promise<void> {
   await client.query(`DELETE FROM chunk_situation_prompts WHERE chunk_id = $1`, [chunkId]);
   for (let i = 0; i < prompts.length; i++) {
-    await client.query(`INSERT INTO chunk_situation_prompts (chunk_id, prompt, position) VALUES ($1, $2, $3)`, [chunkId, prompts[i], i]);
+    const prompt = prompts[i];
+    const { rows } = await client.query<{ id: string }>(
+      `INSERT INTO chunk_situation_prompts (chunk_id, prompt, position) VALUES ($1, $2, $3) RETURNING id`,
+      [chunkId, prompt.text, i],
+    );
+    const promptId = rows[0].id;
+    for (let j = 0; j < prompt.parts.length; j++) {
+      const part = prompt.parts[j];
+      await client.query(
+        `INSERT INTO chunk_situation_prompt_parts (situation_prompt_id, text, explanation_ru, explanation_en, position) VALUES ($1, $2, $3, $4, $5)`,
+        [promptId, part.text, part.explanationRu, part.explanationEn, j],
+      );
+    }
   }
 }
 
@@ -285,7 +347,7 @@ export interface ChunkInput {
   translation: string;
   explanation: string | null;
   level: string;
-  situationPrompts: string[];
+  situationPrompts: AdminSituationPrompt[];
   sentences: AdminChunkSentenceRow[];
 }
 
@@ -324,7 +386,7 @@ export interface ChunkPatch {
   translation?: string;
   explanation?: string | null;
   level?: string;
-  situationPrompts?: string[];
+  situationPrompts?: AdminSituationPrompt[];
   sentences?: AdminChunkSentenceRow[];
 }
 

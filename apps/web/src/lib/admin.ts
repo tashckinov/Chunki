@@ -1,4 +1,4 @@
-import { getJson, postJson, patchJson, deleteJson, postFormData, type ChunkSentence } from './collections';
+import { getJson, postJson, patchJson, deleteJson, postFormData, type ChunkSentence, type SituationPrompt } from './collections';
 
 export interface AdminUser {
   id: string;
@@ -29,7 +29,7 @@ export interface AdminChunk {
   translation: string;
   explanation: string | null;
   level: string;
-  situationPrompts: string[];
+  situationPrompts: SituationPrompt[];
   sentences: ChunkSentence[];
   hasDialogue: boolean;
   position: number;
@@ -52,7 +52,7 @@ export type NewChunkInput = {
   translation: string;
   explanation?: string | null;
   level: string;
-  situationPrompts?: string[];
+  situationPrompts?: SituationPrompt[];
   sentences?: ChunkSentence[];
 };
 

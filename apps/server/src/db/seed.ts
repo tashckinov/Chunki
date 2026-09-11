@@ -265,6 +265,9 @@ const SEED: SeedCollection[] = [
   },
 ];
 
+// Seed prompts are plain strings with no part-level explanations — those can
+// only come from an admin or the AI-assisted bulk flow, never fabricated
+// here, so every inserted prompt gets zero chunk_situation_prompt_parts rows.
 async function replaceSituationPrompts(pool: pg.Pool, chunkId: string, prompts: string[]): Promise<void> {
   await pool.query('DELETE FROM chunk_situation_prompts WHERE chunk_id = $1', [chunkId]);
   for (let i = 0; i < prompts.length; i++) {

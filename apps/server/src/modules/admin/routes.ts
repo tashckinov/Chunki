@@ -59,6 +59,16 @@ const collectionPatchSchema = z.object({
   bannerUrl: z.string().nullable().optional(),
 });
 
+const situationPromptPartSchema = z.object({
+  text: z.string().min(1),
+  explanationRu: z.string().min(1),
+  explanationEn: z.string().min(1),
+});
+const situationPromptSchema = z.object({
+  text: z.string().min(1),
+  parts: z.array(situationPromptPartSchema),
+});
+
 const chunkSentencePartSchema = z.object({
   text: z.string().min(1),
   explanationRu: z.string().min(1),
@@ -81,7 +91,7 @@ const chunkCreateSchema = z.object({
   // would silently wipe an unpatched chunk's prompts/sentences on every
   // unrelated edit. "Omitted on create" is instead handled explicitly in
   // the POST handler below.
-  situationPrompts: z.array(z.string().min(1)).optional(),
+  situationPrompts: z.array(situationPromptSchema).optional(),
   sentences: z.array(chunkSentenceSchema).optional(),
 });
 const chunkPatchSchema = chunkCreateSchema.partial();

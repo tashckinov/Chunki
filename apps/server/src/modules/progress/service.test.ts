@@ -30,7 +30,7 @@ const userId = 'user-1';
 const chunkId = 'chunk-1';
 
 function fakeChunk(overrides: Partial<ChunkWithSituationsRow> = {}): ChunkWithSituationsRow {
-  return { id: chunkId, text: 'sounds good', translation: 'звучит хорошо', example: null, situation_prompts: ['A friend suggests a plan.'], ...overrides };
+  return { id: chunkId, text: 'sounds good', translation: 'звучит хорошо', example: null, situation_prompts: [{ text: 'A friend suggests a plan.', parts: [] }], ...overrides };
 }
 
 function fakeProgress(overrides: Partial<ProgressRow> = {}): ProgressRow {

@@ -24,6 +24,8 @@ import {
   Copy,
   ClipboardPaste,
   Pencil,
+  RefreshCw,
+  MessageCircle,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -53,6 +55,8 @@ const ICONS: Record<string, LucideIcon> = {
   Copy,
   Paste: ClipboardPaste,
   Edit: Pencil,
+  Refresh: RefreshCw,
+  Chat: MessageCircle,
 };
 
 export type IconName = keyof typeof ICONS;

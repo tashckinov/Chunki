@@ -9,6 +9,7 @@ import {
   findChunkWithSituationPrompts,
   findDistractorTranslations,
   type ProgressRow,
+  type SituationPromptPart,
 } from './repository.js';
 
 // Free (non-premium, non-admin) users get 3 lifetime production checks —
@@ -131,12 +132,22 @@ export async function recordRecognitionResult(
   return { kind: 'ok', correct, progress: toSummary(row) };
 }
 
+export interface SituationPromptPartSummary {
+  text: string;
+  explanationRu: string;
+  explanationEn: string;
+}
+
+function toPartSummaries(parts: SituationPromptPart[]): SituationPromptPartSummary[] {
+  return parts.map((p) => ({ text: p.text, explanationRu: p.explanation_ru, explanationEn: p.explanation_en }));
+}
+
 export type ProductionCheckAvailability =
   | { kind: 'not_found' }
   | { kind: 'wrong_state' }
   | { kind: 'unavailable' }
   | { kind: 'limit_reached' }
-  | { kind: 'ok'; chunkId: string; situationPrompt: string; chunkText: string; chunkTranslation: string };
+  | { kind: 'ok'; chunkId: string; situationPrompt: string; situationParts: SituationPromptPartSummary[]; chunkText: string; chunkTranslation: string };
 
 export async function buildProductionCheck(userId: string, chunkId: string): Promise<ProductionCheckAvailability> {
   const chunk = await findChunkWithSituationPrompts(chunkId);
@@ -157,7 +168,8 @@ export async function buildProductionCheck(userId: string, chunkId: string): Pro
   // between this GET and the matching POST (submitProductionAnswer) below,
   // since only that POST ever increments times_production_attempted.
   const index = (progress?.times_production_attempted ?? 0) % chunk.situation_prompts.length;
-  return { kind: 'ok', chunkId, situationPrompt: chunk.situation_prompts[index], chunkText: chunk.text, chunkTranslation: chunk.translation };
+  const prompt = chunk.situation_prompts[index];
+  return { kind: 'ok', chunkId, situationPrompt: prompt.text, situationParts: toPartSummaries(prompt.parts), chunkText: chunk.text, chunkTranslation: chunk.translation };
 }
 
 export type ProductionSubmitResult =
@@ -187,7 +199,7 @@ export async function submitProductionAnswer(userId: string, chunkId: string, an
     chunkText: chunk.text,
     chunkTranslation: chunk.translation,
     chunkExample: chunk.example,
-    situationPrompt: chunk.situation_prompts[index],
+    situationPrompt: chunk.situation_prompts[index].text,
     userAnswer: answer,
   };
   const startedAt = Date.now();

@@ -85,7 +85,14 @@ export const progressRoutes: FastifyPluginAsync = async (app) => {
     if (result.kind === 'unavailable') {
       return { available: false };
     }
-    return { available: true, chunkId: result.chunkId, situationPrompt: result.situationPrompt, chunkText: result.chunkText, chunkTranslation: result.chunkTranslation };
+    return {
+      available: true,
+      chunkId: result.chunkId,
+      situationPrompt: result.situationPrompt,
+      situationParts: result.situationParts,
+      chunkText: result.chunkText,
+      chunkTranslation: result.chunkTranslation,
+    };
   });
 
   // Rate-limited, unlike every other route in this module — this is the one

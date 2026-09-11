@@ -21,9 +21,15 @@ export interface RecognitionCheck {
   options: RecognitionOption[];
 }
 
+export interface SituationPromptPart {
+  text: string;
+  explanationRu: string;
+  explanationEn: string;
+}
+
 export type ProductionCheckAvailability =
   | { available: false; reason?: 'limit_reached' }
-  | { available: true; chunkId: string; situationPrompt: string; chunkText: string; chunkTranslation: string };
+  | { available: true; chunkId: string; situationPrompt: string; situationParts: SituationPromptPart[]; chunkText: string; chunkTranslation: string };
 
 export type ProductionVerdict = 'chunk_used' | 'meaning_only' | 'not_conveyed';
 

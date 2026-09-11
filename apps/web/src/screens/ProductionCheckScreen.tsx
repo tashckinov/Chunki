@@ -1,5 +1,6 @@
 import { PRODUCTION_ANSWER_MAX_LENGTH } from '@app/shared';
 import { useAppStore } from '../store/appStore';
+import { InteractiveWords } from '../components/InteractiveWords';
 import { IconButton } from '../components/ui/IconButton';
 import { Textarea } from '../components/ui/Textarea';
 import { Button } from '../components/ui/Button';
@@ -18,7 +19,13 @@ export function ProductionCheckScreen() {
       <div className="flex-1 min-h-0 flex flex-col gap-5 px-6 py-6">
         <div>
           <div className="text-meta mb-2">Ситуация</div>
-          <div className="text-[19px] leading-[26px] font-medium">{s.productionSituation}</div>
+          <InteractiveWords
+            parts={s.productionSituationParts}
+            interfaceMode={s.interfaceMode}
+            fallbackText={s.productionSituation}
+            textClassName="text-[19px] leading-[26px] font-medium not-italic"
+            inactiveColorClassName="text-text"
+          />
         </div>
 
         {chunkText && (

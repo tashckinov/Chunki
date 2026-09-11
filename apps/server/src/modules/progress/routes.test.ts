@@ -162,6 +162,7 @@ describe('GET /api/progress/production-check/:chunkId', () => {
       kind: 'ok',
       chunkId: validChunkId,
       situationPrompt: 'Your friend suggests a plan.',
+      situationParts: [],
       chunkText: 'sounds good',
       chunkTranslation: 'звучит хорошо',
     });
@@ -172,6 +173,7 @@ describe('GET /api/progress/production-check/:chunkId', () => {
       available: true,
       chunkId: validChunkId,
       situationPrompt: 'Your friend suggests a plan.',
+      situationParts: [],
       chunkText: 'sounds good',
       chunkTranslation: 'звучит хорошо',
     });

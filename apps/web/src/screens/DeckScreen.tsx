@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useAppStore } from '../store/appStore';
 import { useDeckView } from '../store/derived';
 import type { ChunkSentence } from '../lib/collections';
+import { InteractiveWords } from '../components/InteractiveWords';
 import { Icon } from '../components/ui/Icon';
 import { IconButton } from '../components/ui/IconButton';
 import { LinearProgress } from '../components/ui/Progress';
@@ -11,31 +12,12 @@ import { Button } from '../components/ui/Button';
  * Replaces the old flat, non-interactive example sentence: shows one of the
  * chunk's ~3 example sentences (picked at random, stable for as long as
  * this card stays flipped — it remounts fresh on the next flip) as tappable
- * parts. Tapping a part reveals a contextual explanation of just that
- * phrase — in Russian or English depending on the profile's interface-mode
- * setting — instead of only a blanket translation of the whole sentence.
+ * parts via the shared InteractiveWords component.
  */
 function InteractiveSentence({ sentences, interfaceMode }: { sentences: ChunkSentence[]; interfaceMode: 'ru-en' | 'en-en' }) {
   const sentence = useMemo(() => (sentences.length ? sentences[Math.floor(Math.random() * sentences.length)] : null), [sentences]);
-  const [active, setActive] = useState<number | null>(null);
   if (!sentence) return null;
-  return (
-    <div className="flex flex-col gap-2 text-left" onClick={(e) => e.stopPropagation()}>
-      <div className="flex flex-wrap gap-1.5">
-        {sentence.parts.map((p, i) => (
-          <button
-            key={i}
-            type="button"
-            onClick={() => setActive((cur) => (cur === i ? null : i))}
-            className={`rounded-[var(--radius-sm)] px-1.5 py-0.5 text-[15px] leading-6 italic ${active === i ? 'bg-accent-subtle text-accent' : 'text-text-secondary'}`}
-          >
-            {p.text}
-          </button>
-        ))}
-      </div>
-      {active !== null && <div className="text-meta">{interfaceMode === 'ru-en' ? sentence.parts[active].explanationRu : sentence.parts[active].explanationEn}</div>}
-    </div>
-  );
+  return <InteractiveWords parts={sentence.parts} interfaceMode={interfaceMode} />;
 }
 
 export function DeckScreen() {
