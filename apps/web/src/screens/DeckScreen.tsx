@@ -96,15 +96,15 @@ export function DeckScreen() {
               {!s.flipped && <div className="text-body-secondary anim-pulse">Нажмите, чтобы увидеть перевод</div>}
             </div>
             {s.flipped && (
-              <div className="flex flex-col gap-3 anim-rise flex-none">
+              <div className="flex flex-col gap-1 anim-rise flex-none">
                 <div className="h-px bg-border" />
-                {s.interfaceMode === 'ru-en' && <div className="text-[21px] leading-7 text-accent">{v.cur.translation}</div>}
-                <InteractiveSentence sentences={v.cur.sentences} interfaceMode={s.interfaceMode} />
                 {v.cur.explanation && (
                   <div className="rounded-[var(--radius-md)] bg-accent-2-subtle px-4 py-3 text-left">
                     <div className="text-[13.5px] leading-[19px] text-text-secondary">{v.cur.explanation}</div>
                   </div>
                 )}
+                <InteractiveSentence sentences={v.cur.sentences} interfaceMode={s.interfaceMode} />
+                {s.interfaceMode === 'ru-en' && <div className="text-[21px] leading-7 text-accent">{v.cur.translation}</div>}
               </div>
             )}
           </div>
