@@ -1,3 +1,26 @@
+// Shared by both prompt builders below, so this rule can never drift out of
+// sync between them. Without explicit style guidance, an AI tends to write
+// stiff, linguistic-register explanations ("выражает согласие с
+// предложенным вариантом") that are harder for a learner to parse than the
+// phrase being explained — the before/after examples here are the
+// calibration target for what "simple" actually means.
+const EXPLANATION_STYLE_GUIDE = `Как писать explanationRu и explanationEn (важное правило):
+- Максимально просто — как будто объясняешь человеку с уровнем английского A1-A2.
+- Не используй канцелярские/лингвистические формулировки: не "выражает согласие с предложенным вариантом", не "указывает на определённое обстоятельство", не "является решающим фактором" — и так далее в этом духе.
+- Объясняй простой смысл именно этого куска именно в этом предложении, а не грамматическую функцию.
+- Не обязательно переводить дословно — важнее просто и понятно объяснить, что это значит здесь.
+- Одно короткое предложение, не длиннее. Если можно короче — делай короче.
+- explanationRu — простое объяснение по-русски.
+- explanationEn — то же самое простыми словами по-английски, лексика уровня A1-A2.
+
+Пример того, как НЕ надо (слишком сложно и формально):
+{ "text": "No worries,", "explanationRu": "Показывает, что просьба или проблема не доставляет неудобств.", "explanationEn": "Shows that the request or problem is not an inconvenience." }
+{ "text": "depends on", "explanationRu": "Определяется каким-либо фактором.", "explanationEn": "Is determined by a particular factor." }
+
+Пример того, как надо (просто и понятно):
+{ "text": "No worries,", "explanationRu": "Здесь значит: «без проблем, всё нормально».", "explanationEn": "Here it means: \\"no problem, that's fine.\\"" }
+{ "text": "depends on", "explanationRu": "Здесь значит: «зависит от».", "explanationEn": "Here it means: \\"changes because of something.\\"" }`;
+
 /**
  * One self-contained instruction block an admin can paste into an external
  * AI chat: asks for `count` brand-new chunks for a collection, each with
@@ -26,6 +49,8 @@ export function buildBulkChunkCreatePrompt(collectionTitle: string, level: strin
     - text — сама часть (кусок предложения).
     - explanationRu — объяснение значения этой части именно в этом предложении, на русском.
     - explanationEn — то же объяснение на английском.
+
+${EXPLANATION_STYLE_GUIDE}
 
 Ответь СТРОГО валидным JSON, без markdown-обёртки и без каких-либо пояснений до или после, в точности в этом формате:
 {
@@ -68,6 +93,8 @@ ${chunkLines}
   - text — сама часть (кусок предложения).
   - explanationRu — объяснение значения этой части именно в этом предложении, на русском.
   - explanationEn — то же объяснение на английском.
+
+${EXPLANATION_STYLE_GUIDE}
 
 Ответь СТРОГО валидным JSON, без markdown-обёртки и без каких-либо пояснений до или после, в точности в этом формате:
 {
