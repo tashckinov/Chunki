@@ -100,6 +100,10 @@ export interface GradingProvider {
 
 // ---- production check: does a free-text answer show active use of a chunk? ----
 
+/** Twitter-style cap on the free-text production-check answer — enforced both
+ * client-side (live counter) and server-side (the actual validation). */
+export const PRODUCTION_ANSWER_MAX_LENGTH = 150;
+
 export interface ProductionCheckInput {
   chunkText: string;
   chunkTranslation: string;

@@ -142,11 +142,9 @@ interface AppState {
 
   /** Dialogue-comic fetch cache, keyed by chunk id. Key absent = not yet fetched (still loading); null = confirmed no dialogue; an object = a real one. */
   learnerDialogueByChunk: Record<string, LearnerDialogue | null>;
-  /** Chunks whose comic has already been viewed via the production-check gate on DeckDoneScreen this session — the ONLY viewed-tracking in this feature. The "не знаю" trigger never reads or writes this: it shows the comic every time, unconditionally. */
-  viewedProductionDialogueChunks: Record<string, true>;
   dialogueChunkId: string | null;
   /** What to do once the learner closes the comic — mirrors exactly what would have happened at the trigger point if the comic hadn't been shown. */
-  dialogueContinuation: 'advance' | 'recognitioncheck' | 'deckdone' | 'browse' | null;
+  dialogueContinuation: 'advance' | 'recognitioncheck' | 'browse' | null;
   learnerDialogue: LearnerDialogue | null;
 
   recognitionChunkId: string | null;
@@ -245,7 +243,6 @@ interface AppState {
   ensureLearnerDialogue: (chunkId: string) => Promise<LearnerDialogue | null>;
   handleDontKnow: (chunkId: string) => Promise<void>;
   closeDialogue: () => void;
-  openDialogueFromSummary: (chunkId: string) => void;
   openDialogueFromBrowse: (chunkId: string) => Promise<void>;
 }
 
@@ -311,7 +308,6 @@ export const useAppStore = create<AppState>()(
       recognitionAttemptedThisSession: {},
 
       learnerDialogueByChunk: {},
-      viewedProductionDialogueChunks: {},
       dialogueChunkId: null,
       dialogueContinuation: null,
       learnerDialogue: null,
@@ -427,7 +423,6 @@ export const useAppStore = create<AppState>()(
           productionLimitReached: false,
           recognitionAttemptedThisSession: {},
           learnerDialogueByChunk: {},
-          viewedProductionDialogueChunks: {},
           dialogueChunkId: null,
           dialogueContinuation: null,
           learnerDialogue: null,
@@ -656,32 +651,14 @@ export const useAppStore = create<AppState>()(
 
       closeDialogue: () => {
         const { dialogueChunkId, dialogueContinuation } = get();
-        set((st) => ({
-          dialogueChunkId: null,
-          dialogueContinuation: null,
-          learnerDialogue: null,
-          // Only the production-check gate's "viewed" state is ever set —
-          // the "не знаю" path never touches it, so having seen the same
-          // dialogue via "не знаю" can never unlock that gate later.
-          viewedProductionDialogueChunks:
-            dialogueContinuation === 'deckdone' && dialogueChunkId
-              ? { ...st.viewedProductionDialogueChunks, [dialogueChunkId]: true }
-              : st.viewedProductionDialogueChunks,
-        }));
+        set({ dialogueChunkId: null, dialogueContinuation: null, learnerDialogue: null });
         if (dialogueContinuation === 'advance') get().advanceDeck();
         else if (dialogueContinuation === 'recognitioncheck' && dialogueChunkId) void get().startRecognitionCheck(dialogueChunkId);
         else if (dialogueContinuation === 'browse') set({ screen: 'comics' });
-        else set({ screen: 'deckdone' });
+        else set({ screen: 'deck' });
       },
 
-      openDialogueFromSummary: (chunkId) => {
-        const dialogue = get().learnerDialogueByChunk[chunkId];
-        if (!dialogue) return;
-        set({ screen: 'dialogue', dialogueChunkId: chunkId, dialogueContinuation: 'deckdone', learnerDialogue: dialogue });
-      },
-
-      // Browse mode hasn't pre-fetched the dialogue (unlike the summary-screen
-      // path, which prefetches via submitProductionCheck) — await it before
+      // Browse mode hasn't pre-fetched the dialogue — await it before
       // switching screens, so DialogueScreen never renders a blank interim state.
       openDialogueFromBrowse: async (chunkId) => {
         const dialogue = await get().ensureLearnerDialogue(chunkId);
@@ -775,10 +752,6 @@ export const useAppStore = create<AppState>()(
                 chunkProgress: { ...st.chunkProgress, [chunkId]: progress },
               };
             });
-            // Kick off the dialogue lookup as soon as a failed verdict lands,
-            // so it's already resolved (or in flight) by the time the user
-            // reaches DeckDoneScreen's gated reveal — see closeDialogue().
-            if (verdict !== 'chunk_used') void get().ensureLearnerDialogue(chunkId);
           })
           .catch((err) => {
             set((st) => {
