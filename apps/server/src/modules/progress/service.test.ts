@@ -19,11 +19,15 @@ vi.mock('../../openrouter/index.js', () => ({
 vi.mock('../aiLogs/repository.js', () => ({
   recordAiCallLog: vi.fn(),
 }));
+vi.mock('../dialogues/service.js', () => ({
+  findSituationDialogueForLearner: vi.fn(),
+}));
 
 const repo = await import('./repository.js');
 const users = await import('../users/repository.js');
 const openrouter = await import('../../openrouter/index.js');
 const aiLogs = await import('../aiLogs/repository.js');
+const dialogues = await import('../dialogues/service.js');
 const { buildProductionCheck, submitProductionAnswer } = await import('./service.js');
 
 const userId = 'user-1';
@@ -65,6 +69,8 @@ beforeEach(() => {
   vi.mocked(openrouter.getProductionJudgeProvider).mockReset().mockReturnValue(fakeJudge);
   fakeJudge.judgeProduction.mockReset();
   vi.mocked(aiLogs.recordAiCallLog).mockReset().mockResolvedValue(undefined as never);
+  // No "Ситуация" comic by default — existing tests exercise the free-text situationPrompt path unchanged; dialogue-mode gets its own describe block below.
+  vi.mocked(dialogues.findSituationDialogueForLearner).mockReset().mockResolvedValue(null);
 
   vi.mocked(repo.findChunkWithSituationPrompts).mockResolvedValue(fakeChunk());
   vi.mocked(repo.findProgress).mockResolvedValue(fakeProgress());
@@ -103,6 +109,79 @@ describe('buildProductionCheck — free-tier limit', () => {
     );
     const result = await buildProductionCheck(userId, chunkId);
     expect(result.kind).toBe('limit_reached');
+  });
+});
+
+describe('buildProductionCheck — "Ситуация" comic (dialogue mode)', () => {
+  const fakeDialogue = {
+    precedingMessages: [{ characterName: 'Alex', imageUrl: '/img/alex.png', side: 'left' as const, text: 'How was your trip?' }],
+    blank: { characterName: 'Sam', imageUrl: '/img/sam.png', side: 'right' as const },
+    modelAnswer: 'Sounds good to me.',
+  };
+
+  it('prefers the dialogue comic over the free-text situation prompt when one is ready', async () => {
+    vi.mocked(users.findAccountStatus).mockResolvedValue(fakeAccount());
+    vi.mocked(dialogues.findSituationDialogueForLearner).mockResolvedValue(fakeDialogue);
+
+    const result = await buildProductionCheck(userId, chunkId);
+
+    expect(result).toEqual({
+      kind: 'ok',
+      mode: 'dialogue',
+      chunkId,
+      chunkText: 'sounds good',
+      chunkTranslation: 'звучит хорошо',
+      dialogue: { precedingMessages: fakeDialogue.precedingMessages, blank: fakeDialogue.blank },
+    });
+  });
+
+  it('falls back to the free-text situation prompt when no comic is ready', async () => {
+    vi.mocked(users.findAccountStatus).mockResolvedValue(fakeAccount());
+    vi.mocked(dialogues.findSituationDialogueForLearner).mockResolvedValue(null);
+
+    const result = await buildProductionCheck(userId, chunkId);
+
+    expect(result.kind).toBe('ok');
+    expect(result.kind === 'ok' && result.mode).toBe('situation');
+  });
+
+  it('is available via the comic even when the chunk has no situation prompts at all', async () => {
+    vi.mocked(repo.findChunkWithSituationPrompts).mockResolvedValue(fakeChunk({ situation_prompts: [] }));
+    vi.mocked(users.findAccountStatus).mockResolvedValue(fakeAccount());
+    vi.mocked(dialogues.findSituationDialogueForLearner).mockResolvedValue(fakeDialogue);
+
+    const result = await buildProductionCheck(userId, chunkId);
+    expect(result.kind).toBe('ok');
+  });
+
+  it('is unavailable when there is neither a ready comic nor any situation prompts', async () => {
+    vi.mocked(repo.findChunkWithSituationPrompts).mockResolvedValue(fakeChunk({ situation_prompts: [] }));
+    vi.mocked(dialogues.findSituationDialogueForLearner).mockResolvedValue(null);
+
+    const result = await buildProductionCheck(userId, chunkId);
+    expect(result.kind).toBe('unavailable');
+  });
+});
+
+describe('submitProductionAnswer — "Ситуация" comic (dialogue mode)', () => {
+  it('judges against a prompt synthesized from the dialogue and returns modelAnswer', async () => {
+    vi.mocked(users.findAccountStatus).mockResolvedValue(fakeAccount());
+    vi.mocked(dialogues.findSituationDialogueForLearner).mockResolvedValue({
+      precedingMessages: [{ characterName: 'Alex', imageUrl: '/img/alex.png', side: 'left', text: 'How was your trip?' }],
+      blank: { characterName: 'Sam', imageUrl: '/img/sam.png', side: 'right' },
+      modelAnswer: 'Sounds good to me.',
+    });
+    fakeJudge.judgeProduction.mockResolvedValue({ verdict: 'chunk_used', feedback: 'Отлично!' });
+    vi.mocked(repo.upsertProgress).mockResolvedValue(fakeProgress({ state: 'active', times_production_attempted: 1, times_production_passed: 1 }));
+
+    const result = await submitProductionAnswer(userId, chunkId, 'Sounds good, thanks!');
+
+    expect(result.kind).toBe('ok');
+    expect(result.kind === 'ok' ? result.modelAnswer : undefined).toBe('Sounds good to me.');
+    const judgeInput = fakeJudge.judgeProduction.mock.calls[0][0];
+    expect(judgeInput.situationPrompt).toContain('Alex: How was your trip?');
+    expect(judgeInput.situationPrompt).toContain('Sam');
+    expect(judgeInput.situationPrompt).not.toContain('Sounds good to me.');
   });
 });
 

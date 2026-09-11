@@ -167,17 +167,28 @@ export interface AdminChunkRow {
   situation_prompts: AdminSituationPrompt[];
   sentences: AdminChunkSentenceRow[];
   has_dialogue: boolean;
+  has_situation_dialogue: boolean;
   position: number;
 }
 
 // A dialogue row with zero messages counts as "no dialogue" here too — matches
 // how dialogues/repository.ts's findLearnerDialogueRows treats an empty
-// message set as "no dialogue" for the learner side.
+// message set as "no dialogue" for the learner side. Scoped to kind='browse',
+// the "Не знаю" comic.
 const HAS_DIALOGUE_SUBQUERY = `EXISTS (
               SELECT 1 FROM chunk_dialogues d
               JOIN chunk_dialogue_messages m ON m.dialogue_id = d.id
-              WHERE d.chunk_id = c.id
+              WHERE d.chunk_id = c.id AND d.kind = 'browse'
             ) AS has_dialogue`;
+
+// The "Ситуация" comic (kind='situation') only counts as ready once its last
+// message is actually marked is_blank — an authored-but-unfinished comic
+// (no blank picked yet) shouldn't make the admin list say it's usable.
+const HAS_SITUATION_DIALOGUE_SUBQUERY = `EXISTS (
+              SELECT 1 FROM chunk_dialogues d
+              JOIN chunk_dialogue_messages m ON m.dialogue_id = d.id AND m.is_blank
+              WHERE d.chunk_id = c.id AND d.kind = 'situation'
+            ) AS has_situation_dialogue`;
 
 interface RawSentenceRow {
   chunk_id: string;
@@ -294,7 +305,8 @@ async function replaceChunkSentences(client: pg.PoolClient, chunkId: string, sen
 export async function listChunksForCollectionAdmin(collectionId: string): Promise<AdminChunkRow[]> {
   const { rows } = await pool.query<Omit<AdminChunkRow, 'sentences' | 'situation_prompts'>>(
     `SELECT c.id, c.text, c.translation, c.explanation, c.level, cc.position,
-            ${HAS_DIALOGUE_SUBQUERY}
+            ${HAS_DIALOGUE_SUBQUERY},
+            ${HAS_SITUATION_DIALOGUE_SUBQUERY}
      FROM collection_chunks cc
      JOIN chunks c ON c.id = cc.chunk_id
      WHERE cc.collection_id = $1
@@ -312,7 +324,8 @@ type ChunkRowNoPosition = Omit<AdminChunkRow, 'position'>;
 async function findChunkByIdAdmin(id: string, client: pg.PoolClient | pg.Pool = pool): Promise<ChunkRowNoPosition | null> {
   const { rows } = await client.query<Omit<ChunkRowNoPosition, 'sentences' | 'situation_prompts'>>(
     `SELECT c.id, c.text, c.translation, c.explanation, c.level,
-            ${HAS_DIALOGUE_SUBQUERY}
+            ${HAS_DIALOGUE_SUBQUERY},
+            ${HAS_SITUATION_DIALOGUE_SUBQUERY}
      FROM chunks c WHERE c.id = $1`,
     [id],
   );
@@ -356,7 +369,7 @@ export async function createChunkInCollection(collectionId: string, input: Chunk
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { rows: chunkRows } = await client.query<Omit<ChunkRowNoPosition, 'situation_prompts' | 'sentences' | 'has_dialogue'>>(
+    const { rows: chunkRows } = await client.query<Omit<ChunkRowNoPosition, 'situation_prompts' | 'sentences' | 'has_dialogue' | 'has_situation_dialogue'>>(
       `INSERT INTO chunks (text, translation, explanation, level)
        VALUES ($1, $2, $3, $4)
        RETURNING id, text, translation, explanation, level`,
@@ -372,7 +385,7 @@ export async function createChunkInCollection(collectionId: string, input: Chunk
     const position = posRows[0].next_position;
     await client.query(`INSERT INTO collection_chunks (collection_id, chunk_id, position) VALUES ($1, $2, $3)`, [collectionId, chunk.id, position]);
     await client.query('COMMIT');
-    return { ...chunk, situation_prompts: input.situationPrompts, sentences: input.sentences, has_dialogue: false, position };
+    return { ...chunk, situation_prompts: input.situationPrompts, sentences: input.sentences, has_dialogue: false, has_situation_dialogue: false, position };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;

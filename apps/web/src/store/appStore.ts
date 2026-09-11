@@ -26,6 +26,7 @@ import {
   type RecognitionOption,
   type ProductionVerdict,
   type SituationPromptPart,
+  type ProductionDialoguePayload,
 } from '../lib/progress';
 
 export type Screen =
@@ -133,7 +134,7 @@ interface AppState {
   /** This deck session's swipe outcomes, for DeckDoneScreen's tally — not mastery bookkeeping. */
   sessionVerdicts: Record<string, DeckVerdict>;
   /** This deck session's production-check verdicts, revealed together on DeckDoneScreen rather than inline per card. Judging runs in the background — see submitProductionCheck. */
-  sessionProductionResults: Record<string, { kind: 'ok'; verdict: ProductionVerdict; feedback: string } | { kind: 'error'; message: string }>;
+  sessionProductionResults: Record<string, { kind: 'ok'; verdict: ProductionVerdict; feedback: string; modelAnswer?: string } | { kind: 'error'; message: string }>;
   /** Chunks whose production-check answer was submitted but hasn't resolved yet — drives DeckDoneScreen's "still checking" indicator. */
   sessionProductionPending: Record<string, true>;
   /** Set when this deck session got kicked to the summary early because a free user hit the 3-check limit — drives DeckDoneScreen's upsell block. */
@@ -155,8 +156,11 @@ interface AppState {
   recognitionResult: boolean | null;
 
   productionChunkId: string | null;
+  /** Which "Ситуация" flavor the current productionChunkId is showing — a free-text prompt, or a comic whose last line the learner writes themselves. */
+  productionMode: 'situation' | 'dialogue';
   productionSituation: string;
   productionSituationParts: SituationPromptPart[];
+  productionDialogue: ProductionDialoguePayload | null;
   productionAnswer: string;
 
   collections: CollectionSummary[];
@@ -322,8 +326,10 @@ export const useAppStore = create<AppState>()(
       recognitionResult: null,
 
       productionChunkId: null,
+      productionMode: 'situation',
       productionSituation: '',
       productionSituationParts: [],
+      productionDialogue: null,
       productionAnswer: '',
 
       collections: [],
@@ -719,11 +725,23 @@ export const useAppStore = create<AppState>()(
             }
             return;
           }
+          if (check.mode === 'dialogue') {
+            set({
+              screen: 'productioncheck',
+              productionChunkId: check.chunkId,
+              productionMode: 'dialogue',
+              productionDialogue: check.dialogue,
+              productionAnswer: '',
+            });
+            return;
+          }
           set({
             screen: 'productioncheck',
             productionChunkId: check.chunkId,
+            productionMode: 'situation',
             productionSituation: check.situationPrompt,
             productionSituationParts: check.situationParts,
+            productionDialogue: null,
             productionAnswer: '',
           });
         } catch {
@@ -755,12 +773,12 @@ export const useAppStore = create<AppState>()(
         get().advanceDeck();
 
         postProductionCheck(chunkId, answer)
-          .then(({ verdict, feedback, progress }) => {
+          .then(({ verdict, feedback, progress, modelAnswer }) => {
             set((st) => {
               const { [chunkId]: _drop, ...pending } = st.sessionProductionPending;
               return {
                 sessionProductionPending: pending,
-                sessionProductionResults: { ...st.sessionProductionResults, [chunkId]: { kind: 'ok', verdict, feedback } },
+                sessionProductionResults: { ...st.sessionProductionResults, [chunkId]: { kind: 'ok', verdict, feedback, modelAnswer } },
                 chunkProgress: { ...st.chunkProgress, [chunkId]: progress },
               };
             });

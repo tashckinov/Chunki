@@ -17,7 +17,7 @@ function ProductionResultRow({
   result,
 }: {
   chunkText: string;
-  result: { kind: 'ok'; verdict: ProductionVerdict; feedback: string } | { kind: 'error'; message: string };
+  result: { kind: 'ok'; verdict: ProductionVerdict; feedback: string; modelAnswer?: string } | { kind: 'error'; message: string };
 }) {
   return (
     <div className="rounded-[var(--radius-md)] border border-border p-3.5 flex flex-col gap-2">
@@ -32,6 +32,12 @@ function ProductionResultRow({
         )}
       </div>
       <div className="text-body-secondary text-[13.5px]">{result.kind === 'ok' ? result.feedback : result.message}</div>
+      {result.kind === 'ok' && result.modelAnswer && (
+        <div className="text-[13.5px]">
+          <span className="text-text-secondary">Реплика персонажа: </span>
+          <span className="text-accent">«{result.modelAnswer}»</span>
+        </div>
+      )}
     </div>
   );
 }

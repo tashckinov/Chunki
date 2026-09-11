@@ -32,6 +32,7 @@ export interface AdminChunk {
   situationPrompts: SituationPrompt[];
   sentences: ChunkSentence[];
   hasDialogue: boolean;
+  hasSituationDialogue: boolean;
   position: number;
 }
 

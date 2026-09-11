@@ -357,7 +357,7 @@ describe('POST /api/admin/uploads/banner', () => {
 describe('chunks CRUD', () => {
   it('GET /api/admin/collections/:id/chunks lists chunks in position order', async () => {
     vi.mocked(session.getSession).mockResolvedValue(adminSession);
-    const chunks = [{ id: validId, text: 'sounds good', translation: 'звучит хорошо', explanation: null, level: 'A2', situationPrompts: [], sentences: [], hasDialogue: false, position: 0 }];
+    const chunks = [{ id: validId, text: 'sounds good', translation: 'звучит хорошо', explanation: null, level: 'A2', situationPrompts: [], sentences: [], hasDialogue: false, hasSituationDialogue: false, position: 0 }];
     vi.mocked(service.listChunksForCollectionAdmin).mockResolvedValue(chunks);
 
     const res = await app.inject({ method: 'GET', url: `/api/admin/collections/${validId}/chunks`, cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' } });
@@ -368,7 +368,7 @@ describe('chunks CRUD', () => {
 
   it('POST /api/admin/collections/:id/chunks creates a chunk in the collection', async () => {
     vi.mocked(session.getSession).mockResolvedValue(adminSession);
-    const created = { id: validId, text: 'take your time', translation: 'не торопись', explanation: null, level: 'A2', situationPrompts: [], sentences: [], hasDialogue: false, position: 3 };
+    const created = { id: validId, text: 'take your time', translation: 'не торопись', explanation: null, level: 'A2', situationPrompts: [], sentences: [], hasDialogue: false, hasSituationDialogue: false, position: 3 };
     vi.mocked(service.createChunkInCollection).mockResolvedValue(created);
 
     const res = await app.inject({
@@ -388,7 +388,7 @@ describe('chunks CRUD', () => {
 
   it('PATCH /api/admin/chunks/:id updates a chunk', async () => {
     vi.mocked(session.getSession).mockResolvedValue(adminSession);
-    const updated = { id: validId, text: 'sounds good', translation: 'звучит здорово', explanation: null, level: 'A2', situationPrompts: [], sentences: [], hasDialogue: false };
+    const updated = { id: validId, text: 'sounds good', translation: 'звучит здорово', explanation: null, level: 'A2', situationPrompts: [], sentences: [], hasDialogue: false, hasSituationDialogue: false };
     vi.mocked(service.updateChunk).mockResolvedValue({ kind: 'ok', chunk: updated });
 
     const res = await app.inject({
@@ -502,42 +502,116 @@ describe('chunk dialogue', () => {
   const characterId = '33333333-3333-4333-8333-333333333333';
   const imageId = '44444444-4444-4444-8444-444444444444';
 
-  it('GET /api/admin/chunks/:id/dialogue returns null when none exists', async () => {
+  it('GET /api/admin/chunks/:id/dialogue/:kind returns null when none exists', async () => {
     vi.mocked(session.getSession).mockResolvedValue(adminSession);
     vi.mocked(service.getDialogueForChunk).mockResolvedValue(null);
 
-    const res = await app.inject({ method: 'GET', url: `/api/admin/chunks/${validId}/dialogue`, cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' } });
+    const res = await app.inject({ method: 'GET', url: `/api/admin/chunks/${validId}/dialogue/browse`, cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' } });
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ dialogue: null });
+    expect(service.getDialogueForChunk).toHaveBeenCalledWith(validId, 'browse');
   });
 
-  it('POST /api/admin/chunks/:id/dialogue saves (upserts) the dialogue', async () => {
+  it('GET /api/admin/chunks/:id/dialogue/:kind rejects an unknown kind', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(adminSession);
+
+    const res = await app.inject({ method: 'GET', url: `/api/admin/chunks/${validId}/dialogue/bogus`, cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' } });
+
+    expect(res.statusCode).toBe(404);
+    expect(service.getDialogueForChunk).not.toHaveBeenCalled();
+  });
+
+  it('POST /api/admin/chunks/:id/dialogue/browse saves (upserts) the "Не знаю" comic', async () => {
     vi.mocked(session.getSession).mockResolvedValue(adminSession);
     const dialogue = {
       participants: [{ characterId, side: 'left' as const }],
-      messages: [{ characterId, characterImageId: imageId, text: 'Sounds good!' }],
+      messages: [{ characterId, characterImageId: imageId, text: 'Sounds good!', isBlank: false }],
     };
     vi.mocked(service.saveDialogueForChunk).mockResolvedValue({ kind: 'ok', dialogue });
 
     const res = await app.inject({
       method: 'POST',
-      url: `/api/admin/chunks/${validId}/dialogue`,
+      url: `/api/admin/chunks/${validId}/dialogue/browse`,
       cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' },
       payload: dialogue,
     });
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ dialogue });
-    expect(service.saveDialogueForChunk).toHaveBeenCalledWith(validId, dialogue);
+    expect(service.saveDialogueForChunk).toHaveBeenCalledWith(validId, 'browse', dialogue);
   });
 
-  it('POST /api/admin/chunks/:id/dialogue rejects a message from a character not in participants', async () => {
+  it('POST /api/admin/chunks/:id/dialogue/situation saves a comic whose last message is the learner-filled blank', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(adminSession);
+    const dialogue = {
+      participants: [{ characterId, side: 'left' as const }],
+      messages: [
+        { characterId, characterImageId: imageId, text: 'How was your trip?', isBlank: false },
+        { characterId, characterImageId: imageId, text: 'Sounds good!', isBlank: true },
+      ],
+    };
+    vi.mocked(service.saveDialogueForChunk).mockResolvedValue({ kind: 'ok', dialogue });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/admin/chunks/${validId}/dialogue/situation`,
+      cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' },
+      payload: dialogue,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(service.saveDialogueForChunk).toHaveBeenCalledWith(validId, 'situation', dialogue);
+  });
+
+  it('POST /api/admin/chunks/:id/dialogue/:kind rejects a blank message that is not last', async () => {
     vi.mocked(session.getSession).mockResolvedValue(adminSession);
 
     const res = await app.inject({
       method: 'POST',
-      url: `/api/admin/chunks/${validId}/dialogue`,
+      url: `/api/admin/chunks/${validId}/dialogue/situation`,
+      cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' },
+      payload: {
+        participants: [{ characterId, side: 'left' }],
+        messages: [
+          { characterId, characterImageId: imageId, text: 'first', isBlank: true },
+          { characterId, characterImageId: imageId, text: 'second', isBlank: false },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: 'invalid_request' });
+    expect(service.saveDialogueForChunk).not.toHaveBeenCalled();
+  });
+
+  it('POST /api/admin/chunks/:id/dialogue/:kind rejects more than one blank message', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(adminSession);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/admin/chunks/${validId}/dialogue/situation`,
+      cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' },
+      payload: {
+        participants: [{ characterId, side: 'left' }],
+        messages: [
+          { characterId, characterImageId: imageId, text: 'first', isBlank: true },
+          { characterId, characterImageId: imageId, text: 'second', isBlank: true },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: 'invalid_request' });
+    expect(service.saveDialogueForChunk).not.toHaveBeenCalled();
+  });
+
+  it('POST /api/admin/chunks/:id/dialogue/:kind rejects a message from a character not in participants', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(adminSession);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/admin/chunks/${validId}/dialogue/browse`,
       cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' },
       payload: { participants: [], messages: [{ characterId, characterImageId: imageId, text: 'x' }] },
     });
@@ -547,13 +621,13 @@ describe('chunk dialogue', () => {
     expect(service.saveDialogueForChunk).not.toHaveBeenCalled();
   });
 
-  it('POST /api/admin/chunks/:id/dialogue surfaces a service-level invalid_reference as 400', async () => {
+  it('POST /api/admin/chunks/:id/dialogue/:kind surfaces a service-level invalid_reference as 400', async () => {
     vi.mocked(session.getSession).mockResolvedValue(adminSession);
     vi.mocked(service.saveDialogueForChunk).mockResolvedValue({ kind: 'invalid_reference' });
 
     const res = await app.inject({
       method: 'POST',
-      url: `/api/admin/chunks/${validId}/dialogue`,
+      url: `/api/admin/chunks/${validId}/dialogue/browse`,
       cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' },
       payload: { participants: [{ characterId, side: 'left' }], messages: [{ characterId, characterImageId: imageId, text: 'x' }] },
     });
@@ -562,14 +636,15 @@ describe('chunk dialogue', () => {
     expect(res.json()).toEqual({ error: 'invalid_reference' });
   });
 
-  it('DELETE /api/admin/chunks/:id/dialogue deletes it', async () => {
+  it('DELETE /api/admin/chunks/:id/dialogue/:kind deletes only that kind', async () => {
     vi.mocked(session.getSession).mockResolvedValue(adminSession);
     vi.mocked(service.deleteDialogueForChunk).mockResolvedValue(true);
 
-    const res = await app.inject({ method: 'DELETE', url: `/api/admin/chunks/${validId}/dialogue`, cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' } });
+    const res = await app.inject({ method: 'DELETE', url: `/api/admin/chunks/${validId}/dialogue/situation`, cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' } });
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ ok: true });
+    expect(service.deleteDialogueForChunk).toHaveBeenCalledWith(validId, 'situation');
   });
 
   it('DELETE /api/admin/chunks/:id/dialogue returns 404 when none exists', async () => {

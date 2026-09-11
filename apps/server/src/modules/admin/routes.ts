@@ -96,10 +96,18 @@ const chunkCreateSchema = z.object({
 });
 const chunkPatchSchema = chunkCreateSchema.partial();
 
-const dialogueSaveSchema = z.object({
-  participants: z.array(z.object({ characterId: z.string().uuid(), side: z.enum(['left', 'right']) })).min(1),
-  messages: z.array(z.object({ characterId: z.string().uuid(), characterImageId: z.string().uuid(), text: z.string().min(1) })).min(1),
-});
+const dialogueKindParamSchema = idParamSchema.extend({ kind: z.enum(['browse', 'situation']) });
+
+const dialogueSaveSchema = z
+  .object({
+    participants: z.array(z.object({ characterId: z.string().uuid(), side: z.enum(['left', 'right']) })).min(1),
+    messages: z.array(z.object({ characterId: z.string().uuid(), characterImageId: z.string().uuid(), text: z.string().min(1), isBlank: z.boolean().optional() })).min(1),
+  })
+  // Mirrors dialogues/repository.ts's referencesAreValid: at most one blank, and only as the last message.
+  .refine((v) => {
+    const blanks = v.messages.filter((m) => m.isBlank).length;
+    return blanks <= 1 && (blanks === 0 || v.messages[v.messages.length - 1].isBlank);
+  }, 'at most one message may be isBlank, and it must be the last message');
 
 /**
  * Every route here is admin-only, unlike the other modules (which mix
@@ -266,25 +274,25 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     return { ok: true };
   });
 
-  app.get('/chunks/:id/dialogue', async (request, reply) => {
-    const params = idParamSchema.safeParse(request.params);
+  app.get('/chunks/:id/dialogue/:kind', async (request, reply) => {
+    const params = dialogueKindParamSchema.safeParse(request.params);
     if (!params.success) {
       reply.code(404);
       return { error: 'not_found' };
     }
-    return { dialogue: await getDialogueForChunk(params.data.id) };
+    return { dialogue: await getDialogueForChunk(params.data.id, params.data.kind) };
   });
 
-  // Save/upsert — a chunk has at most one dialogue, so a repeat POST
-  // replaces its participants+messages rather than creating a second one.
-  app.post('/chunks/:id/dialogue', async (request, reply) => {
-    const params = idParamSchema.safeParse(request.params);
+  // Save/upsert — a chunk has at most one dialogue per kind, so a repeat POST
+  // for the same kind replaces its participants+messages rather than creating a second one.
+  app.post('/chunks/:id/dialogue/:kind', async (request, reply) => {
+    const params = dialogueKindParamSchema.safeParse(request.params);
     const body = dialogueSaveSchema.safeParse(request.body);
     if (!params.success || !body.success) {
       reply.code(400);
       return { error: 'invalid_request' };
     }
-    const result = await saveDialogueForChunk(params.data.id, body.data);
+    const result = await saveDialogueForChunk(params.data.id, params.data.kind, body.data);
     if (result.kind === 'invalid_reference') {
       reply.code(400);
       return { error: 'invalid_reference' };
@@ -292,13 +300,13 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     return { dialogue: result.dialogue };
   });
 
-  app.delete('/chunks/:id/dialogue', async (request, reply) => {
-    const params = idParamSchema.safeParse(request.params);
+  app.delete('/chunks/:id/dialogue/:kind', async (request, reply) => {
+    const params = dialogueKindParamSchema.safeParse(request.params);
     if (!params.success) {
       reply.code(404);
       return { error: 'not_found' };
     }
-    const deleted = await deleteDialogueForChunk(params.data.id);
+    const deleted = await deleteDialogueForChunk(params.data.id, params.data.kind);
     if (!deleted) {
       reply.code(404);
       return { error: 'not_found' };

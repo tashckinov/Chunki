@@ -30,6 +30,7 @@ import {
   type CharacterChunkUsage,
 } from '../../lib/characters';
 import { EMOTION_SUGGESTIONS, emotionLabel, groupImagesByEmotion } from '../../lib/characterEmotions';
+import type { DialogueKind } from '../../lib/dialogues';
 import { DialogueBuilderView } from './DialogueBuilderView';
 
 /** Persistent label + optional hint — same convention as ContentSection.tsx's Field. */
@@ -56,7 +57,7 @@ type CharactersView =
   | { kind: 'list' }
   | { kind: 'detail'; characterId: string }
   | { kind: 'create' }
-  | { kind: 'dialogue'; characterId: string; chunkId: string; chunkText: string; chunkTranslation: string };
+  | { kind: 'dialogue'; characterId: string; chunkId: string; chunkText: string; chunkTranslation: string; dialogueKind: DialogueKind };
 
 function CharacterCreateView({ onCancel, onSubmit }: { onCancel: () => void; onSubmit: (name: string) => Promise<void> }) {
   const [name, setName] = useState('');
@@ -239,8 +240,9 @@ function CharacterUsageRow({ characterId, onOpen }: { characterId: string; onOpe
   return (
     <div className="flex flex-col gap-1.5">
       {usage.map((u) => (
-        <button key={u.chunkId} type="button" onClick={() => onOpen(u)} className="pressable text-[13.5px] text-left text-accent underline underline-offset-2">
+        <button key={`${u.chunkId}-${u.dialogueKind}`} type="button" onClick={() => onOpen(u)} className="pressable text-[13.5px] text-left text-accent underline underline-offset-2">
           {u.chunkText}
+          <span className="text-meta no-underline"> · {u.dialogueKind === 'situation' ? 'Ситуация' : 'Не знаю'}</span>
           {u.collectionTitles.length > 0 && <span className="text-meta no-underline"> · {u.collectionTitles.join(', ')}</span>}
         </button>
       ))}
@@ -701,16 +703,16 @@ export function CharactersSection({ onOpenMenu }: { onOpenMenu: () => void }) {
         onUpdate={upsertCharacter}
         onDelete={() => handleDelete(character)}
         onOpenDialogue={(usage) =>
-          setView({ kind: 'dialogue', characterId: character.id, chunkId: usage.chunkId, chunkText: usage.chunkText, chunkTranslation: usage.chunkTranslation })
+          setView({ kind: 'dialogue', characterId: character.id, chunkId: usage.chunkId, chunkText: usage.chunkText, chunkTranslation: usage.chunkTranslation, dialogueKind: usage.dialogueKind })
         }
       />
     );
   }
 
   if (view.kind === 'dialogue') {
-    const { characterId, chunkId, chunkText, chunkTranslation } = view;
+    const { characterId, chunkId, chunkText, chunkTranslation, dialogueKind } = view;
     return (
-      <DialogueBuilderView chunk={{ id: chunkId, text: chunkText, translation: chunkTranslation }} onBack={() => setView({ kind: 'detail', characterId })} />
+      <DialogueBuilderView chunk={{ id: chunkId, text: chunkText, translation: chunkTranslation }} kind={dialogueKind} onBack={() => setView({ kind: 'detail', characterId })} />
     );
   }
 

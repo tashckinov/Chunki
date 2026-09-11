@@ -160,6 +160,7 @@ describe('GET /api/progress/production-check/:chunkId', () => {
     vi.mocked(session.getSession).mockResolvedValue(authenticatedSession);
     vi.mocked(service.buildProductionCheck).mockResolvedValue({
       kind: 'ok',
+      mode: 'situation',
       chunkId: validChunkId,
       situationPrompt: 'Your friend suggests a plan.',
       situationParts: [],
@@ -171,9 +172,37 @@ describe('GET /api/progress/production-check/:chunkId', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
       available: true,
+      mode: 'situation',
       chunkId: validChunkId,
       situationPrompt: 'Your friend suggests a plan.',
       situationParts: [],
+      chunkText: 'sounds good',
+      chunkTranslation: 'звучит хорошо',
+    });
+  });
+
+  it('returns the dialogue-completion comic when the chunk has a ready "Ситуация" comic', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(authenticatedSession);
+    const dialogue = {
+      precedingMessages: [{ characterName: 'Alex', imageUrl: '/img/alex.png', side: 'left' as const, text: 'How was your trip?' }],
+      blank: { characterName: 'Sam', imageUrl: '/img/sam.png', side: 'right' as const },
+    };
+    vi.mocked(service.buildProductionCheck).mockResolvedValue({
+      kind: 'ok',
+      mode: 'dialogue',
+      chunkId: validChunkId,
+      dialogue,
+      chunkText: 'sounds good',
+      chunkTranslation: 'звучит хорошо',
+    });
+
+    const res = await app.inject({ method: 'GET', url: `/api/progress/production-check/${validChunkId}`, cookies: authCookie });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      available: true,
+      mode: 'dialogue',
+      chunkId: validChunkId,
+      dialogue,
       chunkText: 'sounds good',
       chunkTranslation: 'звучит хорошо',
     });
