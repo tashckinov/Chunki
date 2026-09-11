@@ -79,17 +79,21 @@ export function InteractiveWords({
   const activePart = active !== null ? parts[active] : null;
 
   return (
-    <div className="flex flex-wrap gap-1.5 text-left" onClick={(e) => e.stopPropagation()}>
-      {parts.map((p, i) => (
-        <button
-          key={i}
-          type="button"
-          onClick={(e) => toggle(i, e)}
-          className={`rounded-[var(--radius-sm)] px-1.5 py-0.5 ${textClassName} ${active === i ? 'bg-accent-subtle text-accent' : inactiveColorClassName}`}
-        >
-          {p.text}
-        </button>
-      ))}
+    <div className="text-left" onClick={(e) => e.stopPropagation()}>
+      <p className={textClassName}>
+        {parts.map((p, i) => (
+          <span key={i}>
+            <button
+              type="button"
+              onClick={(e) => toggle(i, e)}
+              className={`inline bg-transparent border-0 p-0 m-0 cursor-pointer rounded-[3px] ${active === i ? 'bg-accent-subtle text-accent px-0.5 -mx-0.5' : inactiveColorClassName}`}
+            >
+              {p.text}
+            </button>
+            {i < parts.length - 1 ? ' ' : ''}
+          </span>
+        ))}
+      </p>
 
       {activePart &&
         anchorRect &&

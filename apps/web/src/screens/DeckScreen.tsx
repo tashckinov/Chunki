@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAppStore } from '../store/appStore';
 import { useDeckView } from '../store/derived';
 import type { ChunkSentence } from '../lib/collections';
@@ -23,6 +23,14 @@ function InteractiveSentence({ sentences, interfaceMode }: { sentences: ChunkSen
 export function DeckScreen() {
   const s = useAppStore();
   const v = useDeckView();
+  const [translationShown, setTranslationShown] = useState(false);
+
+  // Resets whenever the card is unflipped (front shown again — either the
+  // same card flipped back, or the next card starting fresh), so the
+  // translation is hidden behind the button again each time.
+  useEffect(() => {
+    if (!s.flipped) setTranslationShown(false);
+  }, [s.flipped]);
 
   useEffect(() => {
     if (!s.dragging) return;
@@ -93,7 +101,7 @@ export function DeckScreen() {
               </div>
               <div className="text-meta">{v.cur.level}</div>
               <div className="text-[32px] leading-[40px] font-medium">{v.cur.text}</div>
-              {!s.flipped && <div className="text-body-secondary anim-pulse">Нажмите, чтобы увидеть перевод</div>}
+              {!s.flipped && <div className="text-body-secondary anim-pulse">Нажмите, чтобы перевернуть карточку</div>}
             </div>
             {s.flipped && (
               <div className="flex flex-col gap-1 anim-rise flex-none">
@@ -104,7 +112,21 @@ export function DeckScreen() {
                   </div>
                 )}
                 <InteractiveSentence sentences={v.cur.sentences} interfaceMode={s.interfaceMode} />
-                {s.interfaceMode === 'ru-en' && <div className="text-[21px] leading-7 text-accent">{v.cur.translation}</div>}
+                {s.interfaceMode === 'ru-en' &&
+                  (translationShown ? (
+                    <div className="text-[21px] leading-7 text-accent">{v.cur.translation}</div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setTranslationShown(true);
+                      }}
+                      className="pressable self-start text-[15px] font-medium text-accent"
+                    >
+                      Показать перевод
+                    </button>
+                  ))}
               </div>
             )}
           </div>
