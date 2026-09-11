@@ -43,9 +43,10 @@ export function validateDialogueShape(raw: unknown, characters: Character[]): Pa
       typeof (m as { characterId?: unknown }).characterId !== 'string' ||
       typeof (m as { characterImageId?: unknown }).characterImageId !== 'string' ||
       typeof (m as { text?: unknown }).text !== 'string' ||
-      !(m as { text: string }).text.trim()
+      !(m as { text: string }).text.trim() ||
+      ((m as { isBlank?: unknown }).isBlank !== undefined && typeof (m as { isBlank?: unknown }).isBlank !== 'boolean')
     ) {
-      return { kind: 'error', message: 'У каждого сообщения должны быть characterId, characterImageId и непустой text.' };
+      return { kind: 'error', message: 'У каждого сообщения должны быть characterId, characterImageId, непустой text и (опционально) булево isBlank.' };
     }
     const message = m as AdminDialogueMessage;
     if (!participantIds.has(message.characterId)) {
@@ -57,7 +58,16 @@ export function validateDialogueShape(raw: unknown, characters: Character[]): Pa
     }
   }
 
-  return { kind: 'ok', dialogue: { participants: participants as AdminDialogueParticipant[], messages: messages as AdminDialogueMessage[] } };
+  const typedMessages = messages as AdminDialogueMessage[];
+  const blankCount = typedMessages.filter((m) => m.isBlank).length;
+  if (blankCount > 1) {
+    return { kind: 'error', message: 'Не более одной реплики может быть помечена isBlank.' };
+  }
+  if (blankCount === 1 && !typedMessages[typedMessages.length - 1].isBlank) {
+    return { kind: 'error', message: 'Реплика, помеченная isBlank, должна быть последней в messages.' };
+  }
+
+  return { kind: 'ok', dialogue: { participants: participants as AdminDialogueParticipant[], messages: typedMessages } };
 }
 
 export function parseDialogueImport(text: string, characters: Character[]): ParseDialogueImportResult {

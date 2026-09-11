@@ -27,9 +27,22 @@ export interface SituationPromptPart {
   explanationEn: string;
 }
 
+export interface ProductionDialogueMessage {
+  characterName: string;
+  imageUrl: string;
+  side: 'left' | 'right';
+  text: string;
+}
+
+export interface ProductionDialoguePayload {
+  precedingMessages: ProductionDialogueMessage[];
+  blank: { characterName: string; imageUrl: string; side: 'left' | 'right' };
+}
+
 export type ProductionCheckAvailability =
   | { available: false; reason?: 'limit_reached' }
-  | { available: true; chunkId: string; situationPrompt: string; situationParts: SituationPromptPart[]; chunkText: string; chunkTranslation: string };
+  | { available: true; mode: 'situation'; chunkId: string; situationPrompt: string; situationParts: SituationPromptPart[]; chunkText: string; chunkTranslation: string }
+  | { available: true; mode: 'dialogue'; chunkId: string; dialogue: ProductionDialoguePayload; chunkText: string; chunkTranslation: string };
 
 export type ProductionVerdict = 'chunk_used' | 'meaning_only' | 'not_conveyed';
 
@@ -37,6 +50,8 @@ export interface ProductionCheckResult {
   verdict: ProductionVerdict;
   feedback: string;
   progress: ProgressSummary;
+  /** The "Ситуация" comic's hidden line, revealed once the learner has answered — absent for the free-text situation-prompt flow. */
+  modelAnswer?: string;
 }
 
 export async function postSort(chunkId: string, verdict: SortVerdict): Promise<ProgressSummary> {

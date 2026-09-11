@@ -85,8 +85,19 @@ export const progressRoutes: FastifyPluginAsync = async (app) => {
     if (result.kind === 'unavailable') {
       return { available: false };
     }
+    if (result.mode === 'dialogue') {
+      return {
+        available: true,
+        mode: 'dialogue' as const,
+        chunkId: result.chunkId,
+        dialogue: result.dialogue,
+        chunkText: result.chunkText,
+        chunkTranslation: result.chunkTranslation,
+      };
+    }
     return {
       available: true,
+      mode: 'situation' as const,
       chunkId: result.chunkId,
       situationPrompt: result.situationPrompt,
       situationParts: result.situationParts,
@@ -145,7 +156,7 @@ export const progressRoutes: FastifyPluginAsync = async (app) => {
         reply.code(402);
         return { error: 'limit_reached' };
       }
-      return { verdict: result.verdict, feedback: result.feedback, progress: result.progress };
+      return { verdict: result.verdict, feedback: result.feedback, progress: result.progress, modelAnswer: result.modelAnswer };
     },
   );
 

@@ -198,7 +198,7 @@ describe('DELETE /api/admin/characters/:id', () => {
 describe('GET /api/admin/characters/:id/chunks', () => {
   it('returns the chunks whose dialogue uses this character', async () => {
     vi.mocked(session.getSession).mockResolvedValue(adminSession);
-    const chunks = [{ chunkId: validId, chunkText: 'sounds good', chunkTranslation: 'звучит хорошо', collectionTitles: ['Travel Basics'] }];
+    const chunks = [{ chunkId: validId, chunkText: 'sounds good', chunkTranslation: 'звучит хорошо', dialogueKind: 'browse' as const, collectionTitles: ['Travel Basics'] }];
     vi.mocked(service.findChunksUsingCharacter).mockResolvedValue(chunks);
 
     const res = await app.inject({ method: 'GET', url: `/api/admin/characters/${validId}/chunks`, cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' } });

@@ -23,11 +23,13 @@ export interface ChunkRow {
 }
 
 // A dialogue row with zero messages counts as "no dialogue" here too — mirrors
-// admin/repository.ts's identical HAS_DIALOGUE_SUBQUERY.
+// admin/repository.ts's identical HAS_DIALOGUE_SUBQUERY. Scoped to kind='browse':
+// this flag drives the "Не знаю" comic / Комиксы tab, not the separate
+// "Ситуация" comic (chunk_dialogues.kind='situation').
 const HAS_DIALOGUE_SUBQUERY = `EXISTS (
               SELECT 1 FROM chunk_dialogues d
               JOIN chunk_dialogue_messages m ON m.dialogue_id = d.id
-              WHERE d.chunk_id = c.id
+              WHERE d.chunk_id = c.id AND d.kind = 'browse'
             ) AS has_dialogue`;
 
 interface RawSentenceRow {

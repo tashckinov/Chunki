@@ -7,7 +7,7 @@ import { highlightTarget } from '../../lib/textHighlight';
 import { RetryImage } from '../../components/ui/RetryImage';
 import { emotionLabel, groupImagesByEmotion } from '../../lib/characterEmotions';
 import { fetchCharacters, type Character } from '../../lib/characters';
-import { fetchAdminDialogue, saveAdminDialogue, deleteAdminDialogue, type AdminDialogueParticipant } from '../../lib/dialogues';
+import { fetchAdminDialogue, saveAdminDialogue, deleteAdminDialogue, type AdminDialogueParticipant, type DialogueKind } from '../../lib/dialogues';
 import type { AdminChunk } from '../../lib/admin';
 import { buildDialogueAiPrompt } from '../../lib/dialogueAiPrompt';
 import { parseDialogueImport } from '../../lib/dialogueImport';
@@ -50,12 +50,12 @@ function SaveButton({ onClick, disabled, saving, justSaved }: { onClick: () => v
 }
 
 /** Copies an AI instruction (chunk + full character/emotion/image library) to the clipboard, for composing a dialogue in an external AI chat. */
-function CopyPromptButton({ chunk, characters }: { chunk: DialogueBuilderChunk; characters: Character[] | null }) {
+function CopyPromptButton({ chunk, characters, kind }: { chunk: DialogueBuilderChunk; characters: Character[] | null; kind: DialogueKind }) {
   const [copied, setCopied] = useState(false);
 
   async function copy() {
     if (!characters) return;
-    await navigator.clipboard.writeText(buildDialogueAiPrompt(chunk, characters));
+    await navigator.clipboard.writeText(buildDialogueAiPrompt(chunk, characters, kind));
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }
@@ -174,10 +174,12 @@ function EditableMessageRow({
   );
 }
 
-export function DialogueBuilderView({ chunk, onBack }: { chunk: DialogueBuilderChunk; onBack: () => void }) {
+export function DialogueBuilderView({ chunk, onBack, kind }: { chunk: DialogueBuilderChunk; onBack: () => void; kind: DialogueKind }) {
   const [characters, setCharacters] = useState<Character[] | null>(null);
   const [participants, setParticipants] = useState<AdminDialogueParticipant[]>([]);
   const [messages, setMessages] = useState<BuilderMessage[]>([]);
+  // kind==='situation' only: whether the currently-last message is the blank the learner fills in. A dialogue-level flag (not per-message) so it follows whichever message ends up last through reordering, rather than sticking to a specific row.
+  const [lastIsBlank, setLastIsBlank] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -193,15 +195,17 @@ export function DialogueBuilderView({ chunk, onBack }: { chunk: DialogueBuilderC
   useEffect(() => {
     setLoaded(false);
     setLoadError(null);
-    Promise.all([fetchCharacters(), fetchAdminDialogue(chunk.id)])
+    Promise.all([fetchCharacters(), fetchAdminDialogue(chunk.id, kind)])
       .then(([chars, dialogue]) => {
         setCharacters(chars);
         if (dialogue) {
           setParticipants(dialogue.participants);
           setMessages(dialogue.messages.map((m, i) => ({ id: `m-${i}`, ...m })));
+          setLastIsBlank(dialogue.messages.some((m) => m.isBlank));
         } else {
           setParticipants([]);
           setMessages([]);
+          setLastIsBlank(false);
         }
         setLoaded(true);
       })
@@ -209,7 +213,7 @@ export function DialogueBuilderView({ chunk, onBack }: { chunk: DialogueBuilderC
         setLoadError('Не удалось загрузить данные для редактора диалога.');
         setLoaded(true);
       });
-  }, [chunk.id]);
+  }, [chunk.id, kind]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -279,6 +283,7 @@ export function DialogueBuilderView({ chunk, onBack }: { chunk: DialogueBuilderC
     if (messages.length > 0 && !window.confirm('Заменить текущий диалог вставленным?')) return;
     setParticipants(result.dialogue.participants);
     setMessages(result.dialogue.messages.map((m) => ({ id: crypto.randomUUID(), ...m })));
+    setLastIsBlank(result.dialogue.messages.some((m) => m.isBlank));
     setMode('preview');
     setImportOpen(false);
     setImportText('');
@@ -289,9 +294,18 @@ export function DialogueBuilderView({ chunk, onBack }: { chunk: DialogueBuilderC
     setSaving(true);
     setSaveError(null);
     try {
-      const saved = await saveAdminDialogue(chunk.id, { participants, messages: messages.map(({ characterId, characterImageId, text }) => ({ characterId, characterImageId, text })) });
+      const saved = await saveAdminDialogue(chunk.id, kind, {
+        participants,
+        messages: messages.map(({ characterId, characterImageId, text }, i) => ({
+          characterId,
+          characterImageId,
+          text,
+          isBlank: kind === 'situation' && lastIsBlank && i === messages.length - 1,
+        })),
+      });
       setParticipants(saved.participants);
       setMessages(saved.messages.map((m, i) => ({ id: `m-${i}`, ...m })));
+      setLastIsBlank(saved.messages.some((m) => m.isBlank));
       setJustSaved(true);
       setTimeout(() => setJustSaved(false), 1500);
     } catch (err) {
@@ -303,7 +317,7 @@ export function DialogueBuilderView({ chunk, onBack }: { chunk: DialogueBuilderC
 
   async function handleDeleteDialogue() {
     if (!window.confirm('Удалить диалог для этого чанка?')) return;
-    await deleteAdminDialogue(chunk.id);
+    await deleteAdminDialogue(chunk.id, kind);
     onBack();
   }
 
@@ -326,15 +340,21 @@ export function DialogueBuilderView({ chunk, onBack }: { chunk: DialogueBuilderC
   }
 
   const usesTarget = messages.some((m) => m.text.toLowerCase().includes(chunk.text.toLowerCase()));
+  const blankActive = kind === 'situation' && lastIsBlank && messages.length > 0;
 
-  const playbackMessages: PlaybackMessage[] = messages.map((m) => {
+  // For kind='situation' with the blank enabled, the preview hides the last
+  // message's text behind a placeholder — exactly what the learner sees
+  // before answering — so the admin previews the real experience, not a
+  // spoiler of the model answer.
+  const playbackMessages: PlaybackMessage[] = messages.map((m, i) => {
     const character = characters?.find((c) => c.id === m.characterId);
     const image = character?.images.find((i) => i.id === m.characterImageId);
+    const isBlankSlot = blankActive && i === messages.length - 1;
     return {
       characterName: character?.name ?? '?',
       imageUrl: image?.imageUrl ?? '',
       side: resolveSide(participants, m.characterId) ?? 'left',
-      text: m.text,
+      text: isBlankSlot ? '✍️ Здесь пользователь допишет сам' : m.text,
     };
   });
 
@@ -349,14 +369,14 @@ export function DialogueBuilderView({ chunk, onBack }: { chunk: DialogueBuilderC
         onBack={onBack}
         trailing={
           <div className="flex items-center gap-1">
-            <CopyPromptButton chunk={chunk} characters={characters} />
+            <CopyPromptButton chunk={chunk} characters={characters} kind={kind} />
             <IconButton icon="Paste" label="Вставить диалог от ИИ" onClick={() => setImportOpen(true)} />
             <SaveButton onClick={save} saving={saving} justSaved={justSaved} disabled={saving || messages.length === 0} />
           </div>
         }
       />
       <div className="px-5 pt-1 pb-2 text-meta">
-        Диалог для «{chunk.text}» / {chunk.translation}
+        {kind === 'situation' ? 'Комикс для «Ситуации»' : 'Диалог'} для «{chunk.text}» / {chunk.translation}
       </div>
       <div className="px-5 pb-3">
         <SegmentedControl
@@ -409,6 +429,16 @@ export function DialogueBuilderView({ chunk, onBack }: { chunk: DialogueBuilderC
                 </div>
               </SortableContext>
             </DndContext>
+
+            {kind === 'situation' && messages.length > 0 && (
+              <label className="flex items-start gap-2.5 rounded-[var(--radius-md)] bg-accent-subtle px-3.5 py-3 text-[13.5px] cursor-pointer">
+                <input type="checkbox" checked={lastIsBlank} onChange={(e) => setLastIsBlank(e.target.checked)} className="mt-0.5" />
+                <span>
+                  Последняя реплика — пропуск, который допишет пользователь.
+                  {lastIsBlank && ' В предпросмотре и в приложении её текст будет скрыт.'}
+                </span>
+              </label>
+            )}
 
             {participants.length === 0 ? (
               <Button onClick={() => setWizard({ step: 'character' })} className="self-start">

@@ -1,6 +1,8 @@
 import { PRODUCTION_ANSWER_MAX_LENGTH } from '@app/shared';
 import { useAppStore } from '../store/appStore';
 import { InteractiveWords } from '../components/InteractiveWords';
+import { DialoguePlayback } from '../components/dialogue/DialoguePlayback';
+import { DialogueAnswerBubble } from '../components/dialogue/DialogueAnswerBubble';
 import { IconButton } from '../components/ui/IconButton';
 import { Textarea } from '../components/ui/Textarea';
 import { Button } from '../components/ui/Button';
@@ -9,6 +11,43 @@ export function ProductionCheckScreen() {
   const s = useAppStore();
   const remaining = PRODUCTION_ANSWER_MAX_LENGTH - s.productionAnswer.length;
   const chunkText = s.activeDeckChunks.find((c) => c.id === s.productionChunkId)?.text;
+
+  if (s.productionMode === 'dialogue' && s.productionDialogue) {
+    const { precedingMessages, blank } = s.productionDialogue;
+    return (
+      <div className="flex-1 min-h-0 flex flex-col bg-bg">
+        <div className="flex items-center gap-2 px-3 pt-2">
+          <IconButton icon="Close" label="Закрыть" onClick={s.back} />
+        </div>
+
+        <div className="scroll-clean flex-1 min-h-0 flex flex-col gap-5 px-6 py-6">
+          <div className="text-meta">Ситуация — допишите реплику</div>
+          {precedingMessages.length > 0 && <DialoguePlayback messages={precedingMessages} targetText={chunkText} />}
+          <DialogueAnswerBubble
+            characterName={blank.characterName}
+            imageUrl={blank.imageUrl}
+            side={blank.side}
+            value={s.productionAnswer}
+            onChange={s.setProductionAnswer}
+            maxLength={PRODUCTION_ANSWER_MAX_LENGTH}
+          />
+          {chunkText && <div className="text-meta">Подсказка: используйте фразу «{chunkText}»</div>}
+          <div className={`self-end text-meta ${remaining <= 10 ? 'text-negative' : ''}`}>
+            {s.productionAnswer.length}/{PRODUCTION_ANSWER_MAX_LENGTH}
+          </div>
+        </div>
+
+        <div className="flex-none px-6 pb-6 flex flex-col gap-3">
+          <Button onClick={s.submitProductionCheck} disabled={!s.productionAnswer.trim()}>
+            Проверить
+          </Button>
+          <Button variant="ghost" onClick={s.skipProductionCheck}>
+            Пропустить
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 min-h-0 flex flex-col bg-bg">

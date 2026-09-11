@@ -28,7 +28,7 @@ import {
   type DialogueSummary,
   type SaveDialogueResult,
 } from '../dialogues/service.js';
-import type { DialogueInput } from '../dialogues/repository.js';
+import type { DialogueInput, DialogueKind } from '../dialogues/repository.js';
 
 export interface AdminUserSummary {
   id: string;
@@ -120,6 +120,7 @@ export interface AdminChunkSummary {
   situationPrompts: AdminSituationPrompt[];
   sentences: AdminChunkSentenceRow[];
   hasDialogue: boolean;
+  hasSituationDialogue: boolean;
   position: number;
 }
 
@@ -133,6 +134,7 @@ function toChunkSummary(row: AdminChunkRow): AdminChunkSummary {
     situationPrompts: row.situation_prompts,
     sentences: row.sentences,
     hasDialogue: row.has_dialogue,
+    hasSituationDialogue: row.has_situation_dialogue,
     position: row.position,
   };
 }
@@ -194,15 +196,15 @@ export async function listAiCallLogsForAdmin(limit: number): Promise<AiCallLogSu
   return (await repoListAiCallLogs(limit)).map(toAiCallLogSummary);
 }
 
-export async function getDialogueForChunk(chunkId: string): Promise<DialogueSummary | null> {
-  return dialoguesGetDialogueForChunk(chunkId);
+export async function getDialogueForChunk(chunkId: string, kind: DialogueKind): Promise<DialogueSummary | null> {
+  return dialoguesGetDialogueForChunk(chunkId, kind);
 }
 
-/** Save/upsert — a chunk has at most one dialogue; calling this again replaces it, it never creates a second one. */
-export async function saveDialogueForChunk(chunkId: string, input: DialogueInput): Promise<SaveDialogueResult> {
-  return dialoguesSaveDialogue(chunkId, input);
+/** Save/upsert — a chunk has at most one dialogue per kind; calling this again for the same kind replaces it, it never creates a second one. */
+export async function saveDialogueForChunk(chunkId: string, kind: DialogueKind, input: DialogueInput): Promise<SaveDialogueResult> {
+  return dialoguesSaveDialogue(chunkId, kind, input);
 }
 
-export async function deleteDialogueForChunk(chunkId: string): Promise<boolean> {
-  return dialoguesDeleteDialogueForChunk(chunkId);
+export async function deleteDialogueForChunk(chunkId: string, kind: DialogueKind): Promise<boolean> {
+  return dialoguesDeleteDialogueForChunk(chunkId, kind);
 }

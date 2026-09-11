@@ -1,4 +1,5 @@
 import { getJson, postJson, patchJson, deleteJson, postFormData } from './collections';
+import type { DialogueKind } from './dialogues';
 
 export interface CharacterImage {
   id: string;
@@ -75,6 +76,7 @@ export interface CharacterChunkUsage {
   chunkId: string;
   chunkText: string;
   chunkTranslation: string;
+  dialogueKind: DialogueKind;
   collectionTitles: string[];
 }
 

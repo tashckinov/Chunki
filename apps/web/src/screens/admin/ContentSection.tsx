@@ -25,7 +25,7 @@ import {
   type NewChunkInput,
 } from '../../lib/admin';
 import { fetchCharacters, type Character } from '../../lib/characters';
-import { saveAdminDialogue } from '../../lib/dialogues';
+import { saveAdminDialogue, type DialogueKind } from '../../lib/dialogues';
 import { buildDialogueAiPrompt, buildBulkDialogueAiPrompt } from '../../lib/dialogueAiPrompt';
 import { buildBulkChunkCreatePrompt, buildBulkSentencesRegeneratePrompt, buildBulkSituationsRegeneratePrompt } from '../../lib/chunkAiPrompt';
 import { parseDialogueImport, parseBulkDialogueImport, toPlaybackMessages, type ParsedDialogue, type BulkParsedDialogue } from '../../lib/dialogueImport';
@@ -85,7 +85,8 @@ type ContentView =
   | { kind: 'chunks'; collectionId: string }
   | { kind: 'editChunk'; collectionId: string; chunk: AdminChunk | 'new' }
   | { kind: 'editCollection'; collectionId?: string } // no collectionId = creating a new one, from the collections root
-  | { kind: 'editDialogue'; collectionId: string; chunk: AdminChunk };
+  | { kind: 'editDialogue'; collectionId: string; chunk: AdminChunk }
+  | { kind: 'editSituationDialogue'; collectionId: string; chunk: AdminChunk };
 
 interface ChunkFormValue {
   text: string;
@@ -358,7 +359,7 @@ function CollectionEditView({
  * through an external AI without opening the full editor. Approving calls
  * the same save endpoint the builder uses, so the result is identical either way.
  */
-function DialogueQuickActions({ chunk, characters, onSaved }: { chunk: AdminChunk; characters: Character[] | null; onSaved: () => void }) {
+function DialogueQuickActions({ chunk, kind, characters, onSaved }: { chunk: AdminChunk; kind: DialogueKind; characters: Character[] | null; onSaved: () => void }) {
   const [copied, setCopied] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState('');
@@ -369,7 +370,7 @@ function DialogueQuickActions({ chunk, characters, onSaved }: { chunk: AdminChun
 
   async function copy() {
     if (!characters) return;
-    await navigator.clipboard.writeText(buildDialogueAiPrompt(chunk, characters));
+    await navigator.clipboard.writeText(buildDialogueAiPrompt(chunk, characters, kind));
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }
@@ -389,7 +390,7 @@ function DialogueQuickActions({ chunk, characters, onSaved }: { chunk: AdminChun
     setSaving(true);
     setSaveError(null);
     try {
-      await saveAdminDialogue(chunk.id, preview);
+      await saveAdminDialogue(chunk.id, kind, preview);
       closeSheet(false);
       onSaved();
     } catch (err) {
@@ -418,7 +419,7 @@ function DialogueQuickActions({ chunk, characters, onSaved }: { chunk: AdminChun
       <IconButton icon={copied ? 'Check' : 'Copy'} label="Скопировать инструкцию для ИИ" size="sm" onClick={copy} disabled={!characters} />
       <IconButton icon="Paste" label="Вставить диалог от ИИ" size="sm" onClick={() => closeSheet(true)} disabled={!characters} />
 
-      <Sheet open={importOpen} onOpenChange={closeSheet} title={`Диалог через ИИ — «${chunk.text}»`}>
+      <Sheet open={importOpen} onOpenChange={closeSheet} title={`${kind === 'situation' ? 'Комикс для Ситуации' : 'Диалог'} через ИИ — «${chunk.text}»`}>
         {!preview ? (
           <div className="flex flex-col gap-3">
             <div className="text-[13.5px] text-body-secondary">Вставьте JSON-ответ ИИ, полученный по скопированной инструкции.</div>
@@ -483,6 +484,7 @@ function BulkDialogueAiSheet({
   collectionTitle,
   chunks,
   characters,
+  kind,
   onSaved,
 }: {
   open: boolean;
@@ -490,6 +492,7 @@ function BulkDialogueAiSheet({
   collectionTitle: string;
   chunks: AdminChunk[];
   characters: Character[] | null;
+  kind: DialogueKind;
   onSaved: (chunkId: string) => void;
 }) {
   const [copied, setCopied] = useState(false);
@@ -504,7 +507,7 @@ function BulkDialogueAiSheet({
 
   async function copy() {
     if (!characters) return;
-    await navigator.clipboard.writeText(buildBulkDialogueAiPrompt(chunks, characters));
+    await navigator.clipboard.writeText(buildBulkDialogueAiPrompt(chunks, characters, kind));
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }
@@ -528,7 +531,7 @@ function BulkDialogueAiSheet({
     const failedChunkTexts: string[] = [];
     for (const item of pending) {
       try {
-        await saveAdminDialogue(item.chunkId, item.dialogue);
+        await saveAdminDialogue(item.chunkId, kind, item.dialogue);
         savedChunkIdsRef.current.add(item.chunkId);
         onSaved(item.chunkId);
       } catch {
@@ -553,7 +556,7 @@ function BulkDialogueAiSheet({
   }
 
   return (
-    <Sheet open={open} onOpenChange={closeSheet} title={`Диалоги через ИИ — «${collectionTitle}»`}>
+    <Sheet open={open} onOpenChange={closeSheet} title={`${kind === 'situation' ? 'Комиксы для Ситуации' : 'Диалоги'} через ИИ — «${collectionTitle}»`}>
       {!preview ? (
         <div className="flex flex-col gap-3">
           <div className="text-[13.5px] text-body-secondary">
@@ -1084,7 +1087,7 @@ function BulkAiMenuSheet({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onPick: (action: 'createChunks' | 'sentences' | 'situations' | 'dialogues') => void;
+  onPick: (action: 'createChunks' | 'sentences' | 'situations' | 'dialogues' | 'situationDialogues') => void;
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange} title="Массово через ИИ">
@@ -1112,6 +1115,12 @@ function BulkAiMenuSheet({
           title="Диалоги (комиксы)"
           subtitle="Сгенерировать диалоги-комиксы для всех чанков коллекции сразу"
           onClick={() => onPick('dialogues')}
+        />
+        <ListRow
+          leading={<Icon name="Characters" size={20} />}
+          title="Комиксы для Ситуации"
+          subtitle="Сгенерировать комиксы с репликой-пропуском для «Ситуации» — для всех чанков коллекции сразу"
+          onClick={() => onPick('situationDialogues')}
           divider={false}
         />
       </div>
@@ -1127,15 +1136,17 @@ export function ContentSection({ onOpenMenu }: { onOpenMenu: () => void }) {
   const [view, setView] = useState<ContentView>({ kind: 'collections' });
   const [bulkAiMenuOpen, setBulkAiMenuOpen] = useState(false);
   const [bulkAiOpen, setBulkAiOpen] = useState(false);
+  const [bulkSituationDialoguesOpen, setBulkSituationDialoguesOpen] = useState(false);
   const [bulkChunkCreateOpen, setBulkChunkCreateOpen] = useState(false);
   const [bulkSentencesOpen, setBulkSentencesOpen] = useState(false);
   const [bulkSituationsOpen, setBulkSituationsOpen] = useState(false);
 
-  function pickBulkAiAction(action: 'createChunks' | 'sentences' | 'situations' | 'dialogues') {
+  function pickBulkAiAction(action: 'createChunks' | 'sentences' | 'situations' | 'dialogues' | 'situationDialogues') {
     setBulkAiMenuOpen(false);
     if (action === 'createChunks') setBulkChunkCreateOpen(true);
     else if (action === 'sentences') setBulkSentencesOpen(true);
     else if (action === 'situations') setBulkSituationsOpen(true);
+    else if (action === 'situationDialogues') setBulkSituationDialoguesOpen(true);
     else setBulkAiOpen(true);
   }
 
@@ -1152,6 +1163,10 @@ export function ContentSection({ onOpenMenu }: { onOpenMenu: () => void }) {
 
   function markChunkHasDialogue(chunkId: string) {
     setChunks((prev) => prev?.map((c) => (c.id === chunkId ? { ...c, hasDialogue: true } : c)) ?? prev);
+  }
+
+  function markChunkHasSituationDialogue(chunkId: string) {
+    setChunks((prev) => prev?.map((c) => (c.id === chunkId ? { ...c, hasSituationDialogue: true } : c)) ?? prev);
   }
 
   function handleBulkChunkCreated(collectionId: string, chunk: AdminChunk) {
@@ -1259,7 +1274,12 @@ export function ContentSection({ onOpenMenu }: { onOpenMenu: () => void }) {
 
   if (view.kind === 'editDialogue') {
     const { collectionId, chunk } = view;
-    return <DialogueBuilderView chunk={chunk} onBack={() => setView({ kind: 'chunks', collectionId })} />;
+    return <DialogueBuilderView chunk={chunk} kind="browse" onBack={() => setView({ kind: 'chunks', collectionId })} />;
+  }
+
+  if (view.kind === 'editSituationDialogue') {
+    const { collectionId, chunk } = view;
+    return <DialogueBuilderView chunk={chunk} kind="situation" onBack={() => setView({ kind: 'chunks', collectionId })} />;
   }
 
   if (view.kind === 'editCollection') {
@@ -1314,12 +1334,17 @@ export function ContentSection({ onOpenMenu }: { onOpenMenu: () => void }) {
                       {chunk.translation} · {chunk.level}
                       {chunk.situationPrompts.length > 0 ? ` · ${chunk.situationPrompts.length} ${plural(chunk.situationPrompts.length, 'ситуация', 'ситуации', 'ситуаций')}` : ''}
                       {chunk.hasDialogue ? ' · есть диалог' : ''}
+                      {chunk.hasSituationDialogue ? ' · есть комикс-ситуация' : ''}
                     </div>
                   </div>
                   <IconButton icon="Delete" label="Убрать из коллекции" size="sm" tone="muted" onClick={() => handleDetachChunk(collectionId, chunk)} />
-                  <DialogueQuickActions chunk={chunk} characters={characters} onSaved={() => markChunkHasDialogue(chunk.id)} />
+                  <DialogueQuickActions chunk={chunk} kind="browse" characters={characters} onSaved={() => markChunkHasDialogue(chunk.id)} />
                   <Button size="sm" variant="ghost" onClick={() => setView({ kind: 'editDialogue', collectionId, chunk })}>
                     {chunk.hasDialogue ? 'Диалог' : '+ Диалог'}
+                  </Button>
+                  <DialogueQuickActions chunk={chunk} kind="situation" characters={characters} onSaved={() => markChunkHasSituationDialogue(chunk.id)} />
+                  <Button size="sm" variant="ghost" onClick={() => setView({ kind: 'editSituationDialogue', collectionId, chunk })}>
+                    {chunk.hasSituationDialogue ? 'Комикс-ситуация' : '+ Комикс-ситуация'}
                   </Button>
                   <Button size="sm" variant="ghost" onClick={() => setView({ kind: 'editChunk', collectionId, chunk })}>
                     Изменить
@@ -1340,7 +1365,17 @@ export function ContentSection({ onOpenMenu }: { onOpenMenu: () => void }) {
           collectionTitle={selected?.title ?? 'Чанки'}
           chunks={chunks ?? []}
           characters={characters}
+          kind="browse"
           onSaved={markChunkHasDialogue}
+        />
+        <BulkDialogueAiSheet
+          open={bulkSituationDialoguesOpen}
+          onOpenChange={setBulkSituationDialoguesOpen}
+          collectionTitle={selected?.title ?? 'Чанки'}
+          chunks={chunks ?? []}
+          characters={characters}
+          kind="situation"
+          onSaved={markChunkHasSituationDialogue}
         />
         <BulkChunkCreateAiSheet
           open={bulkChunkCreateOpen}
