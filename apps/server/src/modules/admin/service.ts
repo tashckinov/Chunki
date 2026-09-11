@@ -13,6 +13,7 @@ import {
   type AdminUserRow,
   type AdminCollectionRow,
   type AdminChunkRow,
+  type AdminChunkSentenceRow,
   type NewCollectionInput,
   type CollectionPatch,
   type ChunkInput,
@@ -114,10 +115,9 @@ export interface AdminChunkSummary {
   text: string;
   translation: string;
   explanation: string | null;
-  example: string | null;
-  exampleTranslation: string | null;
   level: string;
   situationPrompts: string[];
+  sentences: AdminChunkSentenceRow[];
   hasDialogue: boolean;
   position: number;
 }
@@ -128,10 +128,9 @@ function toChunkSummary(row: AdminChunkRow): AdminChunkSummary {
     text: row.text,
     translation: row.translation,
     explanation: row.explanation,
-    example: row.example,
-    exampleTranslation: row.example_translation,
     level: row.level,
     situationPrompts: row.situation_prompts,
+    sentences: row.sentences,
     hasDialogue: row.has_dialogue,
     position: row.position,
   };

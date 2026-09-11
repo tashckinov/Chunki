@@ -61,14 +61,25 @@ export async function deleteJson<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export interface ChunkSentencePart {
+  text: string;
+  explanationRu: string;
+  explanationEn: string;
+}
+
+export interface ChunkSentence {
+  text: string;
+  translation: string;
+  parts: ChunkSentencePart[];
+}
+
 export interface ChunkSummary {
   id: string;
   text: string;
   translation: string;
   explanation: string | null;
-  example: string | null;
-  exampleTranslation: string | null;
   level: string;
+  sentences: ChunkSentence[];
   hasDialogue: boolean;
 }
 

@@ -1,13 +1,12 @@
-import { findChunkById, type ChunkRow } from './repository.js';
+import { findChunkById, type ChunkRow, type ChunkSentenceRow } from './repository.js';
 
 export interface ChunkSummary {
   id: string;
   text: string;
   translation: string;
   explanation: string | null;
-  example: string | null;
-  exampleTranslation: string | null;
   level: string;
+  sentences: ChunkSentenceRow[];
   hasDialogue: boolean;
 }
 
@@ -17,9 +16,8 @@ export function toChunkSummary(row: ChunkRow): ChunkSummary {
     text: row.text,
     translation: row.translation,
     explanation: row.explanation,
-    example: row.example,
-    exampleTranslation: row.example_translation,
     level: row.level,
+    sentences: row.sentences,
     hasDialogue: row.has_dialogue,
   };
 }

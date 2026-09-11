@@ -26,7 +26,10 @@ import {
 import { fetchCharacters, type Character } from '../../lib/characters';
 import { saveAdminDialogue } from '../../lib/dialogues';
 import { buildDialogueAiPrompt, buildBulkDialogueAiPrompt } from '../../lib/dialogueAiPrompt';
+import { buildBulkChunkCreatePrompt, buildBulkSentencesRegeneratePrompt } from '../../lib/chunkAiPrompt';
 import { parseDialogueImport, parseBulkDialogueImport, toPlaybackMessages, type ParsedDialogue, type BulkParsedDialogue } from '../../lib/dialogueImport';
+import { parseBulkChunkCreateImport, parseBulkSentencesImport, type ParsedChunkCreate, type BulkParsedSentences } from '../../lib/chunkImport';
+import type { ChunkSentence } from '../../lib/collections';
 import { Sheet } from '../../components/ui/Sheet';
 import { DialoguePlayback } from '../../components/dialogue/DialoguePlayback';
 import { DialogueBuilderView } from './DialogueBuilderView';
@@ -80,33 +83,30 @@ interface ChunkFormValue {
   text: string;
   translation: string;
   explanation: string;
-  example: string;
-  exampleTranslation: string;
   level: string;
   situationPrompts: string[];
 }
 
-const EMPTY_CHUNK_FORM: ChunkFormValue = { text: '', translation: '', explanation: '', example: '', exampleTranslation: '', level: 'A2', situationPrompts: [] };
+const EMPTY_CHUNK_FORM: ChunkFormValue = { text: '', translation: '', explanation: '', level: 'A2', situationPrompts: [] };
 
 function chunkToForm(chunk: AdminChunk): ChunkFormValue {
   return {
     text: chunk.text,
     translation: chunk.translation,
     explanation: chunk.explanation ?? '',
-    example: chunk.example ?? '',
-    exampleTranslation: chunk.exampleTranslation ?? '',
     level: chunk.level,
     situationPrompts: chunk.situationPrompts,
   };
 }
 
+// Sentences aren't hand-edited here — they're authored/updated only through
+// the AI copy/paste flow (single-create or bulk-regenerate), so omitting the
+// field on a PATCH leaves a chunk's existing sentences untouched.
 function formToChunkInput(v: ChunkFormValue): NewChunkInput {
   return {
     text: v.text.trim(),
     translation: v.translation.trim(),
     explanation: v.explanation.trim() || null,
-    example: v.example.trim() || null,
-    exampleTranslation: v.exampleTranslation.trim() || null,
     level: v.level,
     situationPrompts: v.situationPrompts.map((p) => p.trim()).filter(Boolean),
   };
@@ -160,15 +160,21 @@ function ChunkEditView({
           <Field label="Пояснение (необязательно)" hint="Короткое объяснение значения — под переводом на обороте.">
             <Textarea value={form.explanation} onChange={(v) => setForm((f) => ({ ...f, explanation: v }))} placeholder="Used to agree to a suggestion." rows={2} />
           </Field>
-          <Field label="Пример использования (необязательно)" hint="Предложение-пример на обороте карточки.">
-            <Input value={form.example} onChange={(v) => setForm((f) => ({ ...f, example: v }))} placeholder="Seven o'clock? Sounds good." />
-          </Field>
-          <Field label="Перевод примера (необязательно)">
-            <Input value={form.exampleTranslation} onChange={(v) => setForm((f) => ({ ...f, exampleTranslation: v }))} placeholder="В семь? Звучит хорошо." />
-          </Field>
           <Field label="Уровень (CEFR)" hint="Влияет на дистракторы в проверке на узнавание.">
             <LevelSelect value={form.level} onChange={(v) => setForm((f) => ({ ...f, level: v }))} />
           </Field>
+          {chunk !== 'new' && (
+            <Field
+              label={`Предложения (${chunk.sentences.length})`}
+              hint="Каждое предложение разбито на части с объяснением — редактируются через «Массово обновить предложения» в списке чанков коллекции, не здесь."
+            >
+              {chunk.sentences.length > 0 ? (
+                <div className="text-[14px] text-text-secondary">{chunk.sentences[0].text}</div>
+              ) : (
+                <div className="text-meta">Пока нет предложений.</div>
+              )}
+            </Field>
+          )}
           <Field
             label={`Ситуации для продакшн-проверки (${form.situationPrompts.length})`}
             hint={
@@ -588,6 +594,325 @@ function BulkDialogueAiSheet({
   );
 }
 
+/** Row of one entry in the bulk-create preview list — collapsed by default, expands to a translation + all its sentences. */
+function BulkChunkCreatePreviewRow({ chunk }: { chunk: ParsedChunkCreate }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="rounded-[var(--radius-md)] border border-border p-3 flex flex-col gap-2">
+      <button type="button" onClick={() => setExpanded((v) => !v)} className="pressable flex items-center justify-between gap-2 text-left">
+        <span className="text-[14px] truncate">{chunk.text}</span>
+        <span className="text-meta flex-none">
+          {chunk.sentences.length} {plural(chunk.sentences.length, 'предложение', 'предложения', 'предложений')}
+        </span>
+      </button>
+      {expanded && (
+        <div className="flex flex-col gap-2">
+          <div className="text-[13.5px] text-body-secondary">{chunk.translation}</div>
+          {chunk.sentences.map((s, i) => (
+            <div key={i} className="text-[13.5px]">
+              <div>{s.text}</div>
+              <div className="text-meta">{s.translation}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Phase 4: bulk-CREATE brand-new chunks for a collection via the same
+ * copy-prompt / paste-and-preview / approve loop as the dialogue bulk sheet
+ * above, just producing whole new chunks (with ~3 example sentences each)
+ * instead of comics for existing ones. Reuses the existing single-chunk
+ * POST endpoint in a client-side loop — no new backend route needed.
+ */
+function BulkChunkCreateAiSheet({
+  open,
+  onOpenChange,
+  collectionId,
+  collectionTitle,
+  level,
+  existingChunkTexts,
+  onSaved,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  collectionId: string;
+  collectionTitle: string;
+  level: string;
+  existingChunkTexts: string[];
+  onSaved: (chunk: AdminChunk) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const [count, setCount] = useState('5');
+  const [importText, setImportText] = useState('');
+  const [importError, setImportError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<ParsedChunkCreate[] | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveSummary, setSaveSummary] = useState<{ okCount: number; total: number; failedChunkTexts: string[] } | null>(null);
+  // Tracks which preview indices already created successfully so a retry
+  // after a partial failure only re-attempts the ones that actually failed.
+  const savedIndexesRef = useRef<Set<number>>(new Set());
+
+  async function copy() {
+    const n = Math.max(1, Number(count) || 5);
+    await navigator.clipboard.writeText(buildBulkChunkCreatePrompt(collectionTitle, level, n, existingChunkTexts));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  function handleParse() {
+    const result = parseBulkChunkCreateImport(importText);
+    if (result.kind === 'error') {
+      setImportError(result.message);
+      return;
+    }
+    setImportError(null);
+    setSaveSummary(null);
+    savedIndexesRef.current = new Set();
+    setPreview(result.chunks);
+  }
+
+  async function saveAll() {
+    if (!preview) return;
+    setSaving(true);
+    const failedChunkTexts: string[] = [];
+    for (let i = 0; i < preview.length; i++) {
+      if (savedIndexesRef.current.has(i)) continue;
+      try {
+        const created = await createAdminChunk(collectionId, preview[i]);
+        savedIndexesRef.current.add(i);
+        onSaved(created);
+      } catch {
+        failedChunkTexts.push(preview[i].text);
+      }
+    }
+    setSaveSummary({ okCount: savedIndexesRef.current.size, total: preview.length, failedChunkTexts });
+    setSaving(false);
+  }
+
+  function closeSheet(next: boolean) {
+    if (next) {
+      onOpenChange(true);
+      return;
+    }
+    onOpenChange(false);
+    setImportText('');
+    setImportError(null);
+    setPreview(null);
+    setSaveSummary(null);
+    savedIndexesRef.current = new Set();
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={closeSheet} title={`Новые чанки через ИИ — «${collectionTitle}»`}>
+      {!preview ? (
+        <div className="flex flex-col gap-3">
+          <div className="text-[13.5px] text-body-secondary">
+            Скопируйте инструкцию, сгенерируйте новые чанки во внешнем ИИ-чате, затем вставьте ответ ниже.
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-20">
+              <Input value={count} onChange={setCount} placeholder="5" type="number" />
+            </div>
+            <span className="text-[13.5px] text-body-secondary">чанков</span>
+          </div>
+          <Button size="sm" variant="secondary" onClick={copy}>
+            {copied ? 'Скопировано' : 'Копировать инструкцию'}
+          </Button>
+          <Textarea
+            value={importText}
+            onChange={(v) => {
+              setImportText(v);
+              setImportError(null);
+            }}
+            placeholder='{"chunks": [...]}'
+            rows={10}
+          />
+          {importError && <div className="text-negative text-[13px]">{importError}</div>}
+          <Button size="sm" onClick={handleParse} disabled={!importText.trim()}>
+            Вставить и посмотреть
+          </Button>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2 max-h-[45vh] overflow-y-auto">
+            {preview.map((chunk, i) => (
+              <BulkChunkCreatePreviewRow key={i} chunk={chunk} />
+            ))}
+          </div>
+          {saveSummary && (
+            <div className={saveSummary.failedChunkTexts.length > 0 ? 'text-negative text-[13px]' : 'text-[13px] text-body-secondary'}>
+              Создано {saveSummary.okCount} из {saveSummary.total}
+              {saveSummary.failedChunkTexts.length > 0 ? ` — не удалось: ${saveSummary.failedChunkTexts.join(', ')}` : ''}
+            </div>
+          )}
+          <div className="flex gap-2">
+            <Button size="sm" onClick={saveAll} disabled={saving}>
+              {saving ? 'Создаём…' : `Создать все (${preview.length})`}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setPreview(null)}>
+              Назад
+            </Button>
+          </div>
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
+/** Row of one entry in the bulk-sentences preview list — collapsed by default, expands to all its sentences. */
+function BulkSentencesPreviewRow({ item, chunkText }: { item: BulkParsedSentences; chunkText: string }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="rounded-[var(--radius-md)] border border-border p-3 flex flex-col gap-2">
+      <button type="button" onClick={() => setExpanded((v) => !v)} className="pressable flex items-center justify-between gap-2 text-left">
+        <span className="text-[14px] truncate">{chunkText}</span>
+        <span className="text-meta flex-none">
+          {item.sentences.length} {plural(item.sentences.length, 'предложение', 'предложения', 'предложений')}
+        </span>
+      </button>
+      {expanded && (
+        <div className="flex flex-col gap-2">
+          {item.sentences.map((s, i) => (
+            <div key={i} className="text-[13.5px]">
+              <div>{s.text}</div>
+              <div className="text-meta">{s.translation}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Phase 4: bulk-REGENERATE example sentences for chunks that already exist
+ * — a deliberately separate copy/paste round from BulkDialogueAiSheet above
+ * (confirmed with the user), touching only sentences, never dialogues.
+ */
+function BulkSentencesRegenerateAiSheet({
+  open,
+  onOpenChange,
+  collectionTitle,
+  chunks,
+  onSaved,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  collectionTitle: string;
+  chunks: AdminChunk[];
+  onSaved: (chunkId: string, sentences: ChunkSentence[]) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [importError, setImportError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<BulkParsedSentences[] | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveSummary, setSaveSummary] = useState<{ okCount: number; total: number; failedChunkTexts: string[] } | null>(null);
+  const savedChunkIdsRef = useRef<Set<string>>(new Set());
+
+  async function copy() {
+    await navigator.clipboard.writeText(buildBulkSentencesRegeneratePrompt(chunks.map((c) => ({ id: c.id, text: c.text, translation: c.translation }))));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  function handleParse() {
+    const result = parseBulkSentencesImport(importText, chunks);
+    if (result.kind === 'error') {
+      setImportError(result.message);
+      return;
+    }
+    setImportError(null);
+    setSaveSummary(null);
+    savedChunkIdsRef.current = new Set();
+    setPreview(result.items);
+  }
+
+  async function saveAll() {
+    if (!preview) return;
+    setSaving(true);
+    const pending = preview.filter((item) => !savedChunkIdsRef.current.has(item.chunkId));
+    const failedChunkTexts: string[] = [];
+    for (const item of pending) {
+      try {
+        await updateAdminChunk(item.chunkId, { sentences: item.sentences });
+        savedChunkIdsRef.current.add(item.chunkId);
+        onSaved(item.chunkId, item.sentences);
+      } catch {
+        failedChunkTexts.push(chunks.find((c) => c.id === item.chunkId)?.text ?? item.chunkId);
+      }
+    }
+    setSaveSummary({ okCount: savedChunkIdsRef.current.size, total: preview.length, failedChunkTexts });
+    setSaving(false);
+  }
+
+  function closeSheet(next: boolean) {
+    if (next) {
+      onOpenChange(true);
+      return;
+    }
+    onOpenChange(false);
+    setImportText('');
+    setImportError(null);
+    setPreview(null);
+    setSaveSummary(null);
+    savedChunkIdsRef.current = new Set();
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={closeSheet} title={`Предложения через ИИ — «${collectionTitle}»`}>
+      {!preview ? (
+        <div className="flex flex-col gap-3">
+          <div className="text-[13.5px] text-body-secondary">
+            Скопируйте инструкцию для всей коллекции, сгенерируйте новые примеры предложений во внешнем ИИ-чате, затем вставьте ответ ниже.
+          </div>
+          <Button size="sm" variant="secondary" onClick={copy}>
+            {copied ? 'Скопировано' : `Копировать инструкцию (${chunks.length} ${plural(chunks.length, 'чанк', 'чанка', 'чанков')})`}
+          </Button>
+          <Textarea
+            value={importText}
+            onChange={(v) => {
+              setImportText(v);
+              setImportError(null);
+            }}
+            placeholder='{"sentencesByChunk": [...]}'
+            rows={10}
+          />
+          {importError && <div className="text-negative text-[13px]">{importError}</div>}
+          <Button size="sm" onClick={handleParse} disabled={!importText.trim()}>
+            Вставить и посмотреть
+          </Button>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2 max-h-[45vh] overflow-y-auto">
+            {preview.map((item) => (
+              <BulkSentencesPreviewRow key={item.chunkId} item={item} chunkText={chunks.find((c) => c.id === item.chunkId)?.text ?? item.chunkId} />
+            ))}
+          </div>
+          {saveSummary && (
+            <div className={saveSummary.failedChunkTexts.length > 0 ? 'text-negative text-[13px]' : 'text-[13px] text-body-secondary'}>
+              Сохранено {saveSummary.okCount} из {saveSummary.total}
+              {saveSummary.failedChunkTexts.length > 0 ? ` — не удалось: ${saveSummary.failedChunkTexts.join(', ')}` : ''}
+            </div>
+          )}
+          <div className="flex gap-2">
+            <Button size="sm" onClick={saveAll} disabled={saving}>
+              {saving ? 'Сохраняем…' : `Сохранить все (${preview.length})`}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setPreview(null)}>
+              Назад
+            </Button>
+          </div>
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
 export function ContentSection({ onOpenMenu }: { onOpenMenu: () => void }) {
   const [collections, setCollections] = useState<AdminCollection[] | null>(null);
   const [chunks, setChunks] = useState<AdminChunk[] | null>(null);
@@ -595,6 +920,8 @@ export function ContentSection({ onOpenMenu }: { onOpenMenu: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<ContentView>({ kind: 'collections' });
   const [bulkAiOpen, setBulkAiOpen] = useState(false);
+  const [bulkChunkCreateOpen, setBulkChunkCreateOpen] = useState(false);
+  const [bulkSentencesOpen, setBulkSentencesOpen] = useState(false);
 
   useEffect(() => {
     fetchAdminCollections()
@@ -609,6 +936,15 @@ export function ContentSection({ onOpenMenu }: { onOpenMenu: () => void }) {
 
   function markChunkHasDialogue(chunkId: string) {
     setChunks((prev) => prev?.map((c) => (c.id === chunkId ? { ...c, hasDialogue: true } : c)) ?? prev);
+  }
+
+  function handleBulkChunkCreated(collectionId: string, chunk: AdminChunk) {
+    setChunks((prev) => (prev ? [...prev, chunk] : [chunk]));
+    bumpChunkCount(collectionId, 1);
+  }
+
+  function handleBulkSentencesSaved(chunkId: string, sentences: ChunkSentence[]) {
+    setChunks((prev) => prev?.map((c) => (c.id === chunkId ? { ...c, sentences } : c)) ?? prev);
   }
 
   const activeCollectionId = view.kind === 'chunks' || view.kind === 'editChunk' ? view.collectionId : null;
@@ -736,14 +1072,22 @@ export function ContentSection({ onOpenMenu }: { onOpenMenu: () => void }) {
                 </Button>
               </div>
             )}
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="text-[14.5px] font-medium">Чанки</div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 {chunks && chunks.length > 0 && (
-                  <Button size="sm" variant="ghost" onClick={() => setBulkAiOpen(true)}>
-                    Массово через ИИ
-                  </Button>
+                  <>
+                    <Button size="sm" variant="ghost" onClick={() => setBulkSentencesOpen(true)}>
+                      Массово обновить предложения
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setBulkAiOpen(true)}>
+                      Массово через ИИ
+                    </Button>
+                  </>
                 )}
+                <Button size="sm" variant="ghost" onClick={() => setBulkChunkCreateOpen(true)}>
+                  Массово создать чанки
+                </Button>
                 <Button size="sm" variant="secondary" onClick={() => setView({ kind: 'editChunk', collectionId, chunk: 'new' })}>
                   + Чанк
                 </Button>
@@ -786,6 +1130,22 @@ export function ContentSection({ onOpenMenu }: { onOpenMenu: () => void }) {
           chunks={chunks ?? []}
           characters={characters}
           onSaved={markChunkHasDialogue}
+        />
+        <BulkChunkCreateAiSheet
+          open={bulkChunkCreateOpen}
+          onOpenChange={setBulkChunkCreateOpen}
+          collectionId={collectionId}
+          collectionTitle={selected?.title ?? 'Чанки'}
+          level={selected?.level ?? 'A2'}
+          existingChunkTexts={chunks?.map((c) => c.text) ?? []}
+          onSaved={(chunk) => handleBulkChunkCreated(collectionId, chunk)}
+        />
+        <BulkSentencesRegenerateAiSheet
+          open={bulkSentencesOpen}
+          onOpenChange={setBulkSentencesOpen}
+          collectionTitle={selected?.title ?? 'Чанки'}
+          chunks={chunks ?? []}
+          onSaved={handleBulkSentencesSaved}
         />
       </div>
     );

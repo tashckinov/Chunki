@@ -1,13 +1,24 @@
 import { pool } from '../../db/pool.js';
 
+export interface ChunkSentencePart {
+  text: string;
+  explanationRu: string;
+  explanationEn: string;
+}
+
+export interface ChunkSentenceRow {
+  text: string;
+  translation: string;
+  parts: ChunkSentencePart[];
+}
+
 export interface ChunkRow {
   id: string;
   text: string;
   translation: string;
   explanation: string | null;
-  example: string | null;
-  example_translation: string | null;
   level: string;
+  sentences: ChunkSentenceRow[];
   has_dialogue: boolean;
 }
 
@@ -19,20 +30,71 @@ const HAS_DIALOGUE_SUBQUERY = `EXISTS (
               WHERE d.chunk_id = c.id
             ) AS has_dialogue`;
 
+interface RawSentenceRow {
+  chunk_id: string;
+  sentence_id: string;
+  text: string;
+  translation: string;
+}
+
+interface RawPartRow {
+  sentence_id: string;
+  text: string;
+  explanation_ru: string;
+  explanation_en: string;
+}
+
+// Batch-fetches every sentence (+ its parts) for a set of chunk ids in two
+// flat queries and groups them in application code — mirrors admin/
+// repository.ts's identical fetchSentencesForChunks (small, tolerable
+// duplication, same posture as the two modules' parallel HAS_DIALOGUE
+// queries above).
+async function fetchSentencesForChunks(chunkIds: string[]): Promise<Map<string, ChunkSentenceRow[]>> {
+  if (chunkIds.length === 0) return new Map();
+  const { rows: sentenceRows } = await pool.query<RawSentenceRow>(
+    `SELECT chunk_id, id AS sentence_id, text, translation
+     FROM chunk_sentences WHERE chunk_id = ANY($1::uuid[]) ORDER BY chunk_id, position`,
+    [chunkIds],
+  );
+  const sentenceIds = sentenceRows.map((r) => r.sentence_id);
+  const partsBySentence = new Map<string, ChunkSentencePart[]>();
+  if (sentenceIds.length > 0) {
+    const { rows: partRows } = await pool.query<RawPartRow>(
+      `SELECT sentence_id, text, explanation_ru, explanation_en
+       FROM chunk_sentence_parts WHERE sentence_id = ANY($1::uuid[]) ORDER BY sentence_id, position`,
+      [sentenceIds],
+    );
+    for (const p of partRows) {
+      const arr = partsBySentence.get(p.sentence_id) ?? [];
+      arr.push({ text: p.text, explanationRu: p.explanation_ru, explanationEn: p.explanation_en });
+      partsBySentence.set(p.sentence_id, arr);
+    }
+  }
+  const byChunk = new Map<string, ChunkSentenceRow[]>();
+  for (const s of sentenceRows) {
+    const arr = byChunk.get(s.chunk_id) ?? [];
+    arr.push({ text: s.text, translation: s.translation, parts: partsBySentence.get(s.sentence_id) ?? [] });
+    byChunk.set(s.chunk_id, arr);
+  }
+  return byChunk;
+}
+
 export async function findChunkById(id: string): Promise<ChunkRow | null> {
-  const { rows } = await pool.query<ChunkRow>(
-    `SELECT c.id, c.text, c.translation, c.explanation, c.example, c.example_translation, c.level,
+  const { rows } = await pool.query<Omit<ChunkRow, 'sentences'>>(
+    `SELECT c.id, c.text, c.translation, c.explanation, c.level,
             ${HAS_DIALOGUE_SUBQUERY}
      FROM chunks c
      WHERE c.id = $1`,
     [id],
   );
-  return rows[0] ?? null;
+  if (!rows[0]) return null;
+  const sentencesByChunk = await fetchSentencesForChunks([rows[0].id]);
+  return { ...rows[0], sentences: sentencesByChunk.get(rows[0].id) ?? [] };
 }
 
 export async function listChunksForCollection(collectionId: string): Promise<ChunkRow[]> {
-  const { rows } = await pool.query<ChunkRow>(
-    `SELECT c.id, c.text, c.translation, c.explanation, c.example, c.example_translation, c.level,
+  const { rows } = await pool.query<Omit<ChunkRow, 'sentences'>>(
+    `SELECT c.id, c.text, c.translation, c.explanation, c.level,
             ${HAS_DIALOGUE_SUBQUERY}
      FROM collection_chunks cc
      JOIN chunks c ON c.id = cc.chunk_id
@@ -40,5 +102,6 @@ export async function listChunksForCollection(collectionId: string): Promise<Chu
      ORDER BY cc.position`,
     [collectionId],
   );
-  return rows;
+  const sentencesByChunk = await fetchSentencesForChunks(rows.map((r) => r.id));
+  return rows.map((r) => ({ ...r, sentences: sentencesByChunk.get(r.id) ?? [] }));
 }

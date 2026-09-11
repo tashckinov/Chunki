@@ -68,7 +68,8 @@ export interface ChunkWithSituationsRow {
 
 export async function findChunkWithSituationPrompts(chunkId: string): Promise<ChunkWithSituationsRow | null> {
   const { rows } = await pool.query<ChunkWithSituationsRow>(
-    `SELECT c.id, c.text, c.translation, c.example,
+    `SELECT c.id, c.text, c.translation,
+            (SELECT text FROM chunk_sentences WHERE chunk_id = c.id ORDER BY position LIMIT 1) AS example,
             COALESCE(
               (SELECT array_agg(p.prompt ORDER BY p.position) FROM chunk_situation_prompts p WHERE p.chunk_id = c.id),
               ARRAY[]::text[]

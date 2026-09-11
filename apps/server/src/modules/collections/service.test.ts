@@ -33,9 +33,8 @@ function fakeChunk(overrides: Partial<ChunkRow> = {}): ChunkRow {
     text: 'check in',
     translation: 'зарегистрироваться',
     explanation: 'Explanation.',
-    example: 'We need to check in.',
-    example_translation: 'Нам нужно зарегистрироваться.',
     level: 'A2',
+    sentences: [{ text: 'We need to check in.', translation: 'Нам нужно зарегистрироваться.', parts: [] }],
     has_dialogue: false,
     ...overrides,
   };
@@ -85,9 +84,8 @@ describe('getPublishedCollectionBySlug', () => {
       text: 'check in',
       translation: 'зарегистрироваться',
       explanation: 'Explanation.',
-      example: 'We need to check in.',
-      exampleTranslation: 'Нам нужно зарегистрироваться.',
       level: 'A2',
+      sentences: [{ text: 'We need to check in.', translation: 'Нам нужно зарегистрироваться.', parts: [] }],
       hasDialogue: false,
     });
   });

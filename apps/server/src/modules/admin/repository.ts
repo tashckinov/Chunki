@@ -135,15 +135,26 @@ export async function updateCollection(id: string, patch: CollectionPatch): Prom
   return rows[0] ?? null;
 }
 
+export interface AdminChunkSentencePart {
+  text: string;
+  explanationRu: string;
+  explanationEn: string;
+}
+
+export interface AdminChunkSentenceRow {
+  text: string;
+  translation: string;
+  parts: AdminChunkSentencePart[];
+}
+
 export interface AdminChunkRow {
   id: string;
   text: string;
   translation: string;
   explanation: string | null;
-  example: string | null;
-  example_translation: string | null;
   level: string;
   situation_prompts: string[];
+  sentences: AdminChunkSentenceRow[];
   has_dialogue: boolean;
   position: number;
 }
@@ -157,9 +168,77 @@ const HAS_DIALOGUE_SUBQUERY = `EXISTS (
               WHERE d.chunk_id = c.id
             ) AS has_dialogue`;
 
+interface RawSentenceRow {
+  chunk_id: string;
+  sentence_id: string;
+  text: string;
+  translation: string;
+}
+
+interface RawPartRow {
+  sentence_id: string;
+  text: string;
+  explanation_ru: string;
+  explanation_en: string;
+}
+
+/** Batch-fetches every sentence (+ its parts) for a set of chunk ids in two
+ * flat queries and groups them in application code — same "LEFT JOIN, group
+ * in JS" style already used by characters/repository.ts for images-per-
+ * character, simpler to read than a nested json_agg subquery. */
+async function fetchSentencesForChunks(chunkIds: string[], client: pg.PoolClient | pg.Pool = pool): Promise<Map<string, AdminChunkSentenceRow[]>> {
+  if (chunkIds.length === 0) return new Map();
+  const { rows: sentenceRows } = await client.query<RawSentenceRow>(
+    `SELECT chunk_id, id AS sentence_id, text, translation
+     FROM chunk_sentences WHERE chunk_id = ANY($1::uuid[]) ORDER BY chunk_id, position`,
+    [chunkIds],
+  );
+  const sentenceIds = sentenceRows.map((r) => r.sentence_id);
+  const partsBySentence = new Map<string, AdminChunkSentencePart[]>();
+  if (sentenceIds.length > 0) {
+    const { rows: partRows } = await client.query<RawPartRow>(
+      `SELECT sentence_id, text, explanation_ru, explanation_en
+       FROM chunk_sentence_parts WHERE sentence_id = ANY($1::uuid[]) ORDER BY sentence_id, position`,
+      [sentenceIds],
+    );
+    for (const p of partRows) {
+      const arr = partsBySentence.get(p.sentence_id) ?? [];
+      arr.push({ text: p.text, explanationRu: p.explanation_ru, explanationEn: p.explanation_en });
+      partsBySentence.set(p.sentence_id, arr);
+    }
+  }
+  const byChunk = new Map<string, AdminChunkSentenceRow[]>();
+  for (const s of sentenceRows) {
+    const arr = byChunk.get(s.chunk_id) ?? [];
+    arr.push({ text: s.text, translation: s.translation, parts: partsBySentence.get(s.sentence_id) ?? [] });
+    byChunk.set(s.chunk_id, arr);
+  }
+  return byChunk;
+}
+
+/** Full-replace, delete-then-reinsert-in-order — same pattern as replaceSituationPrompts below, just nested one level deeper (each sentence's parts). */
+async function replaceChunkSentences(client: pg.PoolClient, chunkId: string, sentences: AdminChunkSentenceRow[]): Promise<void> {
+  await client.query(`DELETE FROM chunk_sentences WHERE chunk_id = $1`, [chunkId]);
+  for (let i = 0; i < sentences.length; i++) {
+    const sentence = sentences[i];
+    const { rows } = await client.query<{ id: string }>(
+      `INSERT INTO chunk_sentences (chunk_id, text, translation, position) VALUES ($1, $2, $3, $4) RETURNING id`,
+      [chunkId, sentence.text, sentence.translation, i],
+    );
+    const sentenceId = rows[0].id;
+    for (let j = 0; j < sentence.parts.length; j++) {
+      const part = sentence.parts[j];
+      await client.query(
+        `INSERT INTO chunk_sentence_parts (sentence_id, text, explanation_ru, explanation_en, position) VALUES ($1, $2, $3, $4, $5)`,
+        [sentenceId, part.text, part.explanationRu, part.explanationEn, j],
+      );
+    }
+  }
+}
+
 export async function listChunksForCollectionAdmin(collectionId: string): Promise<AdminChunkRow[]> {
-  const { rows } = await pool.query<AdminChunkRow>(
-    `SELECT c.id, c.text, c.translation, c.explanation, c.example, c.example_translation, c.level, cc.position,
+  const { rows } = await pool.query<Omit<AdminChunkRow, 'sentences'>>(
+    `SELECT c.id, c.text, c.translation, c.explanation, c.level, cc.position,
             COALESCE(
               (SELECT array_agg(p.prompt ORDER BY p.position) FROM chunk_situation_prompts p WHERE p.chunk_id = c.id),
               ARRAY[]::text[]
@@ -171,14 +250,15 @@ export async function listChunksForCollectionAdmin(collectionId: string): Promis
      ORDER BY cc.position`,
     [collectionId],
   );
-  return rows;
+  const sentencesByChunk = await fetchSentencesForChunks(rows.map((r) => r.id));
+  return rows.map((r) => ({ ...r, sentences: sentencesByChunk.get(r.id) ?? [] }));
 }
 
 type ChunkRowNoPosition = Omit<AdminChunkRow, 'position'>;
 
 async function findChunkByIdAdmin(id: string, client: pg.PoolClient | pg.Pool = pool): Promise<ChunkRowNoPosition | null> {
-  const { rows } = await client.query<ChunkRowNoPosition>(
-    `SELECT c.id, c.text, c.translation, c.explanation, c.example, c.example_translation, c.level,
+  const { rows } = await client.query<Omit<ChunkRowNoPosition, 'sentences'>>(
+    `SELECT c.id, c.text, c.translation, c.explanation, c.level,
             COALESCE(
               (SELECT array_agg(p.prompt ORDER BY p.position) FROM chunk_situation_prompts p WHERE p.chunk_id = c.id),
               ARRAY[]::text[]
@@ -187,7 +267,9 @@ async function findChunkByIdAdmin(id: string, client: pg.PoolClient | pg.Pool = 
      FROM chunks c WHERE c.id = $1`,
     [id],
   );
-  return rows[0] ?? null;
+  if (!rows[0]) return null;
+  const sentencesByChunk = await fetchSentencesForChunks([rows[0].id], client);
+  return { ...rows[0], sentences: sentencesByChunk.get(rows[0].id) ?? [] };
 }
 
 /** Replaces the full set of situation prompts for a chunk, in order — mirrors how every other chunk field is a full-replace patch, not an incremental diff. */
@@ -202,10 +284,9 @@ export interface ChunkInput {
   text: string;
   translation: string;
   explanation: string | null;
-  example: string | null;
-  exampleTranslation: string | null;
   level: string;
   situationPrompts: string[];
+  sentences: AdminChunkSentenceRow[];
 }
 
 /** Inserts the chunk and appends it to the collection in one transaction — a chunk row without a collection_chunks membership would be orphaned and unreachable from any deck. */
@@ -213,14 +294,15 @@ export async function createChunkInCollection(collectionId: string, input: Chunk
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { rows: chunkRows } = await client.query<Omit<ChunkRowNoPosition, 'situation_prompts'>>(
-      `INSERT INTO chunks (text, translation, explanation, example, example_translation, level)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, text, translation, explanation, example, example_translation, level`,
-      [input.text, input.translation, input.explanation, input.example, input.exampleTranslation, input.level],
+    const { rows: chunkRows } = await client.query<Omit<ChunkRowNoPosition, 'situation_prompts' | 'sentences' | 'has_dialogue'>>(
+      `INSERT INTO chunks (text, translation, explanation, level)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, text, translation, explanation, level`,
+      [input.text, input.translation, input.explanation, input.level],
     );
     const chunk = chunkRows[0];
     await replaceSituationPrompts(client, chunk.id, input.situationPrompts);
+    await replaceChunkSentences(client, chunk.id, input.sentences);
     const { rows: posRows } = await client.query<{ next_position: number }>(
       `SELECT COALESCE(MAX(position), -1) + 1 AS next_position FROM collection_chunks WHERE collection_id = $1`,
       [collectionId],
@@ -228,7 +310,7 @@ export async function createChunkInCollection(collectionId: string, input: Chunk
     const position = posRows[0].next_position;
     await client.query(`INSERT INTO collection_chunks (collection_id, chunk_id, position) VALUES ($1, $2, $3)`, [collectionId, chunk.id, position]);
     await client.query('COMMIT');
-    return { ...chunk, situation_prompts: input.situationPrompts, has_dialogue: false, position };
+    return { ...chunk, situation_prompts: input.situationPrompts, sentences: input.sentences, has_dialogue: false, position };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -241,10 +323,9 @@ export interface ChunkPatch {
   text?: string;
   translation?: string;
   explanation?: string | null;
-  example?: string | null;
-  exampleTranslation?: string | null;
   level?: string;
   situationPrompts?: string[];
+  sentences?: AdminChunkSentenceRow[];
 }
 
 export async function updateChunk(id: string, patch: ChunkPatch): Promise<ChunkRowNoPosition | null> {
@@ -261,8 +342,6 @@ export async function updateChunk(id: string, patch: ChunkPatch): Promise<ChunkR
     if (patch.text !== undefined) add('text', patch.text);
     if (patch.translation !== undefined) add('translation', patch.translation);
     if (patch.explanation !== undefined) add('explanation', patch.explanation);
-    if (patch.example !== undefined) add('example', patch.example);
-    if (patch.exampleTranslation !== undefined) add('example_translation', patch.exampleTranslation);
     if (patch.level !== undefined) add('level', patch.level);
 
     if (sets.length > 0) {
@@ -282,6 +361,9 @@ export async function updateChunk(id: string, patch: ChunkPatch): Promise<ChunkR
 
     if (patch.situationPrompts !== undefined) {
       await replaceSituationPrompts(client, id, patch.situationPrompts);
+    }
+    if (patch.sentences !== undefined) {
+      await replaceChunkSentences(client, id, patch.sentences);
     }
 
     const row = await findChunkByIdAdmin(id, client);

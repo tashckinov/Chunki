@@ -57,9 +57,8 @@ describe('GET /api/chunks/:id', () => {
       text: 'sounds good',
       translation: 'звучит хорошо',
       explanation: null,
-      example: null,
-      exampleTranslation: null,
       level: 'A2',
+      sentences: [],
       hasDialogue: false,
     };
     vi.mocked(service.getChunkById).mockResolvedValue(chunk);

@@ -81,7 +81,7 @@ describe('GET /api/collections/:slug', () => {
       description: null,
       level: 'A2',
       bannerUrl: null,
-      chunks: [{ id: 'chunk-1', text: 'check in', translation: 'зарегистрироваться', explanation: null, example: null, exampleTranslation: null, level: 'A2', hasDialogue: false }],
+      chunks: [{ id: 'chunk-1', text: 'check in', translation: 'зарегистрироваться', explanation: null, level: 'A2', sentences: [], hasDialogue: false }],
     };
     vi.mocked(service.getPublishedCollectionBySlug).mockResolvedValue(detail);
 

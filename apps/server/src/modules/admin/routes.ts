@@ -59,19 +59,30 @@ const collectionPatchSchema = z.object({
   bannerUrl: z.string().nullable().optional(),
 });
 
+const chunkSentencePartSchema = z.object({
+  text: z.string().min(1),
+  explanationRu: z.string().min(1),
+  explanationEn: z.string().min(1),
+});
+const chunkSentenceSchema = z.object({
+  text: z.string().min(1),
+  translation: z.string().min(1),
+  parts: z.array(chunkSentencePartSchema).min(1),
+});
+
 const chunkCreateSchema = z.object({
   text: z.string().min(1),
   translation: z.string().min(1),
   explanation: z.string().nullable().optional(),
-  example: z.string().nullable().optional(),
-  exampleTranslation: z.string().nullable().optional(),
   level: z.enum(LEVELS),
-  // No .default([]) here: chunkPatchSchema (below) wraps this in .partial(),
-  // and a default can still apply to an omitted key even when the field is
-  // optional — which would silently wipe an unpatched chunk's prompts on
-  // every unrelated edit. "Omitted on create" is instead handled explicitly
-  // in the POST handler below.
+  // No .default([]) here (situationPrompts and sentences alike):
+  // chunkPatchSchema (below) wraps this in .partial(), and a default can
+  // still apply to an omitted key even when the field is optional — which
+  // would silently wipe an unpatched chunk's prompts/sentences on every
+  // unrelated edit. "Omitted on create" is instead handled explicitly in
+  // the POST handler below.
   situationPrompts: z.array(z.string().min(1)).optional(),
+  sentences: z.array(chunkSentenceSchema).optional(),
 });
 const chunkPatchSchema = chunkCreateSchema.partial();
 
@@ -208,10 +219,9 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       text: body.data.text,
       translation: body.data.translation,
       explanation: body.data.explanation ?? null,
-      example: body.data.example ?? null,
-      exampleTranslation: body.data.exampleTranslation ?? null,
       level: body.data.level,
       situationPrompts: body.data.situationPrompts ?? [],
+      sentences: body.data.sentences ?? [],
     });
     reply.code(201);
     return { chunk };
