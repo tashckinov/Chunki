@@ -1,18 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { Sheet } from '../../components/ui/Sheet';
-import { Icon, type IconName } from '../../components/ui/Icon';
+import { Icon } from '../../components/ui/Icon';
 import { UsersSection } from './UsersSection';
 import { ContentSection } from './ContentSection';
 import { CharactersSection } from './CharactersSection';
 import { AiLogsSection } from './AiLogsSection';
-
-const SECTIONS: { section: 'users' | 'content' | 'characters' | 'aiLogs'; label: string; icon: IconName }[] = [
-  { section: 'users', label: 'Пользователи', icon: 'Account' },
-  { section: 'content', label: 'Контент', icon: 'Stars' },
-  { section: 'characters', label: 'Персонажи', icon: 'Characters' },
-  { section: 'aiLogs', label: 'AI-логи', icon: 'CheckBox' },
-];
+import { ADMIN_SECTIONS } from './sections';
 
 export function AdminScreen() {
   const user = useAppStore((s) => s.user);
@@ -45,7 +39,7 @@ export function AdminScreen() {
       {/* Mobile-only: desktop switches sections via the persistent sidebar instead (see App.tsx). */}
       <Sheet open={menuOpen} onOpenChange={setMenuOpen} title="Админка">
         <div className="flex flex-col gap-1">
-          {SECTIONS.map((s) => (
+          {ADMIN_SECTIONS.map((s) => (
             <button
               key={s.section}
               type="button"
