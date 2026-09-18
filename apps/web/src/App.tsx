@@ -26,18 +26,12 @@ import { RecognitionCheckScreen } from './screens/RecognitionCheckScreen';
 import { ProductionCheckScreen } from './screens/ProductionCheckScreen';
 import { DialogueScreen } from './screens/DialogueScreen';
 import { AdminScreen } from './screens/admin/AdminScreen';
+import { ADMIN_SECTIONS } from './screens/admin/sections';
 
 const SIDEBAR_ITEMS: { label: string; icon: IconName }[] = [
   { label: 'Карточки', icon: 'Stars' },
   { label: 'Комиксы', icon: 'Characters' },
   { label: 'Грамматика', icon: 'CheckBox' },
-];
-
-const ADMIN_SIDEBAR_ITEMS: { label: string; icon: IconName; section: 'users' | 'content' | 'characters' | 'aiLogs' }[] = [
-  { label: 'Пользователи', icon: 'Account', section: 'users' },
-  { label: 'Контент', icon: 'Stars', section: 'content' },
-  { label: 'Персонажи', icon: 'Characters', section: 'characters' },
-  { label: 'AI-логи', icon: 'CheckBox', section: 'aiLogs' },
 ];
 
 // Mobile tab bar carries the brand mark on the flashcards tab instead of a
@@ -122,7 +116,7 @@ function SidebarNav({ value, onChange }: { value: number; onChange: (v: number) 
         <span className="text-[17px] font-semibold">Chunki</span>
       </button>
       {inAdmin
-        ? ADMIN_SIDEBAR_ITEMS.map((item) => {
+        ? ADMIN_SECTIONS.map((item) => {
             const active = item.section === adminSection;
             return (
               <button

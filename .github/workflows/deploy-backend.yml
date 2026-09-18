@@ -1,0 +1,44 @@
+name: Deploy backend to VPS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Queues runs instead of letting two deploys race `docker compose up --build`
+# on the server at once — never cancels a deploy that's already in flight.
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH into the VPS and redeploy
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script: |
+            set -e
+            cd ${{ secrets.VPS_APP_DIR }}
+
+            # Hard-reset to origin/main rather than `git pull` — this clone is a
+            # deploy target, never hand-edited, so there's nothing local worth
+            # merging; a reset can't fail on unexpected divergent history the
+            # way a pull can.
+            git fetch origin main
+            git reset --hard origin/main
+
+            docker compose up -d --build backend
+            docker compose exec -T backend npm run migrate -w apps/server
+
+            # Only the now-unused build layers from this rebuild — never
+            # touches images/containers still in use, so it can't take down
+            # anything that's currently running.
+            docker builder prune -f
+
+            docker compose logs --tail=50 backend

@@ -155,13 +155,48 @@ see "Running locally" above.
 
 ### Redeploying after a code change
 
-Merging a PR to `main` only rebuilds and redeploys the GitHub Pages **frontend** automatically
-(`.github/workflows/deploy-pages.yml`) — the **backend** is not touched until someone runs this on
-the VPS:
+A push to `main` rebuilds and redeploys the GitHub Pages **frontend** automatically
+(`.github/workflows/deploy-pages.yml`), and — once the one-time setup below is done — also
+SSHes into the VPS and redeploys the **backend** automatically
+(`.github/workflows/deploy-backend.yml`): `git reset --hard origin/main`, rebuild+restart just the
+`backend` service, run migrations (idempotent — safe even with no new migrations), prune the
+now-unused Docker build cache from the rebuild, and print the last 50 log lines so a broken
+deploy is visible in the Actions run. You can also trigger it manually from the Actions tab
+("Deploy backend to VPS" → Run workflow) without pushing.
+
+**One-time setup**, from the VPS:
+
+```bash
+# A dedicated, passphrase-less key — never reuse your personal SSH key for this.
+ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/deploy_key -N ""
+cat ~/deploy_key.pub >> ~/.ssh/authorized_keys
+cat ~/deploy_key    # copy this whole output (including the BEGIN/END lines) — you'll need it next
+```
+
+Then, in the GitHub repo → **Settings → Secrets and variables → Actions → New repository secret**,
+add:
+
+| Secret | Value |
+|---|---|
+| `VPS_HOST` | the VPS's hostname or IP |
+| `VPS_USER` | the SSH user from the command above (must be able to run `git`/`docker compose` without a password/sudo prompt) |
+| `VPS_SSH_KEY` | the full private key printed by `cat ~/deploy_key` above |
+| `VPS_APP_DIR` | absolute path to the existing clone on the VPS, e.g. `/home/deploy/Chunki` |
+| `VPS_PORT` | only if SSH isn't on port 22 |
+
+This assumes the VPS's existing clone can already `git fetch`/`pull` non-interactively (whatever
+credentials were used for the original `git clone` in "Then, on the VPS:" above still apply) —
+if that clone ever needs a password or an SSH passphrase prompt, the deploy step will hang until
+the job times out. It also assumes `VPS_USER` can run `docker`/`docker compose` without `sudo` —
+if `docker ps` needs `sudo` for that user, add them to the `docker` group first
+(`sudo usermod -aG docker <user>`, then log out/in for it to take effect).
+
+Until that setup is done, or if you'd rather redeploy by hand, run this on the VPS yourself —
+identical to what the workflow above does:
 
 ```bash
 cd Chunki                                   # the existing clone on the VPS
-git pull origin main
+git fetch origin main && git reset --hard origin/main
 docker compose up -d --build backend                        # rebuild only the backend image; leaves postgres untouched
 docker compose exec backend npm run migrate -w apps/server   # idempotent — safe even with no new migrations
 docker compose logs -f backend                                # confirm clean startup, then Ctrl-C
