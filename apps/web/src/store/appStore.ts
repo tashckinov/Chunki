@@ -28,6 +28,7 @@ import {
   type SituationPromptPart,
   type ProductionDialoguePayload,
 } from '../lib/progress';
+import { fetchPaymentStatus } from '../lib/payments';
 
 export type Screen =
   | 'goals'
@@ -75,7 +76,7 @@ const BACK_MAP: Partial<Record<Screen, Screen>> = {
   admin: 'cardslib',
 };
 
-export type AdminSection = 'users' | 'content' | 'characters' | 'aiLogs';
+export type AdminSection = 'users' | 'content' | 'characters' | 'payments' | 'aiLogs';
 
 interface AppState {
   screen: Screen;
@@ -90,7 +91,9 @@ interface AppState {
   interfaceMode: 'ru-en' | 'en-en';
   hasProgram: boolean;
   plan: 'monthly' | 'yearly';
-  subscribed: boolean;
+  /** Server-sourced (GET /api/payments/status) — refreshed on checkAuth(), never persisted (see partialize below). */
+  premiumUntil: string | null;
+  isPremium: boolean;
 
   from: CEFRLevel;
   to: CEFRLevel;
@@ -180,6 +183,8 @@ interface AppState {
   signOut: () => Promise<void>;
   /** Runs once on app start to see if a session cookie is already valid. */
   checkAuth: () => Promise<void>;
+  /** Refreshes premiumUntil/isPremium from the server — called by checkAuth(); safe to call again after a checkout redirect brings the user back. */
+  refreshPaymentStatus: () => Promise<void>;
   dismissAuthError: () => void;
   signInWithPasskey: () => Promise<void>;
   dismissPasskeyError: () => void;
@@ -206,7 +211,6 @@ interface AppState {
   setTime: (t: string) => void;
   goPaywall: () => void;
   choosePlan: (key: 'monthly' | 'yearly') => void;
-  subscribe: () => void;
   skipPaywall: () => void;
 
   toggleCalendar: () => void;
@@ -268,7 +272,8 @@ export const useAppStore = create<AppState>()(
       interfaceMode: 'ru-en',
       hasProgram: false,
       plan: 'monthly',
-      subscribed: false,
+      premiumUntil: null,
+      isPremium: false,
 
       from: 'A2+',
       to: 'B2',
@@ -353,8 +358,17 @@ export const useAppStore = create<AppState>()(
         try {
           const user = await fetchCurrentUser();
           set({ user, authChecked: true });
+          void get().refreshPaymentStatus();
         } catch {
           set({ authChecked: true });
+        }
+      },
+      refreshPaymentStatus: async () => {
+        try {
+          const { premiumUntil, isPremium } = await fetchPaymentStatus();
+          set({ premiumUntil, isPremium });
+        } catch {
+          // Best-effort — a failed refresh just leaves the last-known status in place.
         }
       },
       dismissAuthError: () => set({ authError: false }),
@@ -406,7 +420,6 @@ export const useAppStore = create<AppState>()(
       setTime: (t) => set({ time: t }),
       goPaywall: () => set({ screen: 'paywall' }),
       choosePlan: (key) => set({ plan: key }),
-      subscribe: () => set({ subscribed: true, hasProgram: true, screen: 'cardslib' }),
       skipPaywall: () => set({ hasProgram: true, screen: 'cardslib' }),
 
       toggleCalendar: () => set((s) => ({ calOpen: !s.calOpen })),
@@ -805,6 +818,9 @@ export const useAppStore = create<AppState>()(
         // would show stale content after it changes server-side.
         // chunkProgress is the same story — server-sourced mastery state,
         // refetched by goDeck(); persisting it risks showing stale rings.
+        // premiumUntil/isPremium too — refreshed by checkAuth() via
+        // refreshPaymentStatus(); persisting them risks showing a stale
+        // premium badge before that refresh resolves.
         const {
           dx,
           dy,
@@ -823,6 +839,8 @@ export const useAppStore = create<AppState>()(
           collectionsStatus,
           collectionsError,
           chunkProgress,
+          premiumUntil,
+          isPremium,
           ...rest
         } = s;
         void dx;
@@ -842,6 +860,8 @@ export const useAppStore = create<AppState>()(
         void collectionsStatus;
         void collectionsError;
         void chunkProgress;
+        void premiumUntil;
+        void isPremium;
         return rest;
       },
     },

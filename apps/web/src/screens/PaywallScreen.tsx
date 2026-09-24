@@ -1,8 +1,11 @@
+import { useState } from 'react';
 import { Check, Sparkles } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { useScheduleView } from '../store/derived';
 import { Button } from '../components/ui/Button';
 import { SegmentedControl } from '../components/ui/SegmentedControl';
+import { createCheckout } from '../lib/payments';
+import { ApiError } from '../lib/collections';
 
 const PLAN_COMPARE = [
   { label: 'Карточки с чанками', free: true },
@@ -18,10 +21,24 @@ const PLANS = {
 };
 
 export function PaywallScreen() {
-  const { to, plan, choosePlan, subscribe, skipPaywall } = useAppStore();
+  const { to, plan, choosePlan, skipPaywall } = useAppStore();
   const { scheduleSummary } = useScheduleView();
   const chosen = PLANS[plan];
   const chosenPrice = plan === 'yearly' ? '3 990 ₽ в год' : '590 ₽ в месяц';
+  const [checkingOut, setCheckingOut] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+
+  async function handleSubscribe() {
+    setCheckingOut(true);
+    setCheckoutError(null);
+    try {
+      const { paymentUrl } = await createCheckout(plan);
+      window.location.href = paymentUrl;
+    } catch (err) {
+      setCheckoutError(err instanceof ApiError && err.status === 409 ? 'К аккаунту не привязан email — войдите заново через Google.' : 'Не удалось начать оплату. Попробуйте позже.');
+      setCheckingOut(false);
+    }
+  }
 
   return (
     <div className="scroll-clean flex-1 min-h-0 px-5 pt-4 pb-8 flex flex-col gap-8 anim-rise">
@@ -60,13 +77,14 @@ export function PaywallScreen() {
       </div>
 
       <div className="flex flex-col gap-2 mt-auto">
-        <Button size="lg" onClick={subscribe} className="w-full">
-          Попробовать 7 дней бесплатно
+        {checkoutError && <div className="text-negative text-[13.5px] text-center">{checkoutError}</div>}
+        <Button size="lg" onClick={handleSubscribe} disabled={checkingOut} className="w-full">
+          {checkingOut ? 'Переходим к оплате…' : 'Оформить подписку'}
         </Button>
-        <Button variant="ghost" size="sm" onClick={skipPaywall} className="w-full">
+        <Button variant="ghost" size="sm" onClick={skipPaywall} className="w-full" disabled={checkingOut}>
           Продолжить бесплатно
         </Button>
-        <div className="text-meta text-center">Первые 7 дней бесплатно, потом {chosenPrice}. Отмена в любой момент.</div>
+        <div className="text-meta text-center">{chosenPrice}. Отмена в любой момент.</div>
       </div>
     </div>
   );

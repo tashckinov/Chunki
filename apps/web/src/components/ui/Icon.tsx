@@ -26,6 +26,7 @@ import {
   Pencil,
   RefreshCw,
   MessageCircle,
+  CreditCard,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -57,6 +58,7 @@ const ICONS: Record<string, LucideIcon> = {
   Edit: Pencil,
   Refresh: RefreshCw,
   Chat: MessageCircle,
+  Payments: CreditCard,
 };
 
 export type IconName = keyof typeof ICONS;

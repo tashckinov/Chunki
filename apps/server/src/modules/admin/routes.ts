@@ -23,6 +23,7 @@ import {
   getDialogueForChunk,
   saveDialogueForChunk,
   deleteDialogueForChunk,
+  listPaymentsForAdmin,
 } from './service.js';
 
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const;
@@ -37,6 +38,7 @@ const BANNER_MAX_DIMENSION = 1600; // ~2x an 800x600 display size, comfortable f
 const idParamSchema = z.object({ id: z.string().uuid() });
 const collectionChunkParamSchema = z.object({ id: z.string().uuid(), chunkId: z.string().uuid() });
 const aiLogsQuerySchema = z.object({ limit: z.coerce.number().int().min(1).max(500).default(100) });
+const paymentsQuerySchema = z.object({ limit: z.coerce.number().int().min(1).max(500).default(100) });
 
 const premiumBodySchema = z.object({ premiumUntil: z.string().datetime().nullable() });
 
@@ -335,5 +337,14 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       return { error: 'invalid_request' };
     }
     return { logs: await listAiCallLogsForAdmin(parsed.data.limit) };
+  });
+
+  app.get('/payments', async (request, reply) => {
+    const parsed = paymentsQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      reply.code(400);
+      return { error: 'invalid_request' };
+    }
+    return { payments: await listPaymentsForAdmin(parsed.data.limit) };
   });
 };

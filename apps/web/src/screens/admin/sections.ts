@@ -6,5 +6,6 @@ export const ADMIN_SECTIONS: { section: AdminSection; label: string; icon: IconN
   { section: 'users', label: 'Пользователи', icon: 'Account' },
   { section: 'content', label: 'Контент', icon: 'Stars' },
   { section: 'characters', label: 'Персонажи', icon: 'Characters' },
+  { section: 'payments', label: 'Платежи', icon: 'Payments' },
   { section: 'aiLogs', label: 'AI-логи', icon: 'CheckBox' },
 ];

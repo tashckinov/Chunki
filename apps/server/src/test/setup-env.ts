@@ -8,3 +8,5 @@ process.env.GOOGLE_CLIENT_SECRET ??= 'test-client-secret';
 process.env.GOOGLE_REDIRECT_URI ??= 'http://localhost:8787/api/auth/google/callback';
 process.env.SESSION_SECRET ??= 'test-session-secret-that-is-long-enough';
 process.env.FRONTEND_URL ??= 'http://localhost:5173';
+process.env.LAVA_TOP_WEBHOOK_LOGIN ??= 'test-webhook-login';
+process.env.LAVA_TOP_WEBHOOK_PASSWORD ??= 'test-webhook-password';

@@ -6,6 +6,7 @@ import { UsersSection } from './UsersSection';
 import { ContentSection } from './ContentSection';
 import { CharactersSection } from './CharactersSection';
 import { AiLogsSection } from './AiLogsSection';
+import { PaymentsSection } from './PaymentsSection';
 import { ADMIN_SECTIONS } from './sections';
 
 export function AdminScreen() {
@@ -32,6 +33,8 @@ export function AdminScreen() {
         <ContentSection onOpenMenu={openMenu} />
       ) : adminSection === 'characters' ? (
         <CharactersSection onOpenMenu={openMenu} />
+      ) : adminSection === 'payments' ? (
+        <PaymentsSection onOpenMenu={openMenu} />
       ) : (
         <AiLogsSection onOpenMenu={openMenu} />
       )}

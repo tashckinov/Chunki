@@ -5,6 +5,7 @@ import { deckTallyView } from '../store/derived';
 import { plural } from '../lib/plural';
 import { Button } from '../components/ui/Button';
 import { Spinner } from '../components/ui/Spinner';
+import { createCheckout } from '../lib/payments';
 
 const VERDICT_COPY: Record<string, { label: string; className: string }> = {
   chunk_used: { label: 'Использовали фразу', className: 'text-positive' },
@@ -54,7 +55,20 @@ export function DeckDoneScreen() {
   const tally = deckTallyView(sessionVerdicts);
   const productionEntries = Object.entries(sessionProductionResults);
   const pendingCount = Object.keys(sessionProductionPending).length;
-  const [subscribeStub, setSubscribeStub] = useState(false);
+  const [checkingOut, setCheckingOut] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+
+  async function handleSubscribe() {
+    setCheckingOut(true);
+    setCheckoutError(null);
+    try {
+      const { paymentUrl } = await createCheckout('monthly');
+      window.location.href = paymentUrl;
+    } catch {
+      setCheckoutError('Не удалось начать оплату. Попробуйте позже.');
+      setCheckingOut(false);
+    }
+  }
 
   return (
     <div className="flex-1 min-h-0 px-5 py-8 flex flex-col gap-8 anim-rise overflow-y-auto scroll-clean">
@@ -93,13 +107,10 @@ export function DeckDoneScreen() {
           <div className="text-body-secondary text-[13.5px]">
             На бесплатном тарифе доступно 3 проверки предложений. Хотите больше? Оформите подписку.
           </div>
-          {subscribeStub ? (
-            <div className="text-negative text-[13.5px]">Извините, не получилось. Подписка пока не доступна.</div>
-          ) : (
-            <Button size="sm" onClick={() => setSubscribeStub(true)}>
-              Оформить подписку
-            </Button>
-          )}
+          {checkoutError && <div className="text-negative text-[13.5px]">{checkoutError}</div>}
+          <Button size="sm" onClick={handleSubscribe} disabled={checkingOut}>
+            {checkingOut ? 'Переходим к оплате…' : 'Оформить подписку'}
+          </Button>
         </div>
       )}
 

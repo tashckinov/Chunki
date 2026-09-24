@@ -29,6 +29,7 @@ import {
   type SaveDialogueResult,
 } from '../dialogues/service.js';
 import type { DialogueInput, DialogueKind } from '../dialogues/repository.js';
+import { listPaymentsForAdmin as paymentsListPaymentsForAdmin, type AdminPaymentSummary } from '../payments/service.js';
 
 export interface AdminUserSummary {
   id: string;
@@ -207,4 +208,8 @@ export async function saveDialogueForChunk(chunkId: string, kind: DialogueKind, 
 
 export async function deleteDialogueForChunk(chunkId: string, kind: DialogueKind): Promise<boolean> {
   return dialoguesDeleteDialogueForChunk(chunkId, kind);
+}
+
+export async function listPaymentsForAdmin(limit: number): Promise<AdminPaymentSummary[]> {
+  return paymentsListPaymentsForAdmin(limit);
 }

@@ -1,7 +1,7 @@
 import type { ProductionCheckVerdict } from '@app/shared';
 import { getProductionJudgeProvider } from '../../openrouter/index.js';
 import { recordAiCallLog } from '../aiLogs/repository.js';
-import { findAccountStatus, incrementProductionChecksUsed } from '../users/repository.js';
+import { findAccountStatus, incrementProductionChecksUsed, isPremiumActive } from '../users/repository.js';
 import { findSituationDialogueForLearner, type SituationDialogueForLearner } from '../dialogues/service.js';
 import {
   findProgress,
@@ -17,10 +17,6 @@ import {
 // permanent until an admin resets production_checks_used back to 0 (see
 // admin/repository.ts's resetProductionChecksUsed).
 const FREE_PRODUCTION_CHECKS_LIMIT = 3;
-
-function isPremiumActive(premiumUntil: Date | null): boolean {
-  return !!premiumUntil && premiumUntil.getTime() > Date.now();
-}
 
 export type SortVerdict = 'know' | 'dont' | 'bury';
 
