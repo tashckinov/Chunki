@@ -347,6 +347,7 @@ export const useAppStore = create<AppState>()(
         try {
           const user = await fetchCurrentUser();
           set({ user, authChecked: true });
+          if (user && get().collectionsError === 'unauthorized') void get().loadCollections();
           void get().refreshPaymentStatus();
           void get().loadProgram();
         } catch {
@@ -367,6 +368,7 @@ export const useAppStore = create<AppState>()(
         try {
           const user = await signInWithPasskeyCeremony();
           set({ user, passkeyBusy: false });
+          if (get().collectionsError === 'unauthorized') void get().loadCollections();
         } catch {
           set({ passkeyBusy: false, passkeyError: 'Не получилось войти через Passkey. Попробуйте ещё раз.' });
         }
