@@ -1,25 +1,41 @@
 import { useState } from 'react';
-import { ApiError, getJson, postJson } from './collections';
+import { getJson, postJson } from './collections';
 
 export type Plan = 'monthly' | 'yearly';
+export type Currency = 'USD' | 'EUR';
 
-export async function createCheckout(plan: Plan): Promise<{ paymentUrl: string }> {
-  return postJson('/api/payments/checkout', { plan });
+// Real prices live in Lava.top's dashboard, one per (plan, currency) offer —
+// this backend has no API to read them back, so the checkout stepper shows
+// only plan names/blurbs here and leaves the actual amount to Lava.top's own
+// payment page after redirect, rather than guessing at a number that could
+// drift out of sync per currency.
+export const PLANS: Record<Plan, { title: string; meta: string }> = {
+  monthly: { title: 'Месяц', meta: 'без обязательств' },
+  yearly: { title: 'Год', meta: 'выгоднее на 44%' },
+};
+
+export const CURRENCIES: Record<Currency, { label: string; symbol: string }> = {
+  USD: { label: 'Доллары США', symbol: '$' },
+  EUR: { label: 'Евро', symbol: '€' },
+};
+
+export async function createCheckout(plan: Plan, currency: Currency, email: string): Promise<{ paymentUrl: string }> {
+  return postJson('/api/payments/checkout', { plan, currency, email });
 }
 
-/** Shared checkout flow for both PaywallScreen and DeckDoneScreen's upsell — redirects to Lava.top's payment page on success. */
-export function useCheckout(plan: Plan) {
+/** Drives the CheckoutScreen stepper's final "Оплатить" step — redirects to Lava.top's payment page on success. */
+export function useCheckout() {
   const [checkingOut, setCheckingOut] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
-  async function subscribe() {
+  async function subscribe(plan: Plan, currency: Currency, email: string) {
     setCheckingOut(true);
     setCheckoutError(null);
     try {
-      const { paymentUrl } = await createCheckout(plan);
+      const { paymentUrl } = await createCheckout(plan, currency, email);
       window.location.href = paymentUrl;
-    } catch (err) {
-      setCheckoutError(err instanceof ApiError && err.status === 409 ? 'К аккаунту не привязан email — войдите заново через Google.' : 'Не удалось начать оплату. Попробуйте позже.');
+    } catch {
+      setCheckoutError('Не удалось начать оплату. Попробуйте позже.');
       setCheckingOut(false);
     }
   }

@@ -1,4 +1,5 @@
 import { getPaymentProvider } from './index.js';
+import type { Currency } from './provider.js';
 import {
   createPendingPayment,
   findPaymentByExternalId,
@@ -10,13 +11,14 @@ import {
 } from './repository.js';
 import { extendPremiumUntil, findAccountStatus, isPremiumActive } from '../users/repository.js';
 
-export type CheckoutResult = { kind: 'ok'; paymentUrl: string } | { kind: 'no_email' };
+export type CheckoutResult = { kind: 'ok'; paymentUrl: string };
 
-export async function createCheckoutForUser(userId: string, email: string | null, plan: PaymentPlan): Promise<CheckoutResult> {
-  if (!email) return { kind: 'no_email' };
-
+// email/currency are chosen by the learner in the checkout stepper (not
+// pulled from the account's login email) — validated by the route's zod
+// schema before this is ever called, so no "no email" case to handle here.
+export async function createCheckoutForUser(userId: string, email: string, plan: PaymentPlan, currency: Currency): Promise<CheckoutResult> {
   const provider = getPaymentProvider();
-  const { externalId, paymentUrl, instantlyPaid } = await provider.createCheckout({ email, plan });
+  const { externalId, paymentUrl, instantlyPaid } = await provider.createCheckout({ email, plan, currency });
   const payment = await createPendingPayment({ userId, provider: provider.name, externalId, plan });
 
   // Mock provider only — lets the whole checkout flow be exercised in

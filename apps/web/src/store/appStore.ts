@@ -47,6 +47,7 @@ export type Screen =
   | 'result'
   | 'schedule'
   | 'paywall'
+  | 'checkout'
   | 'program'
   | 'topic'
   | 'exercises'
@@ -68,6 +69,10 @@ const BACK_MAP: Partial<Record<Screen, Screen>> = {
   result: 'goals',
   schedule: 'result',
   paywall: 'schedule',
+  // Fallback only, same caveat as `dialogue` below — reachable from Paywall,
+  // DeckDone's upsell, and the account dialog's subscribe button, so there's
+  // no single real "back" destination to encode here.
+  checkout: 'cardslib',
   program: 'cardslib',
   topic: 'program',
   exercises: 'topic',

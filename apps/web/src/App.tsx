@@ -12,6 +12,7 @@ import { CheckingScreen } from './screens/CheckingScreen';
 import { ResultScreen } from './screens/ResultScreen';
 import { ScheduleScreen } from './screens/ScheduleScreen';
 import { PaywallScreen } from './screens/PaywallScreen';
+import { CheckoutScreen } from './screens/CheckoutScreen';
 import { ProgramScreen } from './screens/ProgramScreen';
 import { ComicsScreen } from './screens/ComicsScreen';
 import { TopicScreen } from './screens/TopicScreen';
@@ -70,6 +71,8 @@ function CurrentScreen() {
       return <ScheduleScreen />;
     case 'paywall':
       return <PaywallScreen />;
+    case 'checkout':
+      return <CheckoutScreen />;
     case 'program':
       return <ProgramScreen />;
     case 'topic':
@@ -173,6 +176,7 @@ function navTabForScreen(screen: string): number {
     case 'result':
     case 'schedule':
     case 'paywall':
+    case 'checkout':
     case 'program':
     case 'topic':
     case 'exercises':

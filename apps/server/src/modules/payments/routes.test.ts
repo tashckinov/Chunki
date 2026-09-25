@@ -47,37 +47,66 @@ describe('POST /api/payments/checkout', () => {
 
   it('returns 400 for an invalid plan', async () => {
     vi.mocked(session.getSession).mockResolvedValue(authenticatedSession);
-    const res = await app.inject({ method: 'POST', url: '/api/payments/checkout', cookies: authCookie, payload: { plan: 'weekly' } });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/payments/checkout',
+      cookies: authCookie,
+      payload: { plan: 'weekly', currency: 'USD', email: 'person@example.com' },
+    });
     expect(res.statusCode).toBe(400);
     expect(service.createCheckoutForUser).not.toHaveBeenCalled();
   });
 
-  it('creates a checkout for the authenticated user and returns the payment URL', async () => {
+  it('returns 400 for an invalid currency', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(authenticatedSession);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/payments/checkout',
+      cookies: authCookie,
+      payload: { plan: 'monthly', currency: 'RUB', email: 'person@example.com' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(service.createCheckoutForUser).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 for an invalid email', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(authenticatedSession);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/payments/checkout',
+      cookies: authCookie,
+      payload: { plan: 'monthly', currency: 'USD', email: 'not-an-email' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(service.createCheckoutForUser).not.toHaveBeenCalled();
+  });
+
+  it('creates a checkout for the authenticated user with the submitted email/currency and returns the payment URL', async () => {
     vi.mocked(session.getSession).mockResolvedValue(authenticatedSession);
     vi.mocked(service.createCheckoutForUser).mockResolvedValue({ kind: 'ok', paymentUrl: 'https://gate.lava.top/pay/abc' });
 
-    const res = await app.inject({ method: 'POST', url: '/api/payments/checkout', cookies: authCookie, payload: { plan: 'yearly' } });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/payments/checkout',
+      cookies: authCookie,
+      payload: { plan: 'yearly', currency: 'EUR', email: 'chosen@example.com' },
+    });
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ paymentUrl: 'https://gate.lava.top/pay/abc' });
-    expect(service.createCheckoutForUser).toHaveBeenCalledWith('user-1', 'person@example.com', 'yearly');
-  });
-
-  it('returns 409 when the account has no email to check out with', async () => {
-    vi.mocked(session.getSession).mockResolvedValue(authenticatedSession);
-    vi.mocked(service.createCheckoutForUser).mockResolvedValue({ kind: 'no_email' });
-
-    const res = await app.inject({ method: 'POST', url: '/api/payments/checkout', cookies: authCookie, payload: { plan: 'monthly' } });
-
-    expect(res.statusCode).toBe(409);
-    expect(res.json()).toEqual({ error: 'no_email' });
+    expect(service.createCheckoutForUser).toHaveBeenCalledWith('user-1', 'chosen@example.com', 'yearly', 'EUR');
   });
 
   it('returns 502 when the payment provider call throws', async () => {
     vi.mocked(session.getSession).mockResolvedValue(authenticatedSession);
     vi.mocked(service.createCheckoutForUser).mockRejectedValue(new Error('provider down'));
 
-    const res = await app.inject({ method: 'POST', url: '/api/payments/checkout', cookies: authCookie, payload: { plan: 'monthly' } });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/payments/checkout',
+      cookies: authCookie,
+      payload: { plan: 'monthly', currency: 'USD', email: 'person@example.com' },
+    });
 
     expect(res.statusCode).toBe(502);
   });
