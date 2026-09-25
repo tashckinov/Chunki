@@ -199,3 +199,30 @@ export async function findLearnerDialogueRows(chunkId: string, kind: DialogueKin
   );
   return rows;
 }
+
+export interface RandomLearnerDialogueRow extends LearnerDialogueMessageRow {
+  chunk_id: string;
+  chunk_text: string;
+}
+
+/**
+ * Same shape/join as findLearnerDialogueRows above, for one randomly-picked
+ * 'browse' dialogue instead of a known chunk id — used by the public guest
+ * gallery preview, which has no chunk to ask for. Empty means the library
+ * has no browse-kind dialogues yet, not an error.
+ */
+export async function findRandomBrowseDialogueRows(): Promise<RandomLearnerDialogueRow[]> {
+  const { rows } = await pool.query<RandomLearnerDialogueRow>(
+    `SELECT d.chunk_id, c.text AS chunk_text, ch.name AS character_name, ci.image_url, p.side, m.text, m.is_blank
+     FROM chunk_dialogues d
+     JOIN chunks c ON c.id = d.chunk_id
+     JOIN chunk_dialogue_messages m ON m.dialogue_id = d.id
+     JOIN characters ch ON ch.id = m.character_id
+     JOIN character_images ci ON ci.id = m.character_image_id
+     JOIN chunk_dialogue_participants p ON p.dialogue_id = d.id AND p.character_id = m.character_id
+     WHERE d.chunk_id = (SELECT chunk_id FROM chunk_dialogues WHERE kind = 'browse' ORDER BY random() LIMIT 1)
+       AND d.kind = 'browse'
+     ORDER BY m.position`,
+  );
+  return rows;
+}
