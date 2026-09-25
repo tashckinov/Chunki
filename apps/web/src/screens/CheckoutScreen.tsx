@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Check, ChevronRight } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
-import { useCheckout, fetchPaymentPlans, PLAN_BLURB, CURRENCIES, type Plan, type Currency, type PaymentPlanInfo } from '../lib/payments';
+import {
+  useCheckout,
+  fetchPaymentPlans,
+  yearlySavingsPercent,
+  PLAN_BLURB,
+  CURRENCIES,
+  type Plan,
+  type Currency,
+  type PaymentPlanInfo,
+} from '../lib/payments';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { SegmentedControl } from '../components/ui/SegmentedControl';
@@ -12,6 +21,9 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DEFAULT_TITLES: Record<Plan, string> = { monthly: 'Месяц', yearly: 'Год' };
 const CURRENCY_PRICE_KEY: Record<Currency, 'priceUsd' | 'priceEur' | 'priceRub'> = { USD: 'priceUsd', EUR: 'priceEur', RUB: 'priceRub' };
 const ALL_CURRENCIES: Currency[] = ['USD', 'EUR', 'RUB'];
+// What every plan unlocks — kept as a short fixed list rather than admin-editable
+// freeform text, same three premium items PaywallScreen's own comparison shows.
+const PREMIUM_FEATURES = ['Все темы и упражнения', 'Проверка открытых ответов и письма', 'Доп. уроки по слабым темам'];
 
 function TopBar({ title, onBadgeClick }: { title?: string; onBadgeClick?: () => void }) {
   return (
@@ -34,14 +46,53 @@ function TopBar({ title, onBadgeClick }: { title?: string; onBadgeClick?: () => 
   );
 }
 
-function PlanCard({ plan, title, onClick }: { plan: Plan; title: string; onClick: () => void }) {
+function primaryPrice(info: PaymentPlanInfo | undefined): { symbol: string; amount: string } | null {
+  if (!info) return null;
+  for (const currency of ALL_CURRENCIES) {
+    const amount = info[CURRENCY_PRICE_KEY[currency]];
+    if (amount) return { symbol: CURRENCIES[currency].symbol, amount };
+  }
+  return null;
+}
+
+function PlanCard({
+  plan,
+  title,
+  badge,
+  price,
+  onClick,
+}: {
+  plan: Plan;
+  title: string;
+  badge: string | null;
+  price: { symbol: string; amount: string } | null;
+  onClick: () => void;
+}) {
   return (
-    <Card onClick={onClick} className="px-5 py-4 flex items-center justify-between gap-3">
-      <div>
-        <div className="text-[16px] font-medium">{title}</div>
-        <div className="text-meta mt-0.5">{PLAN_BLURB[plan]}</div>
+    <Card onClick={onClick} className="p-5 flex flex-col gap-4">
+      <div className="flex items-start justify-between gap-2">
+        <div className="text-[19px] font-semibold">{title}</div>
+        {badge && <span className="rounded-full bg-accent-subtle text-accent text-[12px] font-medium px-2.5 py-1 whitespace-nowrap">{badge}</span>}
       </div>
-      <Check size={18} className="text-text-tertiary" />
+      {price ? (
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-[30px] font-bold leading-none">
+            {price.symbol}
+            {price.amount}
+          </span>
+          <span className="text-meta">/ {plan === 'monthly' ? 'месяц' : 'год'}</span>
+        </div>
+      ) : (
+        <div className="text-meta">{PLAN_BLURB[plan]}</div>
+      )}
+      <ul className="flex flex-col gap-2">
+        {PREMIUM_FEATURES.map((feature) => (
+          <li key={feature} className="flex items-start gap-2 text-[14px]">
+            <Check size={16} className="text-positive flex-none mt-0.5" />
+            <span>{feature}</span>
+          </li>
+        ))}
+      </ul>
     </Card>
   );
 }
@@ -81,6 +132,12 @@ export function CheckoutScreen() {
   const planInfo = plans?.find((p) => p.plan === plan) ?? null;
   const title = plan ? (planInfo?.title ?? DEFAULT_TITLES[plan]) : '';
 
+  // Smallest savings % across whichever currencies both plans are priced in
+  // — see yearlySavingsPercent's own doc for why the minimum, not the max.
+  const savingsPercent = useMemo(() => (plans ? yearlySavingsPercent(plans) : null), [plans]);
+  const yearlyBadge = savingsPercent ? `Выгоднее на ~${Math.round(savingsPercent)}%` : null;
+  const planBlurb = plan === 'yearly' && yearlyBadge ? yearlyBadge : plan ? PLAN_BLURB[plan] : '';
+
   // Only offer a currency the admin actually priced this plan in — falls
   // back to all three while plans haven't loaded yet or none are priced,
   // so checkout never gets blocked before prices are filled in.
@@ -102,9 +159,21 @@ export function CheckoutScreen() {
       <div className="scroll-clean flex-1 min-h-0 px-5 pt-4 pb-8 flex flex-col gap-8 anim-rise">
         <TopBar />
         <div className="text-page-title">Выберите подписку</div>
-        <div className="flex flex-col gap-3">
-          <PlanCard plan="monthly" title={plans?.find((p) => p.plan === 'monthly')?.title ?? DEFAULT_TITLES.monthly} onClick={() => setPlan('monthly')} />
-          <PlanCard plan="yearly" title={plans?.find((p) => p.plan === 'yearly')?.title ?? DEFAULT_TITLES.yearly} onClick={() => setPlan('yearly')} />
+        <div className="grid grid-cols-1 min-[560px]:grid-cols-2 gap-4">
+          <PlanCard
+            plan="monthly"
+            title={plans?.find((p) => p.plan === 'monthly')?.title ?? DEFAULT_TITLES.monthly}
+            badge={null}
+            price={primaryPrice(plans?.find((p) => p.plan === 'monthly'))}
+            onClick={() => setPlan('monthly')}
+          />
+          <PlanCard
+            plan="yearly"
+            title={plans?.find((p) => p.plan === 'yearly')?.title ?? DEFAULT_TITLES.yearly}
+            badge={yearlyBadge}
+            price={primaryPrice(plans?.find((p) => p.plan === 'yearly'))}
+            onClick={() => setPlan('yearly')}
+          />
         </div>
         <Button variant="ghost" size="sm" onClick={back} className="w-full mt-auto">
           Назад
@@ -119,7 +188,7 @@ export function CheckoutScreen() {
 
       <div className="rounded-[var(--radius-lg)] bg-surface-subtle overflow-hidden">
         <SummaryRow label="Подписка" onClick={() => setPlan(null)}>
-          {title} · {PLAN_BLURB[plan]}
+          {title} · {planBlurb}
         </SummaryRow>
         <SummaryRow label="Валюта">
           <SegmentedControl
