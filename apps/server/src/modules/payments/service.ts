@@ -1,24 +1,34 @@
 import { getPaymentProvider } from './index.js';
 import type { Currency } from './provider.js';
+import { extractOfferId } from './offerId.js';
 import {
   createPendingPayment,
   findPaymentByExternalId,
   updatePaymentStatus,
   recordWebhookLog,
   listPaymentsForAdmin as repoListPaymentsForAdmin,
+  listPaymentPlans as repoListPaymentPlans,
+  findPaymentPlan,
+  upsertPaymentPlan as repoUpsertPaymentPlan,
   type PaymentPlan,
+  type PaymentPlanRow,
   type PaymentStatus,
+  type UpsertPaymentPlanInput as RepoUpsertPaymentPlanInput,
 } from './repository.js';
 import { extendPremiumUntil, findAccountStatus, isPremiumActive } from '../users/repository.js';
 
-export type CheckoutResult = { kind: 'ok'; paymentUrl: string };
+export type CheckoutResult = { kind: 'ok'; paymentUrl: string } | { kind: 'plan_not_configured' };
 
 // email/currency are chosen by the learner in the checkout stepper (not
 // pulled from the account's login email) — validated by the route's zod
 // schema before this is ever called, so no "no email" case to handle here.
 export async function createCheckoutForUser(userId: string, email: string, plan: PaymentPlan, currency: Currency): Promise<CheckoutResult> {
+  const planRow = await findPaymentPlan(plan);
+  const offerId = extractOfferId(planRow?.offer_url);
+  if (!offerId) return { kind: 'plan_not_configured' };
+
   const provider = getPaymentProvider();
-  const { externalId, paymentUrl, instantlyPaid } = await provider.createCheckout({ email, plan, currency });
+  const { externalId, paymentUrl, instantlyPaid } = await provider.createCheckout({ email, plan, currency, offerId });
   const payment = await createPendingPayment({ userId, provider: provider.name, externalId, plan });
 
   // Mock provider only — lets the whole checkout flow be exercised in
@@ -119,4 +129,52 @@ export async function listPaymentsForAdmin(limit: number): Promise<AdminPaymentS
     currency: r.currency,
     createdAt: r.created_at.toISOString(),
   }));
+}
+
+export interface AdminPaymentPlan {
+  plan: string;
+  title: string;
+  offerUrl: string | null;
+  priceUsd: string | null;
+  priceEur: string | null;
+  priceRub: string | null;
+  updatedAt: string;
+}
+
+function toAdminPlan(row: PaymentPlanRow): AdminPaymentPlan {
+  return {
+    plan: row.plan,
+    title: row.title,
+    offerUrl: row.offer_url,
+    priceUsd: row.price_usd,
+    priceEur: row.price_eur,
+    priceRub: row.price_rub,
+    updatedAt: row.updated_at.toISOString(),
+  };
+}
+
+export async function listPaymentPlansForAdmin(): Promise<AdminPaymentPlan[]> {
+  const rows = await repoListPaymentPlans();
+  return rows.map(toAdminPlan);
+}
+
+export type UpsertPaymentPlanInput = Omit<RepoUpsertPaymentPlanInput, 'plan'>;
+
+export async function upsertPaymentPlanForAdmin(plan: PaymentPlan, input: UpsertPaymentPlanInput): Promise<AdminPaymentPlan> {
+  const row = await repoUpsertPaymentPlan({ plan, ...input });
+  return toAdminPlan(row);
+}
+
+export interface PublicPaymentPlan {
+  plan: string;
+  title: string;
+  priceUsd: string | null;
+  priceEur: string | null;
+  priceRub: string | null;
+}
+
+/** No offerUrl here — nothing in the checkout stepper needs it, and it's not something to expose on an unauthenticated route just because it isn't secret. */
+export async function listPublicPaymentPlans(): Promise<PublicPaymentPlan[]> {
+  const rows = await repoListPaymentPlans();
+  return rows.map((r) => ({ plan: r.plan, title: r.title, priceUsd: r.price_usd, priceEur: r.price_eur, priceRub: r.price_rub }));
 }

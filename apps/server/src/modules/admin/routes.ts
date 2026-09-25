@@ -23,6 +23,8 @@ import {
   saveDialogueForChunk,
   deleteDialogueForChunk,
   listPaymentsForAdmin,
+  listPaymentPlansForAdmin,
+  upsertPaymentPlanForAdmin,
   listProgramTopicsForAdmin,
 } from './service.js';
 
@@ -45,6 +47,16 @@ const idParamSchema = z.object({ id: z.string().uuid() });
 const collectionChunkParamSchema = z.object({ id: z.string().uuid(), chunkId: z.string().uuid() });
 const aiLogsQuerySchema = z.object({ limit: z.coerce.number().int().min(1).max(500).default(100) });
 const paymentsQuerySchema = z.object({ limit: z.coerce.number().int().min(1).max(500).default(100) });
+const paymentPlanParamSchema = z.object({ plan: z.enum(['monthly', 'yearly']) });
+// Prices are freeform display numbers — no currency-specific bound beyond
+// "not absurd" (a stray extra digit shouldn't render as a five-figure price).
+const paymentPlanBodySchema = z.object({
+  title: z.string().min(1).max(100),
+  offerUrl: z.string().max(500).nullable(),
+  priceUsd: z.number().nonnegative().max(100000).nullable(),
+  priceEur: z.number().nonnegative().max(100000).nullable(),
+  priceRub: z.number().nonnegative().max(1000000).nullable(),
+});
 const programTopicsQuerySchema = z.object({ limit: z.coerce.number().int().min(1).max(500).default(100) });
 
 const premiumBodySchema = z.object({ premiumUntil: z.string().datetime().nullable() });
@@ -350,6 +362,21 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       return { error: 'invalid_request' };
     }
     return { payments: await listPaymentsForAdmin(parsed.data.limit) };
+  });
+
+  app.get('/payment-plans', async () => {
+    return { plans: await listPaymentPlansForAdmin() };
+  });
+
+  app.patch('/payment-plans/:plan', async (request, reply) => {
+    const params = paymentPlanParamSchema.safeParse(request.params);
+    const body = paymentPlanBodySchema.safeParse(request.body);
+    if (!params.success || !body.success) {
+      reply.code(400);
+      return { error: 'invalid_request' };
+    }
+    const plan = await upsertPaymentPlanForAdmin(params.data.plan, body.data);
+    return { plan };
   });
 
   app.get('/program-topics', async (request, reply) => {

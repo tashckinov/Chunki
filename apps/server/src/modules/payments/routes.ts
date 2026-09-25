@@ -4,7 +4,7 @@ import rateLimit from '@fastify/rate-limit';
 import { z } from 'zod';
 import { loadEnv } from '../../config/env.js';
 import { requireAuthenticatedSession } from '../auth/requireAuth.js';
-import { createCheckoutForUser, getAccountPaymentStatus, handleLavaTopWebhook } from './service.js';
+import { createCheckoutForUser, getAccountPaymentStatus, handleLavaTopWebhook, listPublicPaymentPlans } from './service.js';
 
 const checkoutBodySchema = z.object({
   plan: z.enum(['monthly', 'yearly']),
@@ -67,12 +67,24 @@ export const paymentsRoutes: FastifyPluginAsync = async (app) => {
         return { error: 'provider_unavailable' };
       }
 
+      if (result.kind === 'plan_not_configured') {
+        reply.code(409);
+        return { error: 'plan_not_configured' };
+      }
       return { paymentUrl: result.paymentUrl };
     },
   );
 
   app.get('/status', { preHandler: requireAuthenticatedSession }, async (request) => {
     return getAccountPaymentStatus(request.session!.userId);
+  });
+
+  // Public — the checkout stepper needs plan titles/prices before the user
+  // is necessarily still holding a valid session (e.g. right after login),
+  // and this is read-only, non-sensitive display data. IP-keyed like the
+  // other anonymous-hittable routes (chunks/random-dialogue, auth routes).
+  app.get('/plans', { preHandler: app.rateLimit({ max: 30, timeWindow: '1 minute', keyGenerator: (request) => request.ip }) }, async () => {
+    return { plans: await listPublicPaymentPlans() };
   });
 
   // Public — called by Lava.top server-to-server, never carries a session

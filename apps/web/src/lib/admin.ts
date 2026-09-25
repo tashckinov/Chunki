@@ -153,6 +153,34 @@ export async function fetchAdminPayments(limit = 100): Promise<AdminPayment[]> {
   return data.payments;
 }
 
+export interface AdminPaymentPlan {
+  plan: string;
+  title: string;
+  offerUrl: string | null;
+  priceUsd: string | null;
+  priceEur: string | null;
+  priceRub: string | null;
+  updatedAt: string;
+}
+
+export interface PaymentPlanInput {
+  title: string;
+  offerUrl: string | null;
+  priceUsd: number | null;
+  priceEur: number | null;
+  priceRub: number | null;
+}
+
+export async function fetchAdminPaymentPlans(): Promise<AdminPaymentPlan[]> {
+  const data = await getJson<{ plans: AdminPaymentPlan[] }>('/api/admin/payment-plans');
+  return data.plans;
+}
+
+export async function saveAdminPaymentPlan(plan: string, input: PaymentPlanInput): Promise<AdminPaymentPlan> {
+  const data = await patchJson<{ plan: AdminPaymentPlan }>(`/api/admin/payment-plans/${plan}`, input);
+  return data.plan;
+}
+
 export interface AdminProgramTopic {
   id: string;
   userEmail: string | null;

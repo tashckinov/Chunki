@@ -226,10 +226,7 @@ To go live:
    plans in the checkout stepper. Each Offer's own price fields already cover USD/EUR/RUB (set all
    three there), which is what lets the checkout stepper's currency step work without a separate
    Offer per currency — the `currency` the learner picks is just passed through on the invoice
-   call. For each offer, paste whatever Lava.top gives you to copy — either the bare `offerId` or
-   the full link (`https://app.lava.top/products/<productId>/<offerId>`) — into
-   `LAVA_TOP_OFFER_ID_MONTHLY`/`LAVA_TOP_OFFER_ID_YEARLY`; the server extracts the id from a link
-   automatically.
+   call.
 2. Copy your API key into `LAVA_TOP_API_KEY` (`LAVA_TOP_BASE_URL` defaults to
    `https://gate.lava.top` — only override it if Lava.top gives you a different gateway host).
 3. Under **Интеграции → Webhook**, point the webhook at
@@ -238,7 +235,13 @@ To go live:
    `LAVA_TOP_WEBHOOK_LOGIN`/`LAVA_TOP_WEBHOOK_PASSWORD`. This is a separate credential from
    `LAVA_TOP_API_KEY` (that one's outbound, this one's inbound).
 4. Restart the backend so it picks up the new env vars (see "Redeploying after a code change"
-   above), then send a real or test payment and confirm it shows up in the admin "Платежи" page.
+   above), then open the admin **Платежи** page in the app itself. For each plan (Месяц/Год),
+   fill in the title, paste whatever Lava.top gives you to copy for that Offer — either the bare
+   `offerId` or the full link (`https://app.lava.top/products/<productId>/<offerId>`), the server
+   extracts the id automatically — and the display price in USD/EUR/RUB (shown on the checkout
+   screen; leave a currency blank to hide it there), then save. A plan with no offer link saved
+   fails checkout with a clear error instead of silently using stale config.
+5. Send a real or test payment and confirm it shows up in the admin "Платежи" page.
 
 **Caveat:** Lava.top's official docs (`lava.top`, `dev.lava.top`) were unreachable while this was
 built, so the request/response shapes in `src/modules/payments/lavaTopClient.ts` were

@@ -9,6 +9,8 @@ export interface CheckoutInput {
   email: string;
   plan: Plan;
   currency: Currency;
+  /** Looked up by the caller from the admin-managed payment_plans table — this provider never reads it from env/config itself. */
+  offerId: string;
 }
 
 export interface CheckoutOutput {
@@ -29,17 +31,13 @@ export class LavaTopPaymentProvider implements PaymentProvider {
   name = 'lava_top';
 
   #client: LavaTopClient;
-  #offerIdByPlan: Record<Plan, string | undefined>;
 
-  constructor(env: Pick<Env, 'LAVA_TOP_API_KEY' | 'LAVA_TOP_BASE_URL' | 'LAVA_TOP_OFFER_ID_MONTHLY' | 'LAVA_TOP_OFFER_ID_YEARLY'>) {
+  constructor(env: Pick<Env, 'LAVA_TOP_API_KEY' | 'LAVA_TOP_BASE_URL'>) {
     if (!env.LAVA_TOP_API_KEY) throw new Error('LAVA_TOP_API_KEY is not set — required for the lava_top payment provider.');
     this.#client = new LavaTopClient(env.LAVA_TOP_API_KEY, env.LAVA_TOP_BASE_URL);
-    this.#offerIdByPlan = { monthly: env.LAVA_TOP_OFFER_ID_MONTHLY, yearly: env.LAVA_TOP_OFFER_ID_YEARLY };
   }
 
-  async createCheckout({ email, plan, currency }: CheckoutInput): Promise<CheckoutOutput> {
-    const offerId = this.#offerIdByPlan[plan];
-    if (!offerId) throw new Error(`LAVA_TOP_OFFER_ID_${plan.toUpperCase()} is not set — required to sell the "${plan}" plan via Lava.top.`);
+  async createCheckout({ email, plan, currency, offerId }: CheckoutInput): Promise<CheckoutOutput> {
     const invoice = await this.#client.createInvoice({ email, offerId, currency, periodicity: PERIODICITY_BY_PLAN[plan] });
     return { externalId: invoice.id, paymentUrl: invoice.paymentUrl };
   }

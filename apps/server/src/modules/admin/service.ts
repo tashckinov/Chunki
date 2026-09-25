@@ -30,7 +30,15 @@ import {
   type SaveDialogueResult,
 } from '../dialogues/service.js';
 import type { DialogueInput, DialogueKind } from '../dialogues/repository.js';
-import { listPaymentsForAdmin as paymentsListPaymentsForAdmin, type AdminPaymentSummary } from '../payments/service.js';
+import {
+  listPaymentsForAdmin as paymentsListPaymentsForAdmin,
+  listPaymentPlansForAdmin as paymentsListPaymentPlansForAdmin,
+  upsertPaymentPlanForAdmin as paymentsUpsertPaymentPlanForAdmin,
+  type AdminPaymentSummary,
+  type AdminPaymentPlan,
+  type UpsertPaymentPlanInput,
+} from '../payments/service.js';
+import type { PaymentPlan } from '../payments/repository.js';
 import { listRecentActivityForAdmin as programListRecentActivityForAdmin, type AdminTopicActivitySummary } from '../program/service.js';
 import { deleteUploadedFile } from '../../config/uploads.js';
 
@@ -223,6 +231,14 @@ export async function deleteDialogueForChunk(chunkId: string, kind: DialogueKind
 
 export async function listPaymentsForAdmin(limit: number): Promise<AdminPaymentSummary[]> {
   return paymentsListPaymentsForAdmin(limit);
+}
+
+export async function listPaymentPlansForAdmin(): Promise<AdminPaymentPlan[]> {
+  return paymentsListPaymentPlansForAdmin();
+}
+
+export async function upsertPaymentPlanForAdmin(plan: PaymentPlan, input: UpsertPaymentPlanInput): Promise<AdminPaymentPlan> {
+  return paymentsUpsertPaymentPlanForAdmin(plan, input);
 }
 
 export async function listProgramTopicsForAdmin(limit: number): Promise<AdminTopicActivitySummary[]> {
