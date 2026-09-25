@@ -23,6 +23,7 @@ import { DeckDoneScreen } from './screens/DeckDoneScreen';
 import { RecognitionCheckScreen } from './screens/RecognitionCheckScreen';
 import { ProductionCheckScreen } from './screens/ProductionCheckScreen';
 import { DialogueScreen } from './screens/DialogueScreen';
+import { GuestGalleryScreen } from './screens/GuestGalleryScreen';
 import { AdminScreen } from './screens/admin/AdminScreen';
 import { ADMIN_SECTIONS } from './screens/admin/sections';
 
@@ -50,6 +51,12 @@ function CheckingScreenForContext() {
 
 function CurrentScreen() {
   const screen = useAppStore((s) => s.screen);
+  const authChecked = useAppStore((s) => s.authChecked);
+  const user = useAppStore((s) => s.user);
+  // A confirmed-logged-out visitor (not just "haven't checked yet" — see the
+  // authChecked guard) sees only the guest gallery, regardless of whatever
+  // `screen` happens to be set to (e.g. left over from before signing out).
+  if (authChecked && !user) return <GuestGalleryScreen />;
   switch (screen) {
     case 'goals':
       return <GoalsScreen />;
@@ -186,6 +193,12 @@ export default function App() {
   const screen = useAppStore((s) => s.screen);
   const navTab = useAppStore((s) => navTabForScreen(s.screen));
   const setNavTab = useAppStore((s) => s.setNavTab);
+  const authChecked = useAppStore((s) => s.authChecked);
+  const user = useAppStore((s) => s.user);
+  // Same guard as CurrentScreen() — no nav chrome for a confirmed-logged-out
+  // visitor (nowhere real for it to lead), but never during the brief
+  // window before the initial checkAuth() resolves.
+  const loggedOut = authChecked && !user;
 
   useEffect(() => {
     consumeAuthToken();
@@ -196,10 +209,10 @@ export default function App() {
 
   return (
     <div className="h-dvh w-full flex justify-center bg-bg overflow-hidden">
-      <SidebarNav value={navTab} onChange={setNavTab} />
+      {!loggedOut && <SidebarNav value={navTab} onChange={setNavTab} />}
       <div className="w-full min-[768px]:max-w-[720px] min-[1200px]:max-w-[860px] h-dvh overflow-hidden flex flex-col">
         <CurrentScreen />
-        {screen !== 'admin' && (
+        {screen !== 'admin' && !loggedOut && (
           <div className="flex-none min-[1200px]:hidden">
             <BottomNavigation items={MOBILE_NAV_ITEMS} value={navTab} onChange={setNavTab} />
           </div>
