@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { plural } from '../../lib/plural';
 import { NavigationBar } from '../../components/ui/NavigationBar';
 import { Button } from '../../components/ui/Button';
@@ -38,6 +38,8 @@ import {
   type BulkParsedSituations,
 } from '../../lib/chunkImport';
 import type { ChunkSentence, SituationPrompt } from '../../lib/collections';
+import { useBulkSave } from '../../lib/bulkSave';
+import { useTimedFlag } from '../../lib/timedFlag';
 import { Sheet } from '../../components/ui/Sheet';
 import { DialoguePlayback } from '../../components/dialogue/DialoguePlayback';
 import { DialogueBuilderView } from './DialogueBuilderView';
@@ -363,21 +365,16 @@ function BulkDialogueAiSheet({
   kind: DialogueKind;
   onSaved: (chunkId: string) => void;
 }) {
-  const [copied, setCopied] = useState(false);
+  const [copied, flashCopied] = useTimedFlag();
   const [importText, setImportText] = useState('');
   const [importError, setImportError] = useState<string | null>(null);
   const [preview, setPreview] = useState<BulkParsedDialogue[] | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [saveSummary, setSaveSummary] = useState<{ okCount: number; total: number; failedChunkTexts: string[] } | null>(null);
-  // Tracks which chunkIds already saved successfully so a retry after a
-  // partial failure only re-attempts the ones that actually failed.
-  const savedChunkIdsRef = useRef<Set<string>>(new Set());
+  const { saving, saveSummary, saveAll: runSaveAll, reset: resetSave } = useBulkSave<BulkParsedDialogue, string>();
 
   async function copy() {
     if (!characters) return;
     await navigator.clipboard.writeText(buildBulkDialogueAiPrompt(chunks, characters, kind));
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    flashCopied();
   }
 
   function handleParse() {
@@ -387,27 +384,21 @@ function BulkDialogueAiSheet({
       return;
     }
     setImportError(null);
-    setSaveSummary(null);
-    savedChunkIdsRef.current = new Set();
+    resetSave();
     setPreview(result.dialogues);
   }
 
   async function saveAll() {
     if (!preview) return;
-    setSaving(true);
-    const pending = preview.filter((item) => !savedChunkIdsRef.current.has(item.chunkId));
-    const failedChunkTexts: string[] = [];
-    for (const item of pending) {
-      try {
+    await runSaveAll(
+      preview,
+      (item) => item.chunkId,
+      async (item) => {
         await saveAdminDialogue(item.chunkId, kind, item.dialogue);
-        savedChunkIdsRef.current.add(item.chunkId);
         onSaved(item.chunkId);
-      } catch {
-        failedChunkTexts.push(chunks.find((c) => c.id === item.chunkId)?.text ?? item.chunkId);
-      }
-    }
-    setSaveSummary({ okCount: savedChunkIdsRef.current.size, total: preview.length, failedChunkTexts });
-    setSaving(false);
+      },
+      (item) => chunks.find((c) => c.id === item.chunkId)?.text ?? item.chunkId,
+    );
   }
 
   function closeSheet(next: boolean) {
@@ -419,8 +410,7 @@ function BulkDialogueAiSheet({
     setImportText('');
     setImportError(null);
     setPreview(null);
-    setSaveSummary(null);
-    savedChunkIdsRef.current = new Set();
+    resetSave();
   }
 
   return (
@@ -524,22 +514,17 @@ function BulkChunkCreateAiSheet({
   existingChunkTexts: string[];
   onSaved: (chunk: AdminChunk) => void;
 }) {
-  const [copied, setCopied] = useState(false);
+  const [copied, flashCopied] = useTimedFlag();
   const [count, setCount] = useState('5');
   const [importText, setImportText] = useState('');
   const [importError, setImportError] = useState<string | null>(null);
   const [preview, setPreview] = useState<ParsedChunkCreate[] | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [saveSummary, setSaveSummary] = useState<{ okCount: number; total: number; failedChunkTexts: string[] } | null>(null);
-  // Tracks which preview indices already created successfully so a retry
-  // after a partial failure only re-attempts the ones that actually failed.
-  const savedIndexesRef = useRef<Set<number>>(new Set());
+  const { saving, saveSummary, saveAll: runSaveAll, reset: resetSave } = useBulkSave<ParsedChunkCreate, number>();
 
   async function copy() {
     const n = Math.max(1, Number(count) || 5);
     await navigator.clipboard.writeText(buildBulkChunkCreatePrompt(collectionTitle, level, n, existingChunkTexts));
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    flashCopied();
   }
 
   function handleParse() {
@@ -549,27 +534,21 @@ function BulkChunkCreateAiSheet({
       return;
     }
     setImportError(null);
-    setSaveSummary(null);
-    savedIndexesRef.current = new Set();
+    resetSave();
     setPreview(result.chunks);
   }
 
   async function saveAll() {
     if (!preview) return;
-    setSaving(true);
-    const failedChunkTexts: string[] = [];
-    for (let i = 0; i < preview.length; i++) {
-      if (savedIndexesRef.current.has(i)) continue;
-      try {
-        const created = await createAdminChunk(collectionId, preview[i]);
-        savedIndexesRef.current.add(i);
+    await runSaveAll(
+      preview,
+      (_item, i) => i,
+      async (item) => {
+        const created = await createAdminChunk(collectionId, item);
         onSaved(created);
-      } catch {
-        failedChunkTexts.push(preview[i].text);
-      }
-    }
-    setSaveSummary({ okCount: savedIndexesRef.current.size, total: preview.length, failedChunkTexts });
-    setSaving(false);
+      },
+      (item) => item.text,
+    );
   }
 
   function closeSheet(next: boolean) {
@@ -581,8 +560,7 @@ function BulkChunkCreateAiSheet({
     setImportText('');
     setImportError(null);
     setPreview(null);
-    setSaveSummary(null);
-    savedIndexesRef.current = new Set();
+    resetSave();
   }
 
   return (
@@ -685,18 +663,15 @@ function BulkSentencesRegenerateAiSheet({
   chunks: AdminChunk[];
   onSaved: (chunkId: string, sentences: ChunkSentence[]) => void;
 }) {
-  const [copied, setCopied] = useState(false);
+  const [copied, flashCopied] = useTimedFlag();
   const [importText, setImportText] = useState('');
   const [importError, setImportError] = useState<string | null>(null);
   const [preview, setPreview] = useState<BulkParsedSentences[] | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [saveSummary, setSaveSummary] = useState<{ okCount: number; total: number; failedChunkTexts: string[] } | null>(null);
-  const savedChunkIdsRef = useRef<Set<string>>(new Set());
+  const { saving, saveSummary, saveAll: runSaveAll, reset: resetSave } = useBulkSave<BulkParsedSentences, string>();
 
   async function copy() {
     await navigator.clipboard.writeText(buildBulkSentencesRegeneratePrompt(chunks.map((c) => ({ id: c.id, text: c.text, translation: c.translation }))));
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    flashCopied();
   }
 
   function handleParse() {
@@ -706,27 +681,21 @@ function BulkSentencesRegenerateAiSheet({
       return;
     }
     setImportError(null);
-    setSaveSummary(null);
-    savedChunkIdsRef.current = new Set();
+    resetSave();
     setPreview(result.items);
   }
 
   async function saveAll() {
     if (!preview) return;
-    setSaving(true);
-    const pending = preview.filter((item) => !savedChunkIdsRef.current.has(item.chunkId));
-    const failedChunkTexts: string[] = [];
-    for (const item of pending) {
-      try {
+    await runSaveAll(
+      preview,
+      (item) => item.chunkId,
+      async (item) => {
         await updateAdminChunk(item.chunkId, { sentences: item.sentences });
-        savedChunkIdsRef.current.add(item.chunkId);
         onSaved(item.chunkId, item.sentences);
-      } catch {
-        failedChunkTexts.push(chunks.find((c) => c.id === item.chunkId)?.text ?? item.chunkId);
-      }
-    }
-    setSaveSummary({ okCount: savedChunkIdsRef.current.size, total: preview.length, failedChunkTexts });
-    setSaving(false);
+      },
+      (item) => chunks.find((c) => c.id === item.chunkId)?.text ?? item.chunkId,
+    );
   }
 
   function closeSheet(next: boolean) {
@@ -738,8 +707,7 @@ function BulkSentencesRegenerateAiSheet({
     setImportText('');
     setImportError(null);
     setPreview(null);
-    setSaveSummary(null);
-    savedChunkIdsRef.current = new Set();
+    resetSave();
   }
 
   return (
@@ -835,18 +803,15 @@ function BulkSituationsRegenerateAiSheet({
   chunks: AdminChunk[];
   onSaved: (chunkId: string, situationPrompts: SituationPrompt[]) => void;
 }) {
-  const [copied, setCopied] = useState(false);
+  const [copied, flashCopied] = useTimedFlag();
   const [importText, setImportText] = useState('');
   const [importError, setImportError] = useState<string | null>(null);
   const [preview, setPreview] = useState<BulkParsedSituations[] | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [saveSummary, setSaveSummary] = useState<{ okCount: number; total: number; failedChunkTexts: string[] } | null>(null);
-  const savedChunkIdsRef = useRef<Set<string>>(new Set());
+  const { saving, saveSummary, saveAll: runSaveAll, reset: resetSave } = useBulkSave<BulkParsedSituations, string>();
 
   async function copy() {
     await navigator.clipboard.writeText(buildBulkSituationsRegeneratePrompt(chunks.map((c) => ({ id: c.id, text: c.text, translation: c.translation }))));
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    flashCopied();
   }
 
   function handleParse() {
@@ -856,27 +821,21 @@ function BulkSituationsRegenerateAiSheet({
       return;
     }
     setImportError(null);
-    setSaveSummary(null);
-    savedChunkIdsRef.current = new Set();
+    resetSave();
     setPreview(result.items);
   }
 
   async function saveAll() {
     if (!preview) return;
-    setSaving(true);
-    const pending = preview.filter((item) => !savedChunkIdsRef.current.has(item.chunkId));
-    const failedChunkTexts: string[] = [];
-    for (const item of pending) {
-      try {
+    await runSaveAll(
+      preview,
+      (item) => item.chunkId,
+      async (item) => {
         await updateAdminChunk(item.chunkId, { situationPrompts: item.situations });
-        savedChunkIdsRef.current.add(item.chunkId);
         onSaved(item.chunkId, item.situations);
-      } catch {
-        failedChunkTexts.push(chunks.find((c) => c.id === item.chunkId)?.text ?? item.chunkId);
-      }
-    }
-    setSaveSummary({ okCount: savedChunkIdsRef.current.size, total: preview.length, failedChunkTexts });
-    setSaving(false);
+      },
+      (item) => chunks.find((c) => c.id === item.chunkId)?.text ?? item.chunkId,
+    );
   }
 
   function closeSheet(next: boolean) {
@@ -888,8 +847,7 @@ function BulkSituationsRegenerateAiSheet({
     setImportText('');
     setImportError(null);
     setPreview(null);
-    setSaveSummary(null);
-    savedChunkIdsRef.current = new Set();
+    resetSave();
   }
 
   return (

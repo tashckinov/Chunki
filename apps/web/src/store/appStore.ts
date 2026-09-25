@@ -1,8 +1,18 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { EX_BLOCKS, EXTRA_TOPIC_DEFS, PROGRAM_TOPICS } from '@app/shared';
+import { MCQ } from '@app/shared';
 import type { CEFRLevel, ExercisesGradeResult, PlacementGradeResult } from '@app/shared';
-import { gradeExercises, gradePlacementTest } from '../lib/api';
+import {
+  fetchProgram,
+  fetchTopicStudy,
+  startTopicAttempt as apiStartTopicAttempt,
+  submitPlacementTest as apiSubmitPlacementTest,
+  submitTopicAttempt as apiSubmitTopicAttempt,
+  type ProgramState,
+  type TopicAttempt,
+  type TopicStudy,
+  type UserTopicSummary,
+} from '../lib/program';
 import { fetchCurrentUser, logout, startGoogleLogin, signInWithPasskey as signInWithPasskeyCeremony, type AuthUser } from '../lib/auth';
 import {
   fetchCollectionBySlug,
@@ -28,6 +38,7 @@ import {
   type SituationPromptPart,
   type ProductionDialoguePayload,
 } from '../lib/progress';
+import { fetchPaymentStatus } from '../lib/payments';
 
 export type Screen =
   | 'goals'
@@ -40,10 +51,8 @@ export type Screen =
   | 'topic'
   | 'exercises'
   | 'topicresult'
-  | 'extras'
   | 'cardslib'
   | 'comics'
-  | 'grammar'
   | 'deck'
   | 'deckdone'
   | 'recognitioncheck'
@@ -60,9 +69,8 @@ const BACK_MAP: Partial<Record<Screen, Screen>> = {
   schedule: 'result',
   paywall: 'schedule',
   program: 'cardslib',
-  topic: 'cardslib',
+  topic: 'program',
   exercises: 'topic',
-  extras: 'cardslib',
   topicresult: 'exercises',
   deck: 'cardslib',
   deckdone: 'cardslib',
@@ -75,7 +83,7 @@ const BACK_MAP: Partial<Record<Screen, Screen>> = {
   admin: 'cardslib',
 };
 
-export type AdminSection = 'users' | 'content' | 'characters' | 'aiLogs';
+export type AdminSection = 'users' | 'content' | 'characters' | 'program' | 'payments' | 'aiLogs';
 
 interface AppState {
   screen: Screen;
@@ -88,9 +96,10 @@ interface AppState {
   passkeyBusy: boolean;
   passkeyError: string | null;
   interfaceMode: 'ru-en' | 'en-en';
-  hasProgram: boolean;
   plan: 'monthly' | 'yearly';
-  subscribed: boolean;
+  /** Server-sourced (GET /api/payments/status) — refreshed on checkAuth(), never persisted (see partialize below). */
+  premiumUntil: string | null;
+  isPremium: boolean;
 
   from: CEFRLevel;
   to: CEFRLevel;
@@ -111,21 +120,19 @@ interface AppState {
   days: number[]; // 0=Пн .. 6=Вс
   minutes: number;
   time: string;
-  calOpen: boolean;
-  calFocusIndex: number | null;
 
-  currentTopicIndex: number;
-  completedTopics: Record<string, { scoreOutOf10: number }>;
-  lastCompletedTopicId: string | null;
-
-  exTab: number;
-  exChoiceAnswers: Record<string, string>;
-  exWriteAnswers: Record<string, string>;
+  /** Null while the initial GET /api/program hasn't resolved yet. */
+  programStatus: 'none' | 'active' | null;
+  programTopics: UserTopicSummary[];
+  activeTopicId: string | null;
+  /** Study material cache, keyed by user_topic id — generated once server-side and cached there too, so caching here just avoids a redundant fetch. */
+  topicStudyByTopic: Record<string, TopicStudy>;
+  /** Set when the last openTopic() fetch failed — cleared on the next attempt. Drives TopicScreen's retry state. */
+  topicStudyError: string | null;
+  currentAttempt: TopicAttempt | null;
+  topicAnswers: Record<number, string>;
   exerciseResult: ExercisesGradeResult | null;
-
-  extrasEnabled: Record<string, boolean>;
-  extrasRemoved: string[];
-  confirmRemoveKey: string | null;
+  newTopicsAddedLastResult: number;
 
   deckIndex: number;
   activeDeckChunks: ChunkSummary[];
@@ -180,6 +187,8 @@ interface AppState {
   signOut: () => Promise<void>;
   /** Runs once on app start to see if a session cookie is already valid. */
   checkAuth: () => Promise<void>;
+  /** Refreshes premiumUntil/isPremium from the server — called by checkAuth(); safe to call again after a checkout redirect brings the user back. */
+  refreshPaymentStatus: () => Promise<void>;
   dismissAuthError: () => void;
   signInWithPasskey: () => Promise<void>;
   dismissPasskeyError: () => void;
@@ -206,32 +215,22 @@ interface AppState {
   setTime: (t: string) => void;
   goPaywall: () => void;
   choosePlan: (key: 'monthly' | 'yearly') => void;
-  subscribe: () => void;
   skipPaywall: () => void;
-
-  toggleCalendar: () => void;
-  focusCalendarDay: (dayIndex: number) => void;
 
   goHome: () => void;
   goProgram: () => void;
-  goExtras: () => void;
   goCardsLib: () => void;
   goDeck: (chunks?: ChunkSummary[]) => void;
   loadCollections: () => Promise<void>;
-  openCurrentTopic: () => void;
+  /** Refetches the program (topic list + statuses) — called by checkAuth() and after grading a topic test. */
+  loadProgram: () => Promise<void>;
+  openTopic: (userTopicId: string) => Promise<void>;
   setNavTab: (v: number) => void;
   setAdminSection: (s: AdminSection) => void;
 
-  goExercises: () => void;
-  setExTab: (i: number) => void;
-  setExChoice: (blockKey: string, itemIndex: number, value: string) => void;
-  setExWrite: (blockKey: string, itemIndex: number, value: string) => void;
+  goExercises: () => Promise<void>;
+  setTopicAnswer: (itemIndex: number, value: string) => void;
   exPrimary: () => Promise<void>;
-
-  toggleExtra: (key: string) => void;
-  requestRemoveExtra: (key: string) => void;
-  cancelRemove: () => void;
-  confirmRemoveNow: () => void;
 
   onCardPointerDown: (x: number, y: number) => void;
   onCardPointerMove: (x: number, y: number) => void;
@@ -266,9 +265,9 @@ export const useAppStore = create<AppState>()(
       passkeyBusy: false,
       passkeyError: null,
       interfaceMode: 'ru-en',
-      hasProgram: false,
       plan: 'monthly',
-      subscribed: false,
+      premiumUntil: null,
+      isPremium: false,
 
       from: 'A2+',
       to: 'B2',
@@ -289,21 +288,16 @@ export const useAppStore = create<AppState>()(
       days: [1, 3, 5],
       minutes: 25,
       time: '19:00',
-      calOpen: false,
-      calFocusIndex: null,
 
-      currentTopicIndex: 0,
-      completedTopics: {},
-      lastCompletedTopicId: null,
-
-      exTab: 0,
-      exChoiceAnswers: {},
-      exWriteAnswers: {},
+      programStatus: null,
+      programTopics: [],
+      activeTopicId: null,
+      topicStudyByTopic: {},
+      topicStudyError: null,
+      currentAttempt: null,
+      topicAnswers: {},
       exerciseResult: null,
-
-      extrasEnabled: {},
-      extrasRemoved: [],
-      confirmRemoveKey: null,
+      newTopicsAddedLastResult: 0,
 
       deckIndex: 0,
       activeDeckChunks: [],
@@ -353,8 +347,18 @@ export const useAppStore = create<AppState>()(
         try {
           const user = await fetchCurrentUser();
           set({ user, authChecked: true });
+          void get().refreshPaymentStatus();
+          void get().loadProgram();
         } catch {
           set({ authChecked: true });
+        }
+      },
+      refreshPaymentStatus: async () => {
+        try {
+          const { premiumUntil, isPremium } = await fetchPaymentStatus();
+          set({ premiumUntil, isPremium });
+        } catch {
+          // Best-effort — a failed refresh just leaves the last-known status in place.
         }
       },
       dismissAuthError: () => set({ authError: false }),
@@ -379,7 +383,7 @@ export const useAppStore = create<AppState>()(
       pickMcq: (letter) => set((s) => ({ mcqAnswers: { ...s.mcqAnswers, [s.qi + 1]: letter } })),
       pickUnknown: () => set((s) => ({ mcqAnswers: { ...s.mcqAnswers, [s.qi + 1]: '—' } })),
       nextQ: () =>
-        set((s) => (s.qi >= 7 ? { testPart: 2, qi: s.qi } : { qi: s.qi + 1 })),
+        set((s) => (s.qi >= MCQ.length - 1 ? { testPart: 2, qi: s.qi } : { qi: s.qi + 1 })),
       prevQ: () => set((s) => ({ qi: Math.max(0, s.qi - 1) })),
       setOpen9: (v) => set({ open9: v }),
       setOpen10: (v) => set({ open10: v }),
@@ -388,12 +392,10 @@ export const useAppStore = create<AppState>()(
 
       submitTest: async () => {
         set({ screen: 'checking', grading: true, gradingError: null, checkingContext: 'placement' });
-        const { mcqAnswers, open9, open10, essay } = get();
+        const { from, to, purpose, mcqAnswers, open9, open10, essay } = get();
         try {
-          const result = await gradePlacementTest({ mcqAnswers, open9, open10, essay });
-          const extrasEnabled: Record<string, boolean> = {};
-          for (const key of result.weakTopicKeys) extrasEnabled[key] = true;
-          set({ placementResult: result, grading: false, screen: 'result', extrasEnabled });
+          const { result, topics } = await apiSubmitPlacementTest({ fromLevel: from, toLevel: to, purpose, mcqAnswers, open9, open10, essay });
+          set({ placementResult: result, grading: false, screen: 'result', programStatus: 'active', programTopics: topics });
         } catch (err) {
           set({ grading: false, gradingError: err instanceof Error ? err.message : String(err), screen: 'result' });
         }
@@ -406,16 +408,10 @@ export const useAppStore = create<AppState>()(
       setTime: (t) => set({ time: t }),
       goPaywall: () => set({ screen: 'paywall' }),
       choosePlan: (key) => set({ plan: key }),
-      subscribe: () => set({ subscribed: true, hasProgram: true, screen: 'cardslib' }),
-      skipPaywall: () => set({ hasProgram: true, screen: 'cardslib' }),
-
-      toggleCalendar: () => set((s) => ({ calOpen: !s.calOpen })),
-      focusCalendarDay: (dayIndex) =>
-        set((s) => ({ calOpen: !(s.calOpen && s.calFocusIndex === dayIndex), calFocusIndex: dayIndex })),
+      skipPaywall: () => set({ screen: 'program' }),
 
       goHome: () => set({ screen: 'cardslib' }),
       goProgram: () => set({ screen: 'program' }),
-      goExtras: () => set({ screen: 'extras' }),
       goCardsLib: () => set({ screen: 'cardslib' }),
       goDeck: (chunks) => {
         const resolved = chunks ?? flattenChunks(Object.values(get().collectionDetails));
@@ -461,70 +457,59 @@ export const useAppStore = create<AppState>()(
           set({ collectionsStatus: 'error', collectionsError: unauthorized ? 'unauthorized' : 'error' });
         }
       },
-      openCurrentTopic: () => set({ screen: 'topic' }),
+      loadProgram: async () => {
+        try {
+          const program: ProgramState = await fetchProgram();
+          set({ programStatus: program.status, programTopics: program.status === 'active' ? program.topics : [] });
+        } catch {
+          // Best-effort — a failed refresh just leaves the last-known program in place.
+        }
+      },
+      openTopic: async (userTopicId) => {
+        set({ activeTopicId: userTopicId, screen: 'topic', topicStudyError: null });
+        if (get().topicStudyByTopic[userTopicId]) return;
+        try {
+          const study = await fetchTopicStudy(userTopicId);
+          set((st) => ({ topicStudyByTopic: { ...st.topicStudyByTopic, [userTopicId]: study } }));
+        } catch (err) {
+          // Cache stays unset for this id, so calling openTopic(id) again (the
+          // retry button in TopicScreen) naturally re-fetches.
+          set({ topicStudyError: err instanceof Error ? err.message : String(err) });
+        }
+      },
       setNavTab: (v) => {
-        set({ screen: (['cardslib', 'comics', 'grammar'] as Screen[])[v] ?? 'cardslib' });
+        const destinations: Screen[] = ['cardslib', 'comics', get().programStatus === 'active' ? 'program' : 'goals'];
+        set({ screen: destinations[v] ?? 'cardslib' });
       },
       setAdminSection: (s) => set({ adminSection: s }),
 
-      goExercises: () => set({ screen: 'exercises', exTab: 0, exChoiceAnswers: {}, exWriteAnswers: {}, exerciseResult: null }),
-      setExTab: (i) => set({ exTab: i }),
-      setExChoice: (blockKey, itemIndex, value) =>
-        set((s) => ({ exChoiceAnswers: { ...s.exChoiceAnswers, [`${blockKey}#${itemIndex}`]: value } })),
-      setExWrite: (blockKey, itemIndex, value) =>
-        set((s) => ({ exWriteAnswers: { ...s.exWriteAnswers, [`${blockKey}#${itemIndex}`]: value } })),
+      goExercises: async () => {
+        const topicId = get().activeTopicId;
+        if (!topicId) return;
+        set({ screen: 'exercises', topicAnswers: {}, exerciseResult: null, currentAttempt: null });
+        try {
+          const attempt = await apiStartTopicAttempt(topicId);
+          set({ currentAttempt: attempt });
+        } catch (err) {
+          set({ screen: 'topic', gradingError: err instanceof Error ? err.message : String(err) });
+        }
+      },
+      setTopicAnswer: (itemIndex, value) => set((s) => ({ topicAnswers: { ...s.topicAnswers, [itemIndex]: value } })),
 
       exPrimary: async () => {
         const s = get();
-        const lastBlock = s.exTab >= EX_BLOCKS.length - 1;
-        if (!lastBlock) {
-          set({ exTab: s.exTab + 1 });
-          return;
-        }
-        const topic = PROGRAM_TOPICS[s.currentTopicIndex];
+        const topicId = s.activeTopicId;
+        const attempt = s.currentAttempt;
+        if (!topicId || !attempt) return;
         set({ screen: 'checking', grading: true, gradingError: null, checkingContext: 'exercise' });
         try {
-          const blockAnswers = EX_BLOCKS.map((block) => {
-            const choiceAnswers: Record<number, string> = {};
-            const writeAnswers: Record<number, string> = {};
-            block.items.forEach((item, i) => {
-              const key = `${block.key}#${i}`;
-              if (item.type === 'choice' && s.exChoiceAnswers[key]) choiceAnswers[i] = s.exChoiceAnswers[key];
-              if (item.type === 'write' && s.exWriteAnswers[key]) writeAnswers[i] = s.exWriteAnswers[key];
-            });
-            return { blockKey: block.key, choiceAnswers, writeAnswers };
-          });
-          const result = await gradeExercises({ topicId: topic.id, topicTitle: topic.title, blockAnswers });
-          set((st) => ({
-            exerciseResult: result,
-            grading: false,
-            screen: 'topicresult',
-            completedTopics: { ...st.completedTopics, [topic.id]: { scoreOutOf10: result.scoreOutOf10 } },
-            lastCompletedTopicId: topic.id,
-            currentTopicIndex: Math.min(st.currentTopicIndex + 1, PROGRAM_TOPICS.length - 1),
-            extrasEnabled: result.weakTopicKeys.reduce(
-              (acc, k) => ({ ...acc, [k]: true }),
-              { ...st.extrasEnabled },
-            ),
-          }));
+          const { result, newTopicsAdded } = await apiSubmitTopicAttempt(topicId, attempt.attemptId, s.topicAnswers);
+          set({ exerciseResult: result, newTopicsAddedLastResult: newTopicsAdded, grading: false, screen: 'topicresult' });
+          void get().loadProgram();
         } catch (err) {
           set({ grading: false, gradingError: err instanceof Error ? err.message : String(err), screen: 'exercises' });
         }
       },
-
-      toggleExtra: (key) => set((s) => ({ extrasEnabled: { ...s.extrasEnabled, [key]: !s.extrasEnabled[key] } })),
-      requestRemoveExtra: (key) => set({ confirmRemoveKey: key }),
-      cancelRemove: () => set({ confirmRemoveKey: null }),
-      confirmRemoveNow: () =>
-        set((s) =>
-          s.confirmRemoveKey
-            ? {
-                extrasRemoved: [...s.extrasRemoved, s.confirmRemoveKey],
-                extrasEnabled: { ...s.extrasEnabled, [s.confirmRemoveKey]: false },
-                confirmRemoveKey: null,
-              }
-            : {},
-        ),
 
       onCardPointerDown: (x, y) => {
         if (get().flying) return; // a swipe is still being processed — the card stays off-screen until its destination screen is known
@@ -796,6 +781,14 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'chunki/v1',
+      // 'checking' is a pure loading state (see submitTest/exPrimary) with no
+      // way back in the UI (CheckingScreen has no NavigationBar, and
+      // BACK_MAP has no entry for it) — if the tab closed/reloaded mid-check,
+      // `grading` resets to false but the persisted screen doesn't, leaving
+      // a permanent spinner. Bounce back to a safe screen on rehydrate.
+      onRehydrateStorage: () => (state) => {
+        if (state?.screen === 'checking') state.screen = 'cardslib';
+      },
       partialize: (s) => {
         // user/authChecked/authError are derived fresh from the session
         // cookie on every load (see checkAuth) — persisting them would show
@@ -805,6 +798,10 @@ export const useAppStore = create<AppState>()(
         // would show stale content after it changes server-side.
         // chunkProgress is the same story — server-sourced mastery state,
         // refetched by goDeck(); persisting it risks showing stale rings.
+        // premiumUntil/isPremium too — refreshed by checkAuth() via
+        // refreshPaymentStatus(); persisting them risks showing a stale
+        // premium badge before that refresh resolves. programStatus/
+        // programTopics are the same story — refreshed by loadProgram().
         const {
           dx,
           dy,
@@ -813,6 +810,7 @@ export const useAppStore = create<AppState>()(
           grading,
           gradingError,
           checkingContext,
+          topicStudyError,
           user,
           authChecked,
           authError,
@@ -823,6 +821,10 @@ export const useAppStore = create<AppState>()(
           collectionsStatus,
           collectionsError,
           chunkProgress,
+          premiumUntil,
+          isPremium,
+          programStatus,
+          programTopics,
           ...rest
         } = s;
         void dx;
@@ -832,6 +834,7 @@ export const useAppStore = create<AppState>()(
         void grading;
         void gradingError;
         void checkingContext;
+        void topicStudyError;
         void user;
         void authChecked;
         void authError;
@@ -842,12 +845,12 @@ export const useAppStore = create<AppState>()(
         void collectionsStatus;
         void collectionsError;
         void chunkProgress;
+        void premiumUntil;
+        void isPremium;
+        void programStatus;
+        void programTopics;
         return rest;
       },
     },
   ),
 );
-
-export function extraTopicDefs() {
-  return EXTRA_TOPIC_DEFS;
-}

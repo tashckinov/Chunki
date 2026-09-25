@@ -12,6 +12,7 @@ vi.mock('./repository.js', () => ({
 vi.mock('../users/repository.js', () => ({
   findAccountStatus: vi.fn(),
   incrementProductionChecksUsed: vi.fn(),
+  isPremiumActive: (premiumUntil: Date | null) => !!premiumUntil && premiumUntil.getTime() > Date.now(),
 }));
 vi.mock('../../openrouter/index.js', () => ({
   getProductionJudgeProvider: vi.fn(),

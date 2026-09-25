@@ -78,3 +78,24 @@ export async function findAccountStatus(userId: string): Promise<AccountStatus |
 export async function incrementProductionChecksUsed(userId: string): Promise<void> {
   await pool.query(`UPDATE users SET production_checks_used = production_checks_used + 1 WHERE id = $1`, [userId]);
 }
+
+export function isPremiumActive(premiumUntil: Date | null): boolean {
+  return !!premiumUntil && premiumUntil.getTime() > Date.now();
+}
+
+type PremiumPlan = 'monthly' | 'yearly';
+
+const PLAN_INTERVALS: Record<PremiumPlan, string> = { monthly: '1 month', yearly: '1 year' };
+
+/**
+ * Extends premium from whichever is later — the current expiry or now — so a
+ * renewal while still within an active period stacks onto it instead of
+ * resetting the clock to "now + one period" (which would shave off whatever
+ * time was left).
+ */
+export async function extendPremiumUntil(userId: string, plan: PremiumPlan): Promise<void> {
+  await pool.query(
+    `UPDATE users SET premium_until = GREATEST(COALESCE(premium_until, now()), now()) + $2::interval, updated_at = now() WHERE id = $1`,
+    [userId, PLAN_INTERVALS[plan]],
+  );
+}

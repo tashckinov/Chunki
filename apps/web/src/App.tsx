@@ -13,12 +13,10 @@ import { ResultScreen } from './screens/ResultScreen';
 import { ScheduleScreen } from './screens/ScheduleScreen';
 import { PaywallScreen } from './screens/PaywallScreen';
 import { ProgramScreen } from './screens/ProgramScreen';
-import { GrammarScreen } from './screens/GrammarScreen';
 import { ComicsScreen } from './screens/ComicsScreen';
 import { TopicScreen } from './screens/TopicScreen';
 import { ExercisesScreen } from './screens/ExercisesScreen';
 import { TopicResultScreen } from './screens/TopicResultScreen';
-import { ExtrasScreen } from './screens/ExtrasScreen';
 import { CardsScreen } from './screens/CardsScreen';
 import { DeckScreen } from './screens/DeckScreen';
 import { DeckDoneScreen } from './screens/DeckDoneScreen';
@@ -73,14 +71,10 @@ function CurrentScreen() {
       return <ExercisesScreen />;
     case 'topicresult':
       return <TopicResultScreen />;
-    case 'extras':
-      return <ExtrasScreen />;
     case 'cardslib':
       return <CardsScreen />;
     case 'comics':
       return <ComicsScreen />;
-    case 'grammar':
-      return <GrammarScreen />;
     case 'deck':
       return <DeckScreen />;
     case 'deckdone':
@@ -166,9 +160,16 @@ function navTabForScreen(screen: string): number {
   switch (screen) {
     case 'comics':
       return 1;
-    case 'grammar':
+    case 'goals':
+    case 'test':
+    case 'checking':
+    case 'result':
+    case 'schedule':
+    case 'paywall':
     case 'program':
-    case 'extras':
+    case 'topic':
+    case 'exercises':
+    case 'topicresult':
       return 2;
     case 'cardslib':
     case 'deck':

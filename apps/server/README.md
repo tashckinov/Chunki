@@ -211,6 +211,36 @@ docker compose logs -f backend                                # confirm clean st
   up with a clear fatal error. In Docker Compose this is defense-in-depth on top of
   `depends_on: condition: service_healthy`, which already delays the backend's start.
 
+## Payments (Lava.top)
+
+Subscription checkout is handled by [Lava.top](https://lava.top): `PAYMENT_PROVIDER=lava_top`
+(or omit it — it auto-selects the same way `GRADING_PROVIDER`/`PRODUCTION_JUDGE_PROVIDER` do:
+`lava_top` in production or whenever `LAVA_TOP_API_KEY` is set, `mock` otherwise). With the mock
+provider, checkout "pays" instantly and grants premium — useful for exercising the whole flow
+locally without any Lava.top account at all.
+
+To go live:
+
+1. In your Lava.top dashboard, create **one product** for Chunki premium with **two offers**:
+   monthly (periodicity `MONTHLY`) and yearly (periodicity `PERIOD_YEAR`) — matching the two
+   plans already hardcoded in `PaywallScreen.tsx` (590₽/month, 3990₽/year). Copy each offer's
+   `offerId` from its dashboard page into `LAVA_TOP_OFFER_ID_MONTHLY`/`LAVA_TOP_OFFER_ID_YEARLY`.
+2. Copy your API key into `LAVA_TOP_API_KEY` (`LAVA_TOP_BASE_URL` defaults to
+   `https://gate.lava.top` — only override it if Lava.top gives you a different gateway host).
+3. Under **Интеграции → Webhook**, point the webhook at
+   `https://<your-backend-domain>/api/payments/webhook/lava-top` and set it to use HTTP Basic
+   authentication with a login/password of your choosing — put the same values in
+   `LAVA_TOP_WEBHOOK_LOGIN`/`LAVA_TOP_WEBHOOK_PASSWORD`. This is a separate credential from
+   `LAVA_TOP_API_KEY` (that one's outbound, this one's inbound).
+4. Restart the backend so it picks up the new env vars (see "Redeploying after a code change"
+   above), then send a real or test payment and confirm it shows up in the admin "Платежи" page.
+
+**Caveat:** Lava.top's official docs (`lava.top`, `dev.lava.top`) were unreachable while this was
+built, so the request/response shapes in `src/modules/payments/lavaTopClient.ts` were
+reconstructed from third-party SDKs and one open-source integration rather than from official
+documentation. If Lava.top rejects a request with a format error once you have real credentials,
+that file — and only that file — is where to fix the field/endpoint names.
+
 ## API
 
 ```text

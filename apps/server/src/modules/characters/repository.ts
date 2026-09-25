@@ -1,4 +1,5 @@
 import { pool } from '../../db/pool.js';
+import { buildValuesClause } from '../../db/bulkInsert.js';
 
 export interface CharacterRow {
   id: string;
@@ -98,10 +99,27 @@ export async function updateCharacter(id: string, patch: CharacterPatch): Promis
   return rows[0] ?? null;
 }
 
+export interface DeletedCharacterFiles {
+  deleted: boolean;
+  /** Every `/uploads/...` URL that belonged to this character (full-body + all emotion images) — collected before the DELETE below (whose ON DELETE CASCADE removes the character_images rows), so the caller can clean these up from disk. */
+  imageUrls: string[];
+}
+
 /** Cascades to character_images via ON DELETE CASCADE. */
-export async function deleteCharacter(id: string): Promise<boolean> {
+export async function deleteCharacter(id: string): Promise<DeletedCharacterFiles> {
+  const { rows: characterRows } = await pool.query<{ full_body_image_url: string | null }>(
+    `SELECT full_body_image_url FROM characters WHERE id = $1`,
+    [id],
+  );
+  const { rows: imageRows } = await pool.query<{ image_url: string }>(`SELECT image_url FROM character_images WHERE character_id = $1`, [id]);
+
   const result = await pool.query(`DELETE FROM characters WHERE id = $1`, [id]);
-  return (result.rowCount ?? 0) > 0;
+  const deleted = (result.rowCount ?? 0) > 0;
+  if (!deleted) return { deleted: false, imageUrls: [] };
+
+  const imageUrls = imageRows.map((r) => r.image_url);
+  if (characterRows[0]?.full_body_image_url) imageUrls.push(characterRows[0].full_body_image_url);
+  return { deleted: true, imageUrls };
 }
 
 /** Appends a new image at the end of its (character, emotion) group. */
@@ -162,12 +180,23 @@ export async function updateCharacterImage(id: string, patch: CharacterImagePatc
 
 /** Persists a drag-reorder within one (character, emotion) group — sets position to each id's index in the given order. */
 export async function reorderCharacterImages(characterId: string, emotion: string, imageIds: string[]): Promise<void> {
-  for (let i = 0; i < imageIds.length; i++) {
-    await pool.query(
-      `UPDATE character_images SET position = $3 WHERE id = $1 AND character_id = $2`,
-      [imageIds[i], characterId, i],
-    );
-  }
+  const rows = buildValuesClause(imageIds.map((id, i) => [characterId, id, i]));
+  if (!rows) return;
+  await pool.query(
+    `UPDATE character_images AS ci
+     SET position = v.position
+     FROM (VALUES ${rows.placeholders}) AS v(character_id, id, position)
+     WHERE ci.id = v.id::uuid AND ci.character_id = v.character_id::uuid`,
+    rows.values,
+  );
+}
+
+export async function findCharacterImageById(id: string): Promise<CharacterImageRow | null> {
+  const { rows } = await pool.query<CharacterImageRow>(
+    `SELECT id, character_id, emotion, image_url, description, position, created_at FROM character_images WHERE id = $1`,
+    [id],
+  );
+  return rows[0] ?? null;
 }
 
 export type DeleteImageResult = 'ok' | 'not_found' | 'in_use';

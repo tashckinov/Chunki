@@ -3,10 +3,9 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { FastifyPluginAsync } from 'fastify';
 import multipart from '@fastify/multipart';
-import sharp from 'sharp';
 import { z } from 'zod';
 import { requireAdmin } from '../auth/requireAuth.js';
-import { UPLOADS_DIR } from '../../config/uploads.js';
+import { MAX_UPLOAD_BYTES, UPLOADS_DIR, resizeImage } from '../../config/uploads.js';
 import {
   listUsers,
   setUserPremiumUntil,
@@ -23,6 +22,8 @@ import {
   getDialogueForChunk,
   saveDialogueForChunk,
   deleteDialogueForChunk,
+  listPaymentsForAdmin,
+  listProgramTopicsForAdmin,
 } from './service.js';
 
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const;
@@ -31,12 +32,20 @@ const SLUG_REGEX = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 // Collection banners: ~800x600 (4:3), shown in the Cards library. Resized
 // server-side (see the upload route below) so an unedited phone photo
 // doesn't get stored — and served — at full size for a small card image.
-const MAX_BANNER_BYTES = 10 * 1024 * 1024; // raw upload cap, before resizing
 const BANNER_MAX_DIMENSION = 1600; // ~2x an 800x600 display size, comfortable for retina
 
+// A malformed id (not a UUID at all) is always 400/invalid_request in this
+// admin-only module — unlike the public chunks/collections module, which
+// deliberately 404s on both a malformed id and a real-but-unknown one so a
+// caller can't distinguish "wrong format" from "doesn't exist." There's no
+// such concern for an authenticated admin, so this file lets 400 mean
+// "your request was malformed" and reserves 404 for "well-formed id, no
+// such row" everywhere below.
 const idParamSchema = z.object({ id: z.string().uuid() });
 const collectionChunkParamSchema = z.object({ id: z.string().uuid(), chunkId: z.string().uuid() });
 const aiLogsQuerySchema = z.object({ limit: z.coerce.number().int().min(1).max(500).default(100) });
+const paymentsQuerySchema = z.object({ limit: z.coerce.number().int().min(1).max(500).default(100) });
+const programTopicsQuerySchema = z.object({ limit: z.coerce.number().int().min(1).max(500).default(100) });
 
 const premiumBodySchema = z.object({ premiumUntil: z.string().datetime().nullable() });
 
@@ -66,7 +75,7 @@ const situationPromptPartSchema = z.object({
 });
 const situationPromptSchema = z.object({
   text: z.string().min(1),
-  parts: z.array(situationPromptPartSchema),
+  parts: z.array(situationPromptPartSchema).max(20),
 });
 
 const chunkSentencePartSchema = z.object({
@@ -77,7 +86,7 @@ const chunkSentencePartSchema = z.object({
 const chunkSentenceSchema = z.object({
   text: z.string().min(1),
   translation: z.string().min(1),
-  parts: z.array(chunkSentencePartSchema).min(1),
+  parts: z.array(chunkSentencePartSchema).min(1).max(20),
 });
 
 const chunkCreateSchema = z.object({
@@ -91,8 +100,8 @@ const chunkCreateSchema = z.object({
   // would silently wipe an unpatched chunk's prompts/sentences on every
   // unrelated edit. "Omitted on create" is instead handled explicitly in
   // the POST handler below.
-  situationPrompts: z.array(situationPromptSchema).optional(),
-  sentences: z.array(chunkSentenceSchema).optional(),
+  situationPrompts: z.array(situationPromptSchema).max(50).optional(),
+  sentences: z.array(chunkSentenceSchema).max(50).optional(),
 });
 const chunkPatchSchema = chunkCreateSchema.partial();
 
@@ -116,7 +125,7 @@ const dialogueSaveSchema = z
  */
 export const adminRoutes: FastifyPluginAsync = async (app) => {
   app.addHook('preHandler', requireAdmin);
-  await app.register(multipart, { limits: { fileSize: MAX_BANNER_BYTES, files: 1 } });
+  await app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 } });
 
   app.get('/users', async () => ({ users: await listUsers() }));
 
@@ -198,21 +207,18 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       throw err;
     }
 
-    let resized: Buffer;
+    let resized: { buffer: Buffer; extension: 'png' | 'jpg' };
     try {
-      resized = await sharp(original)
-        .resize({ width: BANNER_MAX_DIMENSION, height: BANNER_MAX_DIMENSION, fit: 'inside', withoutEnlargement: true })
-        .jpeg({ quality: 82 })
-        .toBuffer();
+      resized = await resizeImage(original, BANNER_MAX_DIMENSION);
     } catch {
       reply.code(400);
       return { error: 'invalid_file_type' };
     }
 
-    const filename = `${randomUUID()}.jpg`;
+    const filename = `${randomUUID()}.${resized.extension}`;
     const bannersDir = path.join(UPLOADS_DIR, 'banners');
     await fs.promises.mkdir(bannersDir, { recursive: true });
-    await fs.promises.writeFile(path.join(bannersDir, filename), resized);
+    await fs.promises.writeFile(path.join(bannersDir, filename), resized.buffer);
 
     return { url: `/uploads/banners/${filename}` };
   });
@@ -220,8 +226,8 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   app.get('/collections/:id/chunks', async (request, reply) => {
     const params = idParamSchema.safeParse(request.params);
     if (!params.success) {
-      reply.code(404);
-      return { error: 'not_found' };
+      reply.code(400);
+      return { error: 'invalid_request' };
     }
     return { chunks: await listChunksForCollectionAdmin(params.data.id) };
   });
@@ -263,8 +269,8 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   app.delete('/chunks/:id', async (request, reply) => {
     const params = idParamSchema.safeParse(request.params);
     if (!params.success) {
-      reply.code(404);
-      return { error: 'not_found' };
+      reply.code(400);
+      return { error: 'invalid_request' };
     }
     const deleted = await deleteChunk(params.data.id);
     if (!deleted) {
@@ -277,8 +283,8 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   app.get('/chunks/:id/dialogue/:kind', async (request, reply) => {
     const params = dialogueKindParamSchema.safeParse(request.params);
     if (!params.success) {
-      reply.code(404);
-      return { error: 'not_found' };
+      reply.code(400);
+      return { error: 'invalid_request' };
     }
     return { dialogue: await getDialogueForChunk(params.data.id, params.data.kind) };
   });
@@ -303,8 +309,8 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   app.delete('/chunks/:id/dialogue/:kind', async (request, reply) => {
     const params = dialogueKindParamSchema.safeParse(request.params);
     if (!params.success) {
-      reply.code(404);
-      return { error: 'not_found' };
+      reply.code(400);
+      return { error: 'invalid_request' };
     }
     const deleted = await deleteDialogueForChunk(params.data.id, params.data.kind);
     if (!deleted) {
@@ -317,8 +323,8 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   app.delete('/collections/:id/chunks/:chunkId', async (request, reply) => {
     const params = collectionChunkParamSchema.safeParse(request.params);
     if (!params.success) {
-      reply.code(404);
-      return { error: 'not_found' };
+      reply.code(400);
+      return { error: 'invalid_request' };
     }
     const removed = await removeChunkFromCollection(params.data.id, params.data.chunkId);
     if (!removed) {
@@ -335,5 +341,23 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       return { error: 'invalid_request' };
     }
     return { logs: await listAiCallLogsForAdmin(parsed.data.limit) };
+  });
+
+  app.get('/payments', async (request, reply) => {
+    const parsed = paymentsQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      reply.code(400);
+      return { error: 'invalid_request' };
+    }
+    return { payments: await listPaymentsForAdmin(parsed.data.limit) };
+  });
+
+  app.get('/program-topics', async (request, reply) => {
+    const parsed = programTopicsQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      reply.code(400);
+      return { error: 'invalid_request' };
+    }
+    return { topics: await listProgramTopicsForAdmin(parsed.data.limit) };
   });
 };

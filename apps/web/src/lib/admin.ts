@@ -136,3 +136,35 @@ export async function fetchAdminAiLogs(limit = 100): Promise<AdminAiLog[]> {
   const data = await getJson<{ logs: AdminAiLog[] }>(`/api/admin/ai-logs?limit=${limit}`);
   return data.logs;
 }
+
+export interface AdminPayment {
+  id: string;
+  userEmail: string | null;
+  provider: string;
+  plan: string;
+  status: string;
+  amount: string | null;
+  currency: string | null;
+  createdAt: string;
+}
+
+export async function fetchAdminPayments(limit = 100): Promise<AdminPayment[]> {
+  const data = await getJson<{ payments: AdminPayment[] }>(`/api/admin/payments?limit=${limit}`);
+  return data.payments;
+}
+
+export interface AdminProgramTopic {
+  id: string;
+  userEmail: string | null;
+  title: string;
+  category: string;
+  status: 'assigned' | 'passed_once' | 'mastered';
+  source: 'placement' | 'discovered';
+  nextReviewAt: string | null;
+  updatedAt: string;
+}
+
+export async function fetchAdminProgramTopics(limit = 100): Promise<AdminProgramTopic[]> {
+  const data = await getJson<{ topics: AdminProgramTopic[] }>(`/api/admin/program-topics?limit=${limit}`);
+  return data.topics;
+}

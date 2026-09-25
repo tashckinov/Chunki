@@ -29,7 +29,7 @@ export class OpenRouterProductionJudgeProvider implements ProductionJudgeProvide
   }
 
   get model(): string {
-    return this.#env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
+    return this.#env.OPENROUTER_MODEL;
   }
 
   async judgeProduction(input: ProductionCheckInput): Promise<ProductionCheckResult> {

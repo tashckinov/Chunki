@@ -72,7 +72,7 @@ export async function listCollectionsAdmin(): Promise<AdminCollectionRow[]> {
 
 type CollectionRowNoCount = Omit<AdminCollectionRow, 'chunk_count'>;
 
-async function findCollectionById(id: string): Promise<CollectionRowNoCount | null> {
+export async function findCollectionById(id: string): Promise<CollectionRowNoCount | null> {
   const { rows } = await pool.query<CollectionRowNoCount>(
     `SELECT id, slug, title, description, level, position, is_published, banner_url FROM collections WHERE id = $1`,
     [id],

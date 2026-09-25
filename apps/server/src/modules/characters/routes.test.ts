@@ -11,7 +11,10 @@ vi.mock('../auth/session.js', async () => {
   const actual = await vi.importActual<typeof import('../auth/session.js')>('../auth/session.js');
   return { SESSION_COOKIE_NAME: actual.SESSION_COOKIE_NAME, extractSessionToken: actual.extractSessionToken, getSession: vi.fn() };
 });
-vi.mock('../../config/uploads.js', () => ({ UPLOADS_DIR: TEST_UPLOADS_DIR }));
+vi.mock('../../config/uploads.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../config/uploads.js')>();
+  return { ...actual, UPLOADS_DIR: TEST_UPLOADS_DIR };
+});
 vi.mock('./service.js', () => ({
   listCharacters: vi.fn(),
   findCharacter: vi.fn(),

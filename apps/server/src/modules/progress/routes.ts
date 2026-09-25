@@ -18,7 +18,10 @@ const sortBodySchema = z.object({ chunkId: z.string().uuid(), verdict: z.enum(['
 const optionSchema = z.object({ id: z.string(), label: z.string() });
 const recognitionSubmitSchema = z.object({ selectedOptionId: z.string(), options: z.array(optionSchema) });
 const productionSubmitSchema = z.object({ answer: z.string().min(1).max(PRODUCTION_ANSWER_MAX_LENGTH) });
-const listQuerySchema = z.object({ chunkIds: z.string().min(1) });
+// 500 ids * 37 chars each (36-char UUID + comma) comfortably covers the
+// whole content library with room to grow, while still bounding the string
+// that gets split and passed into the chunkIds = ANY($2) query below.
+const listQuerySchema = z.object({ chunkIds: z.string().min(1).max(18500) });
 
 export const progressRoutes: FastifyPluginAsync = async (app) => {
   app.post('/sort', { preHandler: requireAuthenticatedSession }, async (request, reply) => {

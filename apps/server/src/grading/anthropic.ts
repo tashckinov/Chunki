@@ -1,13 +1,31 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { READING_PASSAGE, READING_QUESTIONS, scoreExerciseChoices, scoreMcq, writeItemsOf } from '@app/shared';
+import { scoreMcq } from '@app/shared';
+import type { Env } from '../config/env.js';
 import type {
+  ExerciseItem,
   ExercisesGradeResult,
   ExercisesSubmission,
   GradeDetail,
   GradingProvider,
   PlacementGradeResult,
   PlacementTestSubmission,
+  TopicStudyContent,
+  TopicSuggestion,
 } from '@app/shared';
+import { READING_PASSAGE, READING_QUESTIONS } from '@app/shared';
+
+const TOPIC_CATEGORY_ENUM = ['Грамматика', 'Лексика', 'Использование языка', 'Понимание', 'Письмо'];
+
+const TOPIC_SCHEMA = {
+  type: 'object',
+  properties: {
+    key: { type: 'string', description: 'Short kebab-case slug in English, e.g. "articles" or "reported-speech-questions".' },
+    title: { type: 'string', description: 'Short Russian title shown to the learner.' },
+    category: { type: 'string', enum: TOPIC_CATEGORY_ENUM },
+    rationale: { type: 'string', description: 'One short Russian sentence — concrete evidence from this answer for why this topic is weak.' },
+  },
+  required: ['key', 'title', 'category', 'rationale'],
+} as const;
 
 const GRADE_DETAIL_SCHEMA = {
   type: 'object',
@@ -23,19 +41,9 @@ const GRADE_DETAIL_SCHEMA = {
   required: ['correctness', 'chunkUsage', 'grammar', 'naturalness', 'score', 'feedback', 'suggestedAnswer'],
 } as const;
 
-function anthropicClient(): Anthropic {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not set — required for the anthropic grading provider.');
-  return new Anthropic({ apiKey });
-}
-
-function model(): string {
-  return process.env.ANTHROPIC_MODEL || 'claude-sonnet-5';
-}
-
-async function callTool<T>(client: Anthropic, opts: { system: string; user: string; toolName: string; toolDescription: string; schema: unknown }): Promise<T> {
+async function callTool<T>(client: Anthropic, opts: { model: string; system: string; user: string; toolName: string; toolDescription: string; schema: unknown }): Promise<T> {
   const response = await client.messages.create({
-    model: model(),
+    model: opts.model,
     max_tokens: 2048,
     system: opts.system,
     messages: [{ role: 'user', content: opts.user }],
@@ -48,11 +56,41 @@ async function callTool<T>(client: Anthropic, opts: { system: string; user: stri
   return toolUse.input as T;
 }
 
+/** Scores the deterministic (multiple-choice) items locally — no need to ask
+ * the model to re-grade something with one correct answer. Only free-text
+ * ("write") items go to the LLM. */
+function scoreChoiceItems(items: ExerciseItem[], answers: Record<number, string>): { correct: number; total: number } {
+  let correct = 0;
+  let total = 0;
+  items.forEach((item, i) => {
+    if (item.type !== 'choice') return;
+    total += 1;
+    if (answers[i] === item.answer) correct += 1;
+  });
+  return { correct, total };
+}
+
 export class AnthropicGradingProvider implements GradingProvider {
   name = 'anthropic';
 
+  #env: Pick<Env, 'ANTHROPIC_API_KEY' | 'ANTHROPIC_MODEL'>;
+
+  constructor(env: Pick<Env, 'ANTHROPIC_API_KEY' | 'ANTHROPIC_MODEL'>) {
+    this.#env = env;
+  }
+
+  #client(): Anthropic {
+    const apiKey = this.#env.ANTHROPIC_API_KEY;
+    if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not set — required for the anthropic grading provider.');
+    return new Anthropic({ apiKey });
+  }
+
+  get #model(): string {
+    return this.#env.ANTHROPIC_MODEL;
+  }
+
   async gradePlacementTest(input: PlacementTestSubmission): Promise<PlacementGradeResult> {
-    const client = anthropicClient();
+    const client = this.#client();
     const mcqScore = scoreMcq(input.mcqAnswers);
 
     type ToolOutput = {
@@ -62,7 +100,7 @@ export class AnthropicGradingProvider implements GradingProvider {
       skills: PlacementGradeResult['skills'];
       aboveLevel: string;
       belowLevel: string;
-      weakTopicKeys: string[];
+      topics: TopicSuggestion[];
     };
 
     const schema = {
@@ -92,16 +130,14 @@ export class AnthropicGradingProvider implements GradingProvider {
         },
         aboveLevel: { type: 'string', description: 'One short sentence in Russian.' },
         belowLevel: { type: 'string', description: 'One short sentence in Russian.' },
-        weakTopicKeys: {
-          type: 'array',
-          items: { type: 'string', enum: ['articles', 'modals', 'conditionals', 'word-order', 'listening'] },
-        },
+        topics: { type: 'array', items: TOPIC_SCHEMA, minItems: 8, maxItems: 12, description: 'Exactly around 10 concrete weak topics to study next, ordered by priority.' },
       },
-      required: ['openGrades', 'essayGrade', 'overallLevel', 'skills', 'aboveLevel', 'belowLevel', 'weakTopicKeys'],
+      required: ['openGrades', 'essayGrade', 'overallLevel', 'skills', 'aboveLevel', 'belowLevel', 'topics'],
     };
 
     const user = [
-      `Grade a CEFR English placement test. The learner answered ${mcqScore.correct}/${mcqScore.total} multiple-choice grammar/vocabulary questions correctly (already scored, do not re-grade those).`,
+      `Grade a CEFR English placement test for a Russian-speaking learner currently around ${input.fromLevel}, aiming for ${input.toLevel}, learning English for: ${input.purpose.join(', ') || '(not specified)'}.`,
+      `The learner answered ${mcqScore.correct}/${mcqScore.total} multiple-choice grammar/vocabulary questions correctly (already scored, do not re-grade those).`,
       '',
       `Reading passage:\n"""${READING_PASSAGE}"""`,
       '',
@@ -111,14 +147,15 @@ export class AnthropicGradingProvider implements GradingProvider {
       `Free writing prompt: "If you could move to another country next year, where would you go and why? What problems do you think you might face?"`,
       `Essay: """${input.essay || '(no answer)'}"""`,
       '',
-      'Grade each open reading answer for comprehension correctness (not grammar — they answered in English but the point is whether they understood the passage). Grade the essay for grammar, natural phrasing, and range of constructions used at CEFR level. Use the multiple-choice score as strong signal for the "Грамматика" skill bar. Produce an overall CEFR level, four skill bars (Грамматика, Чтение и понимание, Лексика и чанки, Письмо), one sentence on what is above the overall level, one sentence on what pulls it down, and which of these follow-up topics (if any) look weak enough to recommend as extra lessons: articles, modals, conditionals, word-order, listening. All prose fields must be in Russian except suggestedAnswer/chunkUsage which are English.',
+      'Grade each open reading answer for comprehension correctness (not grammar — they answered in English but the point is whether they understood the passage). Grade the essay for grammar, natural phrasing, and range of constructions used at CEFR level. Use the multiple-choice score as strong signal for the "Грамматика" skill bar. Produce an overall CEFR level, four skill bars (Грамматика, Чтение и понимание, Лексика и чанки, Письмо), one sentence on what is above the overall level, one sentence on what pulls it down, and a personalized study plan of around 10 concrete topics (grammar points, lexical chunks, skills) worth studying next given this learner\'s level, goal, and purpose — each with a short kebab-case key, a Russian title, a category, and a one-sentence rationale grounded in something specific from this test. All prose fields must be in Russian except suggestedAnswer/chunkUsage which are English.',
     ].join('\n');
 
     const out = await callTool<ToolOutput>(client, {
-      system: 'You are an expert CEFR English examiner grading a Russian-speaking B1-ish learner. Be precise, concise, and encouraging. Always respond only via the provided tool.',
+      model: this.#model,
+      system: 'You are an expert CEFR English examiner grading a Russian-speaking learner and building them a personalized study plan. Be precise, concise, and encouraging. Always respond only via the provided tool.',
       user,
       toolName: 'submit_placement_grade',
-      toolDescription: 'Submit the structured grade for a CEFR placement test.',
+      toolDescription: 'Submit the structured grade and study plan for a CEFR placement test.',
       schema,
     });
 
@@ -136,19 +173,21 @@ export class AnthropicGradingProvider implements GradingProvider {
       mcqScore,
       openGrades,
       essayGrade: out.essayGrade,
-      weakTopicKeys: out.weakTopicKeys,
+      topics: out.topics,
     };
   }
 
   async gradeExercises(input: ExercisesSubmission): Promise<ExercisesGradeResult> {
-    const client = anthropicClient();
-    const choiceScores = scoreExerciseChoices(input);
-    const writeItems = writeItemsOf(input);
+    const client = this.#client();
+    const choiceScore = scoreChoiceItems(input.items, input.answers);
+    const writeItems = input.items
+      .map((item, i) => ({ item, i }))
+      .filter((x): x is { item: Extract<ExerciseItem, { type: 'write' }>; i: number } => x.item.type === 'write');
 
     type ToolOutput = {
-      writeGrades: (GradeDetail & { blockKey: string; itemIndex: number })[];
+      writeGrades: (GradeDetail & { itemIndex: number })[];
       notes: string[];
-      weakTopicKeys: string[];
+      discoveredTopics: TopicSuggestion[];
     };
 
     const schema = {
@@ -158,58 +197,136 @@ export class AnthropicGradingProvider implements GradingProvider {
           type: 'array',
           items: {
             type: 'object',
-            properties: { blockKey: { type: 'string' }, itemIndex: { type: 'number' }, ...GRADE_DETAIL_SCHEMA.properties },
-            required: ['blockKey', 'itemIndex', ...GRADE_DETAIL_SCHEMA.required],
+            properties: { itemIndex: { type: 'number' }, ...GRADE_DETAIL_SCHEMA.properties },
+            required: ['itemIndex', ...GRADE_DETAIL_SCHEMA.required],
           },
         },
         notes: { type: 'array', items: { type: 'string' }, description: '2-3 short Russian sentences on patterns noticed across the answers.' },
-        weakTopicKeys: { type: 'array', items: { type: 'string', enum: ['articles', 'modals', 'conditionals', 'word-order', 'listening'] } },
+        discoveredTopics: {
+          type: 'array',
+          items: TOPIC_SCHEMA,
+          maxItems: 3,
+          description: 'New weak spots noticed in THESE answers that are clearly different from the topic being tested (e.g. wrong article usage while testing modals) — empty array if none.',
+        },
       },
-      required: ['writeGrades', 'notes', 'weakTopicKeys'],
+      required: ['writeGrades', 'notes', 'discoveredTopics'],
     };
 
     const user = [
-      `Topic: "${input.topicTitle}".`,
+      `Topic being tested: "${input.topic.title}" (${input.topic.category}). ${input.topic.rationale}`,
       'Grade each free-text answer below for correctness, grammar, and natural phrasing at the appropriate CEFR level.',
       '',
-      ...writeItems.map((w) => `[${w.blockKey}#${w.itemIndex}] Q: ${w.question}\nA: """${w.answer || '(no answer)'}"""`),
+      ...writeItems.map(({ item, i }) => `[#${i}] Q: ${item.q}\nA: """${input.answers[i] || '(no answer)'}"""`),
       '',
-      'Also list 2-3 short notes in Russian on patterns you noticed (grammar mistakes, articles, word order, etc.), and flag which follow-up topics (articles, modals, conditionals, word-order, listening) look weak enough to recommend as extra lessons.',
+      'Also list 2-3 short notes in Russian on patterns you noticed (grammar mistakes, articles, word order, etc.), and separately flag any NEW weak topics visible in these answers that are clearly different from the topic being tested.',
     ].join('\n\n');
 
     const out = writeItems.length
       ? await callTool<ToolOutput>(client, {
+          model: this.#model,
           system: 'You are an expert CEFR English tutor grading exercise answers for a Russian-speaking learner. Always respond only via the provided tool.',
           user,
           toolName: 'submit_exercise_grade',
           toolDescription: 'Submit structured grades for free-text exercise answers.',
           schema,
         })
-      : { writeGrades: [], notes: [], weakTopicKeys: [] };
+      : { writeGrades: [], notes: [], discoveredTopics: [] };
 
-    const blockScores = choiceScores.map((cs) => {
-      const writesInBlock = out.writeGrades.filter((w) => w.blockKey === cs.blockKey);
-      const writeCorrect = writesInBlock.reduce((sum, w) => sum + w.score, 0);
-      const writeTotal = writesInBlock.length;
-      return {
-        label: labelForBlock(cs.blockKey),
-        correct: cs.correct + writeCorrect,
-        total: cs.total + writeTotal,
-      };
-    });
-
-    const totalCorrect = blockScores.reduce((s, b) => s + b.correct, 0);
-    const totalPossible = blockScores.reduce((s, b) => s + b.total, 0) || 1;
+    const writeCorrect = out.writeGrades.reduce((sum, g) => sum + g.score, 0);
+    const totalCorrect = choiceScore.correct + writeCorrect;
+    const totalPossible = choiceScore.total + writeItems.length || 1;
     const scoreOutOf10 = Math.round((totalCorrect / totalPossible) * 10);
 
     return {
       scoreOutOf10,
+      passed: scoreOutOf10 >= 7,
       verdictLabel: verdictFor(scoreOutOf10),
-      blockScores,
       notes: out.notes,
-      weakTopicKeys: out.weakTopicKeys,
+      discoveredTopics: out.discoveredTopics,
       nextReviewInDays: 3,
     };
+  }
+
+  async generateTopicStudy(topic: TopicSuggestion): Promise<TopicStudyContent> {
+    const client = this.#client();
+
+    const schema = {
+      type: 'object',
+      properties: {
+        explanation: { type: 'string', description: '2-4 sentences in Russian explaining the topic clearly, at an appropriate level.' },
+        keyPoints: { type: 'array', items: { type: 'string' }, minItems: 2, maxItems: 5, description: 'Short Russian bullet points, the essential rules.' },
+        contrastExamples: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 4,
+          items: {
+            type: 'object',
+            properties: { wrong: { type: 'string' }, right: { type: 'string' } },
+            required: ['wrong', 'right'],
+          },
+          description: 'English sentence pairs: a common mistake vs the correct version, illustrating this exact topic.',
+        },
+        exampleChunks: { type: 'array', items: { type: 'string' }, minItems: 2, maxItems: 5, description: 'Useful English chunks/collocations tied to this topic.' },
+      },
+      required: ['explanation', 'keyPoints', 'contrastExamples', 'exampleChunks'],
+    };
+
+    return callTool<TopicStudyContent>(client, {
+      model: this.#model,
+      system: 'You are an expert English teacher writing concise study material in Russian for a Russian-speaking learner. Always respond only via the provided tool.',
+      user: `Write study material for this topic: "${topic.title}" (category: ${topic.category}). Context for why the learner needs it: ${topic.rationale}`,
+      toolName: 'submit_topic_study',
+      toolDescription: 'Submit structured study material for one topic.',
+      schema,
+    });
+  }
+
+  async generateTopicExercises(topic: TopicSuggestion): Promise<ExerciseItem[]> {
+    const client = this.#client();
+
+    type ToolOutput = {
+      items: { type: 'choice' | 'write'; q: string; options?: string[]; answer?: string; rows?: number; placeholder?: string }[];
+    };
+
+    const schema = {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          minItems: 5,
+          maxItems: 8,
+          items: {
+            type: 'object',
+            properties: {
+              type: { type: 'string', enum: ['choice', 'write'] },
+              q: { type: 'string', description: 'The question, in Russian or English as appropriate.' },
+              options: { type: 'array', items: { type: 'string' }, description: 'Only for type=choice — 3-4 options.' },
+              answer: { type: 'string', description: 'Only for type=choice — must exactly match one of options.' },
+              rows: { type: 'number', description: 'Only for type=write — suggested textarea rows, 2-6.' },
+              placeholder: { type: 'string', description: 'Only for type=write — short English placeholder, e.g. "Your answer".' },
+            },
+            required: ['type', 'q'],
+          },
+          description: 'A mix of multiple-choice and free-text exercises drilling this exact topic. Vary the phrasing each time so a repeated attempt is not identical.',
+        },
+      },
+      required: ['items'],
+    };
+
+    const out = await callTool<ToolOutput>(client, {
+      model: this.#model,
+      system: 'You are an expert English teacher writing a short practice quiz for a Russian-speaking learner. Always respond only via the provided tool.',
+      user: `Write 5-8 practice exercises drilling this exact topic: "${topic.title}" (category: ${topic.category}). Context: ${topic.rationale}`,
+      toolName: 'submit_topic_exercises',
+      toolDescription: 'Submit a structured practice quiz for one topic.',
+      schema,
+    });
+
+    return out.items.map((item): ExerciseItem =>
+      item.type === 'choice'
+        ? { type: 'choice', q: item.q, options: item.options ?? [], answer: item.answer ?? '' }
+        : { type: 'write', q: item.q, rows: item.rows ?? 3, placeholder: item.placeholder ?? 'Your answer' },
+    );
   }
 }
 
@@ -218,14 +335,4 @@ function verdictFor(scoreOutOf10: number): string {
   if (scoreOutOf10 >= 7) return 'Хорошо';
   if (scoreOutOf10 >= 5) return 'Неплохо';
   return 'Стоит повторить';
-}
-
-function labelForBlock(blockKey: string): string {
-  const map: Record<string, string> = {
-    comprehension: 'Понимание',
-    grammar: 'Грамматика',
-    'use-of-english': 'Use of English',
-    writing: 'Письмо',
-  };
-  return map[blockKey] ?? blockKey;
 }

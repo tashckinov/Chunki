@@ -5,6 +5,7 @@ import {
   listCollectionsAdmin as repoListCollectionsAdmin,
   createCollection as repoCreateCollection,
   updateCollection as repoUpdateCollection,
+  findCollectionById as repoFindCollectionById,
   listChunksForCollectionAdmin as repoListChunksForCollectionAdmin,
   createChunkInCollection as repoCreateChunkInCollection,
   updateChunk as repoUpdateChunk,
@@ -29,6 +30,9 @@ import {
   type SaveDialogueResult,
 } from '../dialogues/service.js';
 import type { DialogueInput, DialogueKind } from '../dialogues/repository.js';
+import { listPaymentsForAdmin as paymentsListPaymentsForAdmin, type AdminPaymentSummary } from '../payments/service.js';
+import { listRecentActivityForAdmin as programListRecentActivityForAdmin, type AdminTopicActivitySummary } from '../program/service.js';
+import { deleteUploadedFile } from '../../config/uploads.js';
 
 export interface AdminUserSummary {
   id: string;
@@ -107,8 +111,16 @@ export async function createCollection(input: NewCollectionInput): Promise<Admin
 export type UpdateCollectionResult = { kind: 'ok'; collection: AdminCollectionSummary } | { kind: 'not_found' };
 
 export async function updateCollection(id: string, patch: CollectionPatch): Promise<UpdateCollectionResult> {
+  // Fetched before the update so a replaced banner's old file can be
+  // cleaned up afterward — it would otherwise sit on disk forever.
+  const previous = patch.bannerUrl !== undefined ? await repoFindCollectionById(id) : null;
+
   const row = await repoUpdateCollection(id, patch);
-  return row ? { kind: 'ok', collection: toCollectionSummary({ ...row, chunk_count: 0 }) } : { kind: 'not_found' };
+  if (!row) return { kind: 'not_found' };
+
+  if (previous?.banner_url && previous.banner_url !== patch.bannerUrl) void deleteUploadedFile(previous.banner_url);
+
+  return { kind: 'ok', collection: toCollectionSummary({ ...row, chunk_count: 0 }) };
 }
 
 export interface AdminChunkSummary {
@@ -207,4 +219,12 @@ export async function saveDialogueForChunk(chunkId: string, kind: DialogueKind, 
 
 export async function deleteDialogueForChunk(chunkId: string, kind: DialogueKind): Promise<boolean> {
   return dialoguesDeleteDialogueForChunk(chunkId, kind);
+}
+
+export async function listPaymentsForAdmin(limit: number): Promise<AdminPaymentSummary[]> {
+  return paymentsListPaymentsForAdmin(limit);
+}
+
+export async function listProgramTopicsForAdmin(limit: number): Promise<AdminTopicActivitySummary[]> {
+  return programListRecentActivityForAdmin(limit);
 }

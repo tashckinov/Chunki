@@ -62,7 +62,7 @@ export function ResultScreen() {
         </div>
       </div>
 
-      <div className="text-body-secondary">Программа собрана из этих слабых мест: 14 тем до {to}, первые четыре — грамматический фундамент.</div>
+      <div className="text-body-secondary">Программа собрана из этих слабых мест: {placementResult.topics.length} {placementResult.topics.length === 1 ? 'тема' : 'тем'} до {to}.</div>
       <Button size="lg" onClick={goSchedule} className="w-full">
         Настроить расписание
       </Button>

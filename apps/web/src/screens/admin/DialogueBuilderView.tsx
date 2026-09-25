@@ -11,6 +11,7 @@ import { fetchAdminDialogue, saveAdminDialogue, deleteAdminDialogue, type AdminD
 import type { AdminChunk } from '../../lib/admin';
 import { buildDialogueAiPrompt } from '../../lib/dialogueAiPrompt';
 import { parseDialogueImport } from '../../lib/dialogueImport';
+import { useTimedFlag } from '../../lib/timedFlag';
 
 /** The builder only ever reads id/text/translation — any caller with just these three can open it (e.g. a chunk reached via a character's usage list, which doesn't carry the rest of AdminChunk's fields). */
 export type DialogueBuilderChunk = Pick<AdminChunk, 'id' | 'text' | 'translation'>;
@@ -51,13 +52,12 @@ function SaveButton({ onClick, disabled, saving, justSaved }: { onClick: () => v
 
 /** Copies an AI instruction (chunk + full character/emotion/image library) to the clipboard, for composing a dialogue in an external AI chat. */
 function CopyPromptButton({ chunk, characters, kind }: { chunk: DialogueBuilderChunk; characters: Character[] | null; kind: DialogueKind }) {
-  const [copied, setCopied] = useState(false);
+  const [copied, flashCopied] = useTimedFlag();
 
   async function copy() {
     if (!characters) return;
     await navigator.clipboard.writeText(buildDialogueAiPrompt(chunk, characters, kind));
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    flashCopied();
   }
 
   return <IconButton icon={copied ? 'Check' : 'Copy'} label="Скопировать инструкцию для ИИ" onClick={copy} disabled={!characters} />;
@@ -184,7 +184,7 @@ export function DialogueBuilderView({ chunk, onBack, kind }: { chunk: DialogueBu
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [justSaved, setJustSaved] = useState(false);
+  const [justSaved, flashJustSaved] = useTimedFlag();
   const [mode, setMode] = useState<'editor' | 'preview'>('editor');
   const [wizard, setWizard] = useState<WizardState | null>(null);
   const [sceneSettingsOpen, setSceneSettingsOpen] = useState(false);
@@ -306,8 +306,7 @@ export function DialogueBuilderView({ chunk, onBack, kind }: { chunk: DialogueBu
       setParticipants(saved.participants);
       setMessages(saved.messages.map((m, i) => ({ id: `m-${i}`, ...m })));
       setLastIsBlank(saved.messages.some((m) => m.isBlank));
-      setJustSaved(true);
-      setTimeout(() => setJustSaved(false), 1500);
+      flashJustSaved();
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : String(err));
     } finally {

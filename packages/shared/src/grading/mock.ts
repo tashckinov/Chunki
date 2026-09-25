@@ -1,13 +1,16 @@
 import { READING_QUESTIONS } from '../content.js';
 import type {
+  ExerciseItem,
   ExercisesGradeResult,
   ExercisesSubmission,
   GradeDetail,
   GradingProvider,
   PlacementGradeResult,
   PlacementTestSubmission,
+  TopicStudyContent,
+  TopicSuggestion,
 } from '../types.js';
-import { scoreExerciseChoices, scoreMcq, writeItemsOf } from './scoring.js';
+import { scoreMcq } from './scoring.js';
 
 /**
  * Deterministic, no-network grader. Used for local dev/tests and for the static
@@ -46,6 +49,24 @@ function gradeFreeText(answer: string, minWords: number): GradeDetail {
   };
 }
 
+/** Deterministic pool the mock provider draws "AI-discovered" topics from —
+ * a real provider would invent these freely, this is just enough variety to
+ * exercise the whole flow (program list, study, exercises) without a key. */
+const MOCK_TOPIC_POOL: TopicSuggestion[] = [
+  { key: 'articles', title: 'Артикли: a / the / нулевой', category: 'Грамматика', rationale: 'В открытых ответах артикли часто пропущены или лишние.' },
+  { key: 'present-perfect', title: 'Present Perfect vs Past Simple', category: 'Грамматика', rationale: 'Past Simple используется там, где нужен Present Perfect.' },
+  { key: 'word-order', title: 'Порядок слов и наречия частоты', category: 'Использование языка', rationale: 'Наречия частоты стоят не на своём месте в предложении.' },
+  { key: 'conditionals-2', title: 'Второй тип условных', category: 'Грамматика', rationale: 'Условные конструкции второго типа вызывают ошибки.' },
+  { key: 'modals', title: 'Модальные глаголы вероятности', category: 'Грамматика', rationale: 'Модальные глаголы для вероятности путаются между собой.' },
+  { key: 'chunks-opinion', title: 'Chunks: мнение и согласие', category: 'Лексика', rationale: 'Не хватает устойчивых фраз для выражения мнения.' },
+  { key: 'writing-informal', title: 'Письмо: неформальное сообщение', category: 'Письмо', rationale: 'Письменная речь звучит слишком формально для неформального контекста.' },
+  { key: 'reading-long', title: 'Reading: длинный текст на время', category: 'Понимание', rationale: 'Понимание текста замедляется на длинных пассажах.' },
+];
+
+function pickTopics(count: number, seed: number): TopicSuggestion[] {
+  return Array.from({ length: Math.min(count, MOCK_TOPIC_POOL.length) }, (_, i) => MOCK_TOPIC_POOL[(seed + i) % MOCK_TOPIC_POOL.length]);
+}
+
 export class MockGradingProvider implements GradingProvider {
   name = 'mock';
 
@@ -79,38 +100,55 @@ export class MockGradingProvider implements GradingProvider {
       mcqScore,
       openGrades,
       essayGrade,
-      weakTopicKeys: grammarScore < 0.6 ? ['articles', 'conditionals'] : [],
+      topics: pickTopics(MOCK_TOPIC_POOL.length, mcqScore.correct),
     };
   }
 
   async gradeExercises(input: ExercisesSubmission): Promise<ExercisesGradeResult> {
-    const choiceScores = scoreExerciseChoices(input);
-    const writeItems = writeItemsOf(input);
-    const writeGrades = writeItems.map((w) => ({ ...w, grade: gradeFreeText(w.answer, 12) }));
+    let correct = 0;
+    let total = 0;
+    const writeGrades: GradeDetail[] = [];
 
-    const blockScores = choiceScores.map((cs) => {
-      const writesInBlock = writeGrades.filter((w) => w.blockKey === cs.blockKey);
-      const writeCorrect = writesInBlock.reduce((sum, w) => sum + w.grade.score, 0);
-      const writeTotal = writesInBlock.length;
-      return {
-        label: labelForBlock(cs.blockKey),
-        correct: cs.correct + writeCorrect,
-        total: cs.total + writeTotal,
-      };
+    input.items.forEach((item, i) => {
+      const answer = input.answers[i] ?? '';
+      if (item.type === 'choice') {
+        total += 1;
+        if (answer === item.answer) correct += 1;
+      } else {
+        const grade = gradeFreeText(answer, 8);
+        writeGrades.push(grade);
+        total += 1;
+        correct += grade.score;
+      }
     });
 
-    const totalCorrect = blockScores.reduce((s, b) => s + b.correct, 0);
-    const totalPossible = blockScores.reduce((s, b) => s + b.total, 0) || 1;
-    const scoreOutOf10 = Math.round((totalCorrect / totalPossible) * 10);
+    const scoreOutOf10 = total > 0 ? Math.round((correct / total) * 10) : 0;
 
     return {
       scoreOutOf10,
+      passed: scoreOutOf10 >= 7,
       verdictLabel: verdictFor(scoreOutOf10),
-      blockScores,
       notes: ['Мок-проверка: качественные заметки появятся при использовании LLM-провайдера.'],
-      weakTopicKeys: scoreOutOf10 < 7 ? ['articles'] : [],
+      discoveredTopics: scoreOutOf10 < 6 ? pickTopics(1, input.topic.key.length) : [],
       nextReviewInDays: 3,
     };
+  }
+
+  async generateTopicStudy(topic: TopicSuggestion): Promise<TopicStudyContent> {
+    return {
+      explanation: `${topic.title} — мок-материал. ${topic.rationale} Для реального объяснения подключите провайдера LLM.`,
+      keyPoints: ['Ключевой момент 1 (мок)', 'Ключевой момент 2 (мок)', 'Ключевой момент 3 (мок)'],
+      contrastExamples: [{ wrong: 'Пример с ошибкой (мок).', right: 'Правильный вариант (мок).' }],
+      exampleChunks: ['example chunk one', 'example chunk two'],
+    };
+  }
+
+  async generateTopicExercises(topic: TopicSuggestion): Promise<ExerciseItem[]> {
+    return [
+      { type: 'choice', q: `[Мок] Вопрос по теме «${topic.title}» — вариант 1`, options: ['A', 'B', 'C'], answer: 'A' },
+      { type: 'choice', q: `[Мок] Вопрос по теме «${topic.title}» — вариант 2`, options: ['A', 'B', 'C'], answer: 'B' },
+      { type: 'write', q: `[Мок] Напиши предложение, используя «${topic.title}».`, rows: 2, placeholder: 'Your answer' },
+    ];
   }
 }
 
@@ -128,14 +166,4 @@ function verdictFor(scoreOutOf10: number): string {
   if (scoreOutOf10 >= 7) return 'Хорошо';
   if (scoreOutOf10 >= 5) return 'Неплохо';
   return 'Стоит повторить';
-}
-
-function labelForBlock(blockKey: string): string {
-  const map: Record<string, string> = {
-    comprehension: 'Понимание',
-    grammar: 'Грамматика',
-    'use-of-english': 'Use of English',
-    writing: 'Письмо',
-  };
-  return map[blockKey] ?? blockKey;
 }

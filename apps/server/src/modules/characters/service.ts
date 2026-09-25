@@ -1,6 +1,7 @@
 import {
   listCharacters as repoListCharacters,
   findCharacterById as repoFindCharacterById,
+  findCharacterImageById as repoFindCharacterImageById,
   createCharacter as repoCreateCharacter,
   updateCharacter as repoUpdateCharacter,
   deleteCharacter as repoDeleteCharacter,
@@ -15,6 +16,7 @@ import {
   type CharacterImagePatch,
 } from './repository.js';
 import { findChunksUsingCharacter as findChunksUsingCharacterDialogues, type ChunkUsingCharacter } from '../dialogues/service.js';
+import { deleteUploadedFile } from '../../config/uploads.js';
 
 export interface CharacterImageSummary {
   id: string;
@@ -66,13 +68,23 @@ export async function createCharacter(name: string): Promise<CharacterSummary> {
 }
 
 export async function updateCharacter(id: string, patch: CharacterPatch): Promise<CharacterResult> {
+  // Fetched before the update so a replaced full-body image's old file can
+  // be cleaned up afterward — it would otherwise sit on disk forever.
+  const previous = patch.fullBodyImageUrl !== undefined ? await repoFindCharacterById(id) : null;
+
   const row = await repoUpdateCharacter(id, patch);
   if (!row) return { kind: 'not_found' };
+
+  const oldUrl = previous?.character.full_body_image_url;
+  if (oldUrl && oldUrl !== patch.fullBodyImageUrl) void deleteUploadedFile(oldUrl);
+
   return findCharacter(id);
 }
 
 export async function deleteCharacter(id: string): Promise<boolean> {
-  return repoDeleteCharacter(id);
+  const { deleted, imageUrls } = await repoDeleteCharacter(id);
+  for (const url of imageUrls) void deleteUploadedFile(url);
+  return deleted;
 }
 
 export async function addCharacterImage(characterId: string, input: { emotion: string; imageUrl: string; description?: string | null }): Promise<CharacterImageSummary> {
@@ -91,7 +103,12 @@ export async function reorderCharacterImages(characterId: string, emotion: strin
 export type DeleteImageResult = 'ok' | 'not_found' | 'in_use';
 
 export async function deleteCharacterImage(id: string): Promise<DeleteImageResult> {
-  return repoDeleteCharacterImage(id);
+  // Fetched before the delete — once the row is gone there's no way to
+  // recover which file it pointed at.
+  const existing = await repoFindCharacterImageById(id);
+  const result = await repoDeleteCharacterImage(id);
+  if (result === 'ok' && existing) void deleteUploadedFile(existing.image_url);
+  return result;
 }
 
 export async function findChunksUsingCharacter(characterId: string): Promise<ChunkUsingCharacter[]> {

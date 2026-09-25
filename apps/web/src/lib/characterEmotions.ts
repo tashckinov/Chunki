@@ -8,7 +8,7 @@ export const EMOTION_LABELS: Record<string, string> = {
   neutral: 'Neutral',
   annoyed: 'Annoyed',
 };
-export const EMOTION_SUGGESTIONS = ['happy', 'laughing', 'confused', 'surprised', 'neutral', 'annoyed'];
+export const EMOTION_SUGGESTIONS = Object.keys(EMOTION_LABELS);
 
 export function emotionLabel(emotion: string): string {
   return EMOTION_LABELS[emotion] ?? emotion;

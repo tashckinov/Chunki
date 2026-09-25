@@ -62,6 +62,16 @@ services:
       PRODUCTION_JUDGE_PROVIDER: ${PRODUCTION_JUDGE_PROVIDER:-}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       OPENROUTER_MODEL: ${OPENROUTER_MODEL:-}
+      # Subscription payments via Lava.top — same optional/auto-select shape
+      # as the providers above; see apps/server/README.md's "Payments
+      # (Lava.top)" section for how to get these values.
+      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-}
+      LAVA_TOP_API_KEY: ${LAVA_TOP_API_KEY:-}
+      LAVA_TOP_BASE_URL: ${LAVA_TOP_BASE_URL:-}
+      LAVA_TOP_OFFER_ID_MONTHLY: ${LAVA_TOP_OFFER_ID_MONTHLY:-}
+      LAVA_TOP_OFFER_ID_YEARLY: ${LAVA_TOP_OFFER_ID_YEARLY:-}
+      LAVA_TOP_WEBHOOK_LOGIN: ${LAVA_TOP_WEBHOOK_LOGIN:-}
+      LAVA_TOP_WEBHOOK_PASSWORD: ${LAVA_TOP_WEBHOOK_PASSWORD:-}
     ports:
       - '${PORT:-8787}:8787'
     healthcheck:

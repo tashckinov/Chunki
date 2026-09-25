@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { FREE_PRODUCTION_CHECKS_LIMIT } from '@app/shared';
 import { useAppStore } from '../store/appStore';
 import type { ProductionVerdict } from '../lib/progress';
 import { deckTallyView } from '../store/derived';
 import { plural } from '../lib/plural';
 import { Button } from '../components/ui/Button';
 import { Spinner } from '../components/ui/Spinner';
+import { useCheckout } from '../lib/payments';
 
 const VERDICT_COPY: Record<string, { label: string; className: string }> = {
   chunk_used: { label: 'Использовали фразу', className: 'text-positive' },
@@ -50,11 +51,12 @@ export function DeckDoneScreen() {
     productionLimitReached,
     activeDeckChunks,
     goCardsLib,
+    plan,
   } = useAppStore();
   const tally = deckTallyView(sessionVerdicts);
   const productionEntries = Object.entries(sessionProductionResults);
   const pendingCount = Object.keys(sessionProductionPending).length;
-  const [subscribeStub, setSubscribeStub] = useState(false);
+  const { checkingOut, checkoutError, subscribe } = useCheckout(plan);
 
   return (
     <div className="flex-1 min-h-0 px-5 py-8 flex flex-col gap-8 anim-rise overflow-y-auto scroll-clean">
@@ -91,15 +93,12 @@ export function DeckDoneScreen() {
         <div className="rounded-[var(--radius-md)] bg-accent-subtle p-4 flex flex-col gap-2.5">
           <div className="text-[14.5px] font-semibold">Бесплатные проверки закончились</div>
           <div className="text-body-secondary text-[13.5px]">
-            На бесплатном тарифе доступно 3 проверки предложений. Хотите больше? Оформите подписку.
+            На бесплатном тарифе доступно {FREE_PRODUCTION_CHECKS_LIMIT} {plural(FREE_PRODUCTION_CHECKS_LIMIT, 'проверка', 'проверки', 'проверок')} предложений. Хотите больше? Оформите подписку.
           </div>
-          {subscribeStub ? (
-            <div className="text-negative text-[13.5px]">Извините, не получилось. Подписка пока не доступна.</div>
-          ) : (
-            <Button size="sm" onClick={() => setSubscribeStub(true)}>
-              Оформить подписку
-            </Button>
-          )}
+          {checkoutError && <div className="text-negative text-[13.5px]">{checkoutError}</div>}
+          <Button size="sm" onClick={subscribe} disabled={checkingOut}>
+            {checkingOut ? 'Переходим к оплате…' : 'Оформить подписку'}
+          </Button>
         </div>
       )}
 
