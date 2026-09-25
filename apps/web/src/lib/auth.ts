@@ -107,23 +107,35 @@ export async function logout(): Promise<void> {
   setStoredToken(null);
 }
 
-async function postJson<T>(path: string, body?: unknown): Promise<T> {
+async function postJson<T>(path: string, body?: unknown, extraHeaders?: HeadersInit): Promise<T> {
   const res = await fetch(apiUrl(path), {
     method: 'POST',
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...extraHeaders },
     body: JSON.stringify(body ?? {}),
   });
   if (!res.ok) throw new Error(`POST ${path} failed: ${res.status}`);
   return res.json() as Promise<T>;
 }
 
+// Same cross-site-cookie problem session.ts's bearer-token fallback exists
+// for: the frontend (GitHub Pages) and backend are different sites, so the
+// short-lived challenge cookie the options call sets can get dropped before
+// the matching verify call. The options response also hands back a signed
+// challengeToken; resending it as a plain header (not a cookie) survives
+// that blocking, so the verify call works whether or not the cookie did.
+const CHALLENGE_HEADER_NAME = 'X-Webauthn-Challenge';
+
 /** Registers a brand-new passkey/account on this device and logs the user in. */
 export async function registerPasskey(): Promise<AuthUser> {
   const { startRegistration } = await import('@simplewebauthn/browser');
-  const { options } = await postJson<{ options: PublicKeyCredentialCreationOptionsJSON }>('/api/auth/webauthn/register/options');
+  const { options, challengeToken } = await postJson<{ options: PublicKeyCredentialCreationOptionsJSON; challengeToken: string }>(
+    '/api/auth/webauthn/register/options',
+  );
   const attestation = await startRegistration({ optionsJSON: options });
-  const { token, user } = await postJson<{ token: string; user: AuthUser }>('/api/auth/webauthn/register/verify', attestation);
+  const { token, user } = await postJson<{ token: string; user: AuthUser }>('/api/auth/webauthn/register/verify', attestation, {
+    [CHALLENGE_HEADER_NAME]: challengeToken,
+  });
   applyAuthToken(token);
   markPasskeyRegistered();
   return user;
@@ -132,9 +144,13 @@ export async function registerPasskey(): Promise<AuthUser> {
 /** Authenticates with an existing passkey on this device — usernameless, the OS picks the credential. */
 export async function authenticatePasskey(): Promise<AuthUser> {
   const { startAuthentication } = await import('@simplewebauthn/browser');
-  const { options } = await postJson<{ options: PublicKeyCredentialRequestOptionsJSON }>('/api/auth/webauthn/login/options');
+  const { options, challengeToken } = await postJson<{ options: PublicKeyCredentialRequestOptionsJSON; challengeToken: string }>(
+    '/api/auth/webauthn/login/options',
+  );
   const assertion = await startAuthentication({ optionsJSON: options });
-  const { token, user } = await postJson<{ token: string; user: AuthUser }>('/api/auth/webauthn/login/verify', assertion);
+  const { token, user } = await postJson<{ token: string; user: AuthUser }>('/api/auth/webauthn/login/verify', assertion, {
+    [CHALLENGE_HEADER_NAME]: challengeToken,
+  });
   applyAuthToken(token);
   return user;
 }
