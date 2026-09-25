@@ -5,7 +5,6 @@ import { deckTallyView } from '../store/derived';
 import { plural } from '../lib/plural';
 import { Button } from '../components/ui/Button';
 import { Spinner } from '../components/ui/Spinner';
-import { useCheckout } from '../lib/payments';
 
 const VERDICT_COPY: Record<string, { label: string; className: string }> = {
   chunk_used: { label: 'Использовали фразу', className: 'text-positive' },
@@ -51,12 +50,11 @@ export function DeckDoneScreen() {
     productionLimitReached,
     activeDeckChunks,
     goCardsLib,
-    plan,
+    go,
   } = useAppStore();
   const tally = deckTallyView(sessionVerdicts);
   const productionEntries = Object.entries(sessionProductionResults);
   const pendingCount = Object.keys(sessionProductionPending).length;
-  const { checkingOut, checkoutError, subscribe } = useCheckout(plan);
 
   return (
     <div className="flex-1 min-h-0 px-5 py-8 flex flex-col gap-8 anim-rise overflow-y-auto scroll-clean">
@@ -95,9 +93,8 @@ export function DeckDoneScreen() {
           <div className="text-body-secondary text-[13.5px]">
             На бесплатном тарифе доступно {FREE_PRODUCTION_CHECKS_LIMIT} {plural(FREE_PRODUCTION_CHECKS_LIMIT, 'проверка', 'проверки', 'проверок')} предложений. Хотите больше? Оформите подписку.
           </div>
-          {checkoutError && <div className="text-negative text-[13.5px]">{checkoutError}</div>}
-          <Button size="sm" onClick={subscribe} disabled={checkingOut}>
-            {checkingOut ? 'Переходим к оплате…' : 'Оформить подписку'}
+          <Button size="sm" onClick={() => go('checkout')}>
+            Оформить подписку
           </Button>
         </div>
       )}

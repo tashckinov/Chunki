@@ -1,12 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import type { Env } from '../../config/env.js';
-import { LavaTopClient, type LavaTopCurrency, type LavaTopPeriodicity } from './lavaTopClient.js';
+import { LavaTopClient, type LavaTopPeriodicity } from './lavaTopClient.js';
 
 export type Plan = 'monthly' | 'yearly';
+export type Currency = 'USD' | 'EUR';
 
 export interface CheckoutInput {
   email: string;
   plan: Plan;
+  currency: Currency;
 }
 
 export interface CheckoutOutput {
@@ -23,24 +25,29 @@ export interface PaymentProvider {
 
 const PERIODICITY_BY_PLAN: Record<Plan, LavaTopPeriodicity> = { monthly: 'MONTHLY', yearly: 'PERIOD_YEAR' };
 
+type OfferEnv = 'LAVA_TOP_OFFER_ID_MONTHLY_USD' | 'LAVA_TOP_OFFER_ID_MONTHLY_EUR' | 'LAVA_TOP_OFFER_ID_YEARLY_USD' | 'LAVA_TOP_OFFER_ID_YEARLY_EUR';
+
 export class LavaTopPaymentProvider implements PaymentProvider {
   name = 'lava_top';
 
   #client: LavaTopClient;
-  #offerIdByPlan: Record<Plan, string | undefined>;
-  #currency: LavaTopCurrency;
+  #offerIdByPlanCurrency: Record<Plan, Record<Currency, string | undefined>>;
 
-  constructor(env: Pick<Env, 'LAVA_TOP_API_KEY' | 'LAVA_TOP_BASE_URL' | 'LAVA_TOP_CURRENCY' | 'LAVA_TOP_OFFER_ID_MONTHLY' | 'LAVA_TOP_OFFER_ID_YEARLY'>) {
+  constructor(env: Pick<Env, 'LAVA_TOP_API_KEY' | 'LAVA_TOP_BASE_URL' | OfferEnv>) {
     if (!env.LAVA_TOP_API_KEY) throw new Error('LAVA_TOP_API_KEY is not set — required for the lava_top payment provider.');
     this.#client = new LavaTopClient(env.LAVA_TOP_API_KEY, env.LAVA_TOP_BASE_URL);
-    this.#offerIdByPlan = { monthly: env.LAVA_TOP_OFFER_ID_MONTHLY, yearly: env.LAVA_TOP_OFFER_ID_YEARLY };
-    this.#currency = env.LAVA_TOP_CURRENCY;
+    this.#offerIdByPlanCurrency = {
+      monthly: { USD: env.LAVA_TOP_OFFER_ID_MONTHLY_USD, EUR: env.LAVA_TOP_OFFER_ID_MONTHLY_EUR },
+      yearly: { USD: env.LAVA_TOP_OFFER_ID_YEARLY_USD, EUR: env.LAVA_TOP_OFFER_ID_YEARLY_EUR },
+    };
   }
 
-  async createCheckout({ email, plan }: CheckoutInput): Promise<CheckoutOutput> {
-    const offerId = this.#offerIdByPlan[plan];
-    if (!offerId) throw new Error(`LAVA_TOP_OFFER_ID_${plan.toUpperCase()} is not set — required to sell the "${plan}" plan via Lava.top.`);
-    const invoice = await this.#client.createInvoice({ email, offerId, currency: this.#currency, periodicity: PERIODICITY_BY_PLAN[plan] });
+  async createCheckout({ email, plan, currency }: CheckoutInput): Promise<CheckoutOutput> {
+    const offerId = this.#offerIdByPlanCurrency[plan][currency];
+    if (!offerId) {
+      throw new Error(`LAVA_TOP_OFFER_ID_${plan.toUpperCase()}_${currency} is not set — required to sell the "${plan}" plan in ${currency} via Lava.top.`);
+    }
+    const invoice = await this.#client.createInvoice({ email, offerId, currency, periodicity: PERIODICITY_BY_PLAN[plan] });
     return { externalId: invoice.id, paymentUrl: invoice.paymentUrl };
   }
 }

@@ -6,7 +6,11 @@ import { loadEnv } from '../../config/env.js';
 import { requireAuthenticatedSession } from '../auth/requireAuth.js';
 import { createCheckoutForUser, getAccountPaymentStatus, handleLavaTopWebhook } from './service.js';
 
-const checkoutBodySchema = z.object({ plan: z.enum(['monthly', 'yearly']) });
+const checkoutBodySchema = z.object({
+  plan: z.enum(['monthly', 'yearly']),
+  currency: z.enum(['USD', 'EUR']),
+  email: z.string().email().max(255),
+});
 
 /** HTTP Basic auth, checked against LAVA_TOP_WEBHOOK_LOGIN/PASSWORD — configured to match in Lava.top's dashboard under Интеграции → Webhook. Not the same secret as LAVA_TOP_API_KEY, which is this app's own outbound credential. */
 function verifyLavaTopWebhookAuth(header: string | undefined): boolean {
@@ -56,17 +60,13 @@ export const paymentsRoutes: FastifyPluginAsync = async (app) => {
 
       let result;
       try {
-        result = await createCheckoutForUser(request.session!.userId, request.session!.email, parsed.data.plan);
+        result = await createCheckoutForUser(request.session!.userId, parsed.data.email, parsed.data.plan, parsed.data.currency);
       } catch (err) {
         request.log.error({ message: err instanceof Error ? err.message : String(err) }, 'payment checkout creation failed');
         reply.code(502);
         return { error: 'provider_unavailable' };
       }
 
-      if (result.kind === 'no_email') {
-        reply.code(409);
-        return { error: 'no_email' };
-      }
       return { paymentUrl: result.paymentUrl };
     },
   );
