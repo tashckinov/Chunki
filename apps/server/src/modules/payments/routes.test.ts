@@ -63,7 +63,7 @@ describe('POST /api/payments/checkout', () => {
       method: 'POST',
       url: '/api/payments/checkout',
       cookies: authCookie,
-      payload: { plan: 'monthly', currency: 'RUB', email: 'person@example.com' },
+      payload: { plan: 'monthly', currency: 'GBP', email: 'person@example.com' },
     });
     expect(res.statusCode).toBe(400);
     expect(service.createCheckoutForUser).not.toHaveBeenCalled();

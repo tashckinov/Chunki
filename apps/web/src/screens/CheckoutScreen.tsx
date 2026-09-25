@@ -55,6 +55,7 @@ export function CheckoutScreen() {
             options={[
               { value: 'USD' as const, label: CURRENCIES.USD.symbol + ' USD' },
               { value: 'EUR' as const, label: CURRENCIES.EUR.symbol + ' EUR' },
+              { value: 'RUB' as const, label: CURRENCIES.RUB.symbol + ' RUB' },
             ]}
             value={currency}
             onChange={setCurrency}

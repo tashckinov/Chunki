@@ -56,10 +56,10 @@ const envSchema = z.object({
 
   // Subscription payments via Lava.top — same optional explicit-override /
   // auto-select-when-a-key-is-present shape as the providers above (see
-  // modules/payments/index.ts). The learner picks both plan and currency at
-  // checkout time, so there's one offer id per (plan, currency) pair — four
-  // offers total, each configured separately in Lava.top's dashboard (not
-  // something this app can create via API).
+  // modules/payments/index.ts). One offer id per plan: a Lava.top Offer
+  // already carries a price in every currency it's configured for (USD/EUR/
+  // RUB), so `currency` is just a parameter on the invoice call, not a
+  // separate Offer to create.
   PAYMENT_PROVIDER: z.preprocess(emptyToUndefined, z.enum(['mock', 'lava_top']).optional()),
   LAVA_TOP_API_KEY: z.string().optional(),
   // preprocess needed here (unlike the plain .optional() strings around it)
@@ -67,10 +67,8 @@ const envSchema = z.object({
   // — an empty string (what an unset var arrives as via docker-compose)
   // would otherwise fail .url() validation instead of falling through to it.
   LAVA_TOP_BASE_URL: z.preprocess(emptyToUndefined, z.string().url().default('https://gate.lava.top')),
-  LAVA_TOP_OFFER_ID_MONTHLY_USD: z.preprocess(offerIdFromUrlOrId, z.string().optional()),
-  LAVA_TOP_OFFER_ID_MONTHLY_EUR: z.preprocess(offerIdFromUrlOrId, z.string().optional()),
-  LAVA_TOP_OFFER_ID_YEARLY_USD: z.preprocess(offerIdFromUrlOrId, z.string().optional()),
-  LAVA_TOP_OFFER_ID_YEARLY_EUR: z.preprocess(offerIdFromUrlOrId, z.string().optional()),
+  LAVA_TOP_OFFER_ID_MONTHLY: z.preprocess(offerIdFromUrlOrId, z.string().optional()),
+  LAVA_TOP_OFFER_ID_YEARLY: z.preprocess(offerIdFromUrlOrId, z.string().optional()),
   // Verifies inbound webhook calls (HTTP Basic auth, configured to match in
   // Lava.top's dashboard under Интеграции → Webhook) — not the same secret
   // as LAVA_TOP_API_KEY, which is used for this app's outbound calls.

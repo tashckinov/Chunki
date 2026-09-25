@@ -221,15 +221,15 @@ locally without any Lava.top account at all.
 
 To go live:
 
-1. The checkout screen lets the learner pick both plan and currency, so in your Lava.top
-   dashboard, create **one product** for Chunki premium with **four offers** — every combination
-   of monthly/yearly (periodicity `MONTHLY`/`PERIOD_YEAR`) × USD/EUR. For each offer, paste
-   whatever Lava.top gives you to copy — either the bare `offerId` or the full link
-   (`https://app.lava.top/products/<productId>/<offerId>`) — into
-   `LAVA_TOP_OFFER_ID_MONTHLY_USD`/`LAVA_TOP_OFFER_ID_MONTHLY_EUR`/`LAVA_TOP_OFFER_ID_YEARLY_USD`/
-   `LAVA_TOP_OFFER_ID_YEARLY_EUR`; the server extracts the id from a link automatically. A
-   currency the learner picks whose offer isn't configured fails checkout with a 502 — leaving one
-   unset is fine only if you're intentionally not selling that currency yet.
+1. In your Lava.top dashboard, create **one product** for Chunki premium with **two offers**:
+   monthly (periodicity `MONTHLY`) and yearly (periodicity `PERIOD_YEAR`) — matching the two
+   plans in the checkout stepper. Each Offer's own price fields already cover USD/EUR/RUB (set all
+   three there), which is what lets the checkout stepper's currency step work without a separate
+   Offer per currency — the `currency` the learner picks is just passed through on the invoice
+   call. For each offer, paste whatever Lava.top gives you to copy — either the bare `offerId` or
+   the full link (`https://app.lava.top/products/<productId>/<offerId>`) — into
+   `LAVA_TOP_OFFER_ID_MONTHLY`/`LAVA_TOP_OFFER_ID_YEARLY`; the server extracts the id from a link
+   automatically.
 2. Copy your API key into `LAVA_TOP_API_KEY` (`LAVA_TOP_BASE_URL` defaults to
    `https://gate.lava.top` — only override it if Lava.top gives you a different gateway host).
 3. Under **Интеграции → Webhook**, point the webhook at
