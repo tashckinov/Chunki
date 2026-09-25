@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { FREE_PRODUCTION_CHECKS_LIMIT } from '@app/shared';
 import { useAppStore } from '../store/appStore';
 import type { ProductionVerdict } from '../lib/progress';
@@ -6,7 +5,7 @@ import { deckTallyView } from '../store/derived';
 import { plural } from '../lib/plural';
 import { Button } from '../components/ui/Button';
 import { Spinner } from '../components/ui/Spinner';
-import { createCheckout } from '../lib/payments';
+import { useCheckout } from '../lib/payments';
 
 const VERDICT_COPY: Record<string, { label: string; className: string }> = {
   chunk_used: { label: 'Использовали фразу', className: 'text-positive' },
@@ -57,20 +56,7 @@ export function DeckDoneScreen() {
   const tally = deckTallyView(sessionVerdicts);
   const productionEntries = Object.entries(sessionProductionResults);
   const pendingCount = Object.keys(sessionProductionPending).length;
-  const [checkingOut, setCheckingOut] = useState(false);
-  const [checkoutError, setCheckoutError] = useState<string | null>(null);
-
-  async function handleSubscribe() {
-    setCheckingOut(true);
-    setCheckoutError(null);
-    try {
-      const { paymentUrl } = await createCheckout(plan);
-      window.location.href = paymentUrl;
-    } catch {
-      setCheckoutError('Не удалось начать оплату. Попробуйте позже.');
-      setCheckingOut(false);
-    }
-  }
+  const { checkingOut, checkoutError, subscribe } = useCheckout(plan);
 
   return (
     <div className="flex-1 min-h-0 px-5 py-8 flex flex-col gap-8 anim-rise overflow-y-auto scroll-clean">
@@ -110,7 +96,7 @@ export function DeckDoneScreen() {
             На бесплатном тарифе доступно {FREE_PRODUCTION_CHECKS_LIMIT} {plural(FREE_PRODUCTION_CHECKS_LIMIT, 'проверка', 'проверки', 'проверок')} предложений. Хотите больше? Оформите подписку.
           </div>
           {checkoutError && <div className="text-negative text-[13.5px]">{checkoutError}</div>}
-          <Button size="sm" onClick={handleSubscribe} disabled={checkingOut}>
+          <Button size="sm" onClick={subscribe} disabled={checkingOut}>
             {checkingOut ? 'Переходим к оплате…' : 'Оформить подписку'}
           </Button>
         </div>

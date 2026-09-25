@@ -5,6 +5,7 @@ import { NavigationBar } from '../../components/ui/NavigationBar';
 import { Button } from '../../components/ui/Button';
 import { IconButton } from '../../components/ui/IconButton';
 import { Textarea } from '../../components/ui/Textarea';
+import { useTimedFlag } from '../../lib/timedFlag';
 
 function StatusBadge({ ok, readyLabel, missingLabel }: { ok: boolean; readyLabel: string; missingLabel: string }) {
   return (
@@ -61,7 +62,7 @@ export function ChunkDetailView({
   const [situationDraft, setSituationDraft] = useState<SituationPrompt[]>(chunk.situationPrompts);
   const [savingSituations, setSavingSituations] = useState(false);
   const [situationsSaveError, setSituationsSaveError] = useState<string | null>(null);
-  const [situationsJustSaved, setSituationsJustSaved] = useState(false);
+  const [situationsJustSaved, flashSituationsJustSaved] = useTimedFlag();
 
   // Keyed on chunk.id (not the chunk object) — the parent re-looks-up chunk
   // from its list state on every render, so a naive [chunk] dependency
@@ -75,8 +76,7 @@ export function ChunkDetailView({
     setSituationsSaveError(null);
     try {
       await onSaveSituationPrompts(situationDraft);
-      setSituationsJustSaved(true);
-      setTimeout(() => setSituationsJustSaved(false), 1500);
+      flashSituationsJustSaved();
     } catch (err) {
       setSituationsSaveError(err instanceof Error ? err.message : String(err));
     } finally {

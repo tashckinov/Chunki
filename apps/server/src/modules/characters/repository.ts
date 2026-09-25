@@ -1,4 +1,5 @@
 import { pool } from '../../db/pool.js';
+import { buildValuesClause } from '../../db/bulkInsert.js';
 
 export interface CharacterRow {
   id: string;
@@ -179,12 +180,15 @@ export async function updateCharacterImage(id: string, patch: CharacterImagePatc
 
 /** Persists a drag-reorder within one (character, emotion) group — sets position to each id's index in the given order. */
 export async function reorderCharacterImages(characterId: string, emotion: string, imageIds: string[]): Promise<void> {
-  for (let i = 0; i < imageIds.length; i++) {
-    await pool.query(
-      `UPDATE character_images SET position = $3 WHERE id = $1 AND character_id = $2`,
-      [imageIds[i], characterId, i],
-    );
-  }
+  const rows = buildValuesClause(imageIds.map((id, i) => [characterId, id, i]));
+  if (!rows) return;
+  await pool.query(
+    `UPDATE character_images AS ci
+     SET position = v.position
+     FROM (VALUES ${rows.placeholders}) AS v(character_id, id, position)
+     WHERE ci.id = v.id::uuid AND ci.character_id = v.character_id::uuid`,
+    rows.values,
+  );
 }
 
 export async function findCharacterImageById(id: string): Promise<CharacterImageRow | null> {

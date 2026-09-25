@@ -1,8 +1,7 @@
 import { useAppStore } from '../store/appStore';
+import { formatDayMonth } from '../lib/schedule';
 import { CircularProgress } from '../components/ui/Progress';
 import { Button } from '../components/ui/Button';
-
-const MONTHS = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
 
 export function TopicResultScreen() {
   const s = useAppStore();
@@ -22,7 +21,7 @@ export function TopicResultScreen() {
   }
 
   const reviewDate = topic.status === 'passed_once' && topic.nextReviewAt ? new Date(topic.nextReviewAt) : null;
-  const reviewLabel = reviewDate ? `${reviewDate.getDate()} ${MONTHS[reviewDate.getMonth()]}` : null;
+  const reviewLabel = reviewDate ? formatDayMonth(reviewDate) : null;
 
   return (
     <div className="scroll-clean flex-1 min-h-0 px-5 pt-4 pb-8 flex flex-col gap-8 anim-rise">

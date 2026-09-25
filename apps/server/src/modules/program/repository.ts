@@ -1,5 +1,6 @@
 import type { TopicCategory, TopicSuggestion } from '@app/shared';
 import { pool } from '../../db/pool.js';
+import { buildValuesClause } from '../../db/bulkInsert.js';
 
 export type UserTopicStatus = 'assigned' | 'passed_once' | 'mastered';
 export type UserTopicSource = 'placement' | 'discovered';
@@ -71,17 +72,15 @@ export async function createPlacementTest(input: NewPlacementTest): Promise<void
  * against an existing (possibly already-mastered) topic. Returns only the
  * rows that were actually newly inserted. */
 export async function insertNewUserTopics(userId: string, topics: TopicSuggestion[], source: UserTopicSource): Promise<UserTopicRow[]> {
-  const inserted: UserTopicRow[] = [];
-  for (const topic of topics) {
-    const { rows } = await pool.query<UserTopicRow>(
-      `INSERT INTO user_topics (user_id, key, title, category, rationale, source)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (user_id, key) DO NOTHING
-       RETURNING *`,
-      [userId, topic.key, topic.title, topic.category, topic.rationale, source],
-    );
-    if (rows[0]) inserted.push(rows[0]);
-  }
+  const rows = buildValuesClause(topics.map((topic) => [userId, topic.key, topic.title, topic.category, topic.rationale, source]));
+  if (!rows) return [];
+  const { rows: inserted } = await pool.query<UserTopicRow>(
+    `INSERT INTO user_topics (user_id, key, title, category, rationale, source)
+     VALUES ${rows.placeholders}
+     ON CONFLICT (user_id, key) DO NOTHING
+     RETURNING *`,
+    rows.values,
+  );
   return inserted;
 }
 

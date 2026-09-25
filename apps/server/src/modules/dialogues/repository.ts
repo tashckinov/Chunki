@@ -1,5 +1,6 @@
 import pg from 'pg';
 import { pool } from '../../db/pool.js';
+import { buildValuesClause } from '../../db/bulkInsert.js';
 
 /**
  * A chunk has at most one dialogue per kind: 'browse' is the passive comic
@@ -76,16 +77,17 @@ export async function saveDialogue(chunkId: string, kind: DialogueKind, input: D
     const dialogueId = rows[0].id;
 
     await client.query(`DELETE FROM chunk_dialogue_participants WHERE dialogue_id = $1`, [dialogueId]);
-    for (const p of input.participants) {
-      await client.query(`INSERT INTO chunk_dialogue_participants (dialogue_id, character_id, side) VALUES ($1, $2, $3)`, [dialogueId, p.characterId, p.side]);
+    const participantRows = buildValuesClause(input.participants.map((p) => [dialogueId, p.characterId, p.side]));
+    if (participantRows) {
+      await client.query(`INSERT INTO chunk_dialogue_participants (dialogue_id, character_id, side) VALUES ${participantRows.placeholders}`, participantRows.values);
     }
 
     await client.query(`DELETE FROM chunk_dialogue_messages WHERE dialogue_id = $1`, [dialogueId]);
-    for (let i = 0; i < input.messages.length; i++) {
-      const m = input.messages[i];
+    const messageRows = buildValuesClause(input.messages.map((m, i) => [dialogueId, m.characterId, m.characterImageId, m.text, i, !!m.isBlank]));
+    if (messageRows) {
       await client.query(
-        `INSERT INTO chunk_dialogue_messages (dialogue_id, character_id, character_image_id, text, position, is_blank) VALUES ($1, $2, $3, $4, $5, $6)`,
-        [dialogueId, m.characterId, m.characterImageId, m.text, i, !!m.isBlank],
+        `INSERT INTO chunk_dialogue_messages (dialogue_id, character_id, character_image_id, text, position, is_blank) VALUES ${messageRows.placeholders}`,
+        messageRows.values,
       );
     }
 

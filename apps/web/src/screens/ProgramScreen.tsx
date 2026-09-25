@@ -1,9 +1,6 @@
 import { useAppStore } from '../store/appStore';
+import { daysUntil } from '../lib/schedule';
 import { NavigationBar } from '../components/ui/NavigationBar';
-
-function daysUntil(iso: string): number {
-  return Math.max(1, Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000));
-}
 
 export function ProgramScreen() {
   const s = useAppStore();

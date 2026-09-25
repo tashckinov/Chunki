@@ -1,11 +1,9 @@
-import { useState } from 'react';
 import { Check, Sparkles } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { useScheduleView } from '../store/derived';
 import { Button } from '../components/ui/Button';
 import { SegmentedControl } from '../components/ui/SegmentedControl';
-import { createCheckout } from '../lib/payments';
-import { ApiError } from '../lib/collections';
+import { useCheckout } from '../lib/payments';
 
 const PLAN_COMPARE = [
   { label: 'Карточки с чанками', free: true },
@@ -30,20 +28,7 @@ export function PaywallScreen() {
   const { scheduleSummary } = useScheduleView();
   const chosen = PLANS[plan];
   const chosenPrice = plan === 'yearly' ? '3 990 ₽ в год' : '590 ₽ в месяц';
-  const [checkingOut, setCheckingOut] = useState(false);
-  const [checkoutError, setCheckoutError] = useState<string | null>(null);
-
-  async function handleSubscribe() {
-    setCheckingOut(true);
-    setCheckoutError(null);
-    try {
-      const { paymentUrl } = await createCheckout(plan);
-      window.location.href = paymentUrl;
-    } catch (err) {
-      setCheckoutError(err instanceof ApiError && err.status === 409 ? 'К аккаунту не привязан email — войдите заново через Google.' : 'Не удалось начать оплату. Попробуйте позже.');
-      setCheckingOut(false);
-    }
-  }
+  const { checkingOut, checkoutError, subscribe } = useCheckout(plan);
 
   return (
     <div className="scroll-clean flex-1 min-h-0 px-5 pt-4 pb-8 flex flex-col gap-8 anim-rise">
@@ -83,7 +68,7 @@ export function PaywallScreen() {
 
       <div className="flex flex-col gap-2 mt-auto">
         {checkoutError && <div className="text-negative text-[13.5px] text-center">{checkoutError}</div>}
-        <Button size="lg" onClick={handleSubscribe} disabled={checkingOut} className="w-full">
+        <Button size="lg" onClick={subscribe} disabled={checkingOut} className="w-full">
           {checkingOut ? 'Переходим к оплате…' : 'Оформить подписку'}
         </Button>
         <Button variant="ghost" size="sm" onClick={skipPaywall} className="w-full" disabled={checkingOut}>
