@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Play, Check } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { apiUrl, flattenChunks, type CollectionDetail } from '../lib/collections';
@@ -100,11 +100,6 @@ export function CardsScreen() {
   const [level, setLevel] = useState<string | null>(null);
   const [mode, setMode] = useState<'collections' | 'progress'>('collections');
   const [accountOpen, setAccountOpen] = useState(false);
-
-  useEffect(() => {
-    s.loadCollections();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const details = useMemo(() => Object.values(s.collectionDetails), [s.collectionDetails]);
   const allChunks = useMemo(() => flattenChunks(details), [details]);

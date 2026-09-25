@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useAppStore } from '../store/appStore';
 import { NavigationBar } from '../components/ui/NavigationBar';
 import { Card } from '../components/ui/Card';
@@ -9,11 +9,6 @@ export function ComicsScreen() {
   const s = useAppStore();
   const [openingChunkId, setOpeningChunkId] = useState<string | null>(null);
   const [accountOpen, setAccountOpen] = useState(false);
-
-  useEffect(() => {
-    s.loadCollections();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const details = useMemo(() => Object.values(s.collectionDetails), [s.collectionDetails]);
   const groups = useMemo(
