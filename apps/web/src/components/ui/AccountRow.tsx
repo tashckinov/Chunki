@@ -81,7 +81,7 @@ function GoogleGlyph() {
  * backend's /api/auth/me, sourced from the provider's verified profile (or
  * left null for passkey accounts, which have no provider profile at all).
  */
-function AccountDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function AccountDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { user, signIn, signOut, authError, dismissAuthError, signInWithPasskey, passkeyBusy, passkeyError, dismissPasskeyError, go } = useAppStore();
 
   if (!user) {
