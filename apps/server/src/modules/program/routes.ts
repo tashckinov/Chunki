@@ -53,6 +53,10 @@ export const programRoutes: FastifyPluginAsync = async (app) => {
       reply.code(404);
       return { error: 'not_found' };
     }
+    if (result.kind === 'not_allowed') {
+      reply.code(403);
+      return { error: 'not_allowed', upsellTariffs: result.upsellTariffs };
+    }
     return { study: result.study };
   });
 
@@ -73,14 +77,19 @@ export const programRoutes: FastifyPluginAsync = async (app) => {
         return { error: 'invalid_request', details: parsed.error.flatten() };
       }
 
+      let result;
       try {
-        const { result, topics } = await submitPlacementTest(request.session!.userId, parsed.data);
-        return { result, topics };
+        result = await submitPlacementTest(request.session!.userId, parsed.data);
       } catch (err) {
         request.log.error({ message: err instanceof Error ? err.message : String(err) }, 'gradePlacementTest failed');
         reply.code(502);
         return { error: 'grading_failed' };
       }
+      if (result.kind === 'not_allowed') {
+        reply.code(403);
+        return { error: 'not_allowed', upsellTariffs: result.upsellTariffs };
+      }
+      return { result: result.result, topics: result.topics };
     },
   );
 
@@ -111,6 +120,10 @@ export const programRoutes: FastifyPluginAsync = async (app) => {
       if (result.kind === 'already_mastered' || result.kind === 'not_due') {
         reply.code(409);
         return { error: result.kind };
+      }
+      if (result.kind === 'not_allowed') {
+        reply.code(403);
+        return { error: 'not_allowed', upsellTariffs: result.upsellTariffs };
       }
       return { attemptId: result.attemptId, attemptKind: result.attemptKind, items: result.items };
     },
@@ -144,6 +157,10 @@ export const programRoutes: FastifyPluginAsync = async (app) => {
       if (result.kind === 'already_graded') {
         reply.code(409);
         return { error: 'already_graded' };
+      }
+      if (result.kind === 'not_allowed') {
+        reply.code(403);
+        return { error: 'not_allowed', upsellTariffs: result.upsellTariffs };
       }
       return { result: result.result, newTopicsAdded: result.newTopicsAdded };
     },

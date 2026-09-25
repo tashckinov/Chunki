@@ -18,7 +18,7 @@ vi.mock('../../config/uploads.js', async (importOriginal) => {
 vi.mock('./service.js', () => ({
   listUsers: vi.fn(),
   setUserPremiumUntil: vi.fn(),
-  resetProductionChecks: vi.fn(),
+  resetDailyChecksForAdmin: vi.fn(),
   listCollectionsAdmin: vi.fn(),
   createCollection: vi.fn(),
   updateCollection: vi.fn(),
@@ -32,8 +32,6 @@ vi.mock('./service.js', () => ({
   saveDialogueForChunk: vi.fn(),
   deleteDialogueForChunk: vi.fn(),
   listPaymentsForAdmin: vi.fn(),
-  listPaymentPlansForAdmin: vi.fn(),
-  upsertPaymentPlanForAdmin: vi.fn(),
   listProgramTopicsForAdmin: vi.fn(),
 }));
 
@@ -102,7 +100,7 @@ describe('GET /api/admin/users', () => {
   it('returns the user list for an admin', async () => {
     vi.mocked(session.getSession).mockResolvedValue(adminSession);
     const users = [
-      { id: validId, email: 'a@b.com', displayName: null, createdAt: '2026-01-01T00:00:00.000Z', lastLoginAt: '2026-01-01T00:00:00.000Z', isAdmin: false, premiumUntil: null, productionChecksUsed: 0 },
+      { id: validId, email: 'a@b.com', displayName: null, createdAt: '2026-01-01T00:00:00.000Z', lastLoginAt: '2026-01-01T00:00:00.000Z', isAdmin: false, premiumUntil: null, currentTariffId: null, dailyChecksUsed: 0, dailyChecksDate: null },
     ];
     vi.mocked(service.listUsers).mockResolvedValue(users);
 
@@ -124,7 +122,9 @@ describe('PATCH /api/admin/users/:id', () => {
       lastLoginAt: '2026-01-01T00:00:00.000Z',
       isAdmin: false,
       premiumUntil: '2026-02-01T00:00:00.000Z',
-      productionChecksUsed: 0,
+      currentTariffId: null,
+      dailyChecksUsed: 0,
+      dailyChecksDate: null,
     };
     vi.mocked(service.setUserPremiumUntil).mockResolvedValue({ kind: 'ok', user: updated });
 
@@ -144,7 +144,7 @@ describe('PATCH /api/admin/users/:id', () => {
     vi.mocked(session.getSession).mockResolvedValue(adminSession);
     vi.mocked(service.setUserPremiumUntil).mockResolvedValue({
       kind: 'ok',
-      user: { id: validId, email: null, displayName: null, createdAt: '', lastLoginAt: '', isAdmin: false, premiumUntil: null, productionChecksUsed: 0 },
+      user: { id: validId, email: null, displayName: null, createdAt: '', lastLoginAt: '', isAdmin: false, premiumUntil: null, currentTariffId: null, dailyChecksUsed: 0, dailyChecksDate: null },
     });
 
     const res = await app.inject({
@@ -189,7 +189,7 @@ describe('PATCH /api/admin/users/:id', () => {
   });
 });
 
-describe('POST /api/admin/users/:id/reset-production-checks', () => {
+describe('POST /api/admin/users/:id/reset-daily-checks', () => {
   it('resets the counter and returns the updated user', async () => {
     vi.mocked(session.getSession).mockResolvedValue(adminSession);
     const updated = {
@@ -200,28 +200,30 @@ describe('POST /api/admin/users/:id/reset-production-checks', () => {
       lastLoginAt: '2026-01-01T00:00:00.000Z',
       isAdmin: false,
       premiumUntil: null,
-      productionChecksUsed: 0,
+      currentTariffId: null,
+      dailyChecksUsed: 0,
+      dailyChecksDate: null,
     };
-    vi.mocked(service.resetProductionChecks).mockResolvedValue({ kind: 'ok', user: updated });
+    vi.mocked(service.resetDailyChecksForAdmin).mockResolvedValue({ kind: 'ok', user: updated });
 
     const res = await app.inject({
       method: 'POST',
-      url: `/api/admin/users/${validId}/reset-production-checks`,
+      url: `/api/admin/users/${validId}/reset-daily-checks`,
       cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' },
     });
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ user: updated });
-    expect(service.resetProductionChecks).toHaveBeenCalledWith(validId);
+    expect(service.resetDailyChecksForAdmin).toHaveBeenCalledWith(validId);
   });
 
   it('returns 404 for an unknown user', async () => {
     vi.mocked(session.getSession).mockResolvedValue(adminSession);
-    vi.mocked(service.resetProductionChecks).mockResolvedValue({ kind: 'not_found' });
+    vi.mocked(service.resetDailyChecksForAdmin).mockResolvedValue({ kind: 'not_found' });
 
     const res = await app.inject({
       method: 'POST',
-      url: `/api/admin/users/${validId}/reset-production-checks`,
+      url: `/api/admin/users/${validId}/reset-daily-checks`,
       cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' },
     });
 
@@ -526,69 +528,6 @@ describe('GET /api/admin/payments', () => {
   });
 });
 
-describe('GET /api/admin/payment-plans', () => {
-  it('returns the plans', async () => {
-    vi.mocked(session.getSession).mockResolvedValue(adminSession);
-    const plans = [
-      { plan: 'monthly', title: 'Месяц', offerUrl: null, priceUsd: null, priceEur: null, priceRub: null, updatedAt: '2026-01-01T00:00:00.000Z' },
-    ];
-    vi.mocked(service.listPaymentPlansForAdmin).mockResolvedValue(plans);
-
-    const res = await app.inject({ method: 'GET', url: '/api/admin/payment-plans', cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' } });
-
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ plans });
-  });
-});
-
-describe('PATCH /api/admin/payment-plans/:plan', () => {
-  const body = { title: 'Год', offerUrl: 'https://app.lava.top/products/abc/def', priceUsd: 59.99, priceEur: 54.99, priceRub: 3990 };
-
-  it('rejects an invalid plan', async () => {
-    vi.mocked(session.getSession).mockResolvedValue(adminSession);
-
-    const res = await app.inject({
-      method: 'PATCH',
-      url: '/api/admin/payment-plans/weekly',
-      cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' },
-      payload: body,
-    });
-
-    expect(res.statusCode).toBe(400);
-    expect(service.upsertPaymentPlanForAdmin).not.toHaveBeenCalled();
-  });
-
-  it('rejects an invalid body', async () => {
-    vi.mocked(session.getSession).mockResolvedValue(adminSession);
-
-    const res = await app.inject({
-      method: 'PATCH',
-      url: '/api/admin/payment-plans/yearly',
-      cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' },
-      payload: { title: '', offerUrl: null, priceUsd: null, priceEur: null, priceRub: null },
-    });
-
-    expect(res.statusCode).toBe(400);
-    expect(service.upsertPaymentPlanForAdmin).not.toHaveBeenCalled();
-  });
-
-  it('upserts the plan and returns it', async () => {
-    vi.mocked(session.getSession).mockResolvedValue(adminSession);
-    const updated = { plan: 'yearly', ...body, updatedAt: '2026-01-01T00:00:00.000Z' };
-    vi.mocked(service.upsertPaymentPlanForAdmin).mockResolvedValue(updated);
-
-    const res = await app.inject({
-      method: 'PATCH',
-      url: '/api/admin/payment-plans/yearly',
-      cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' },
-      payload: body,
-    });
-
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ plan: updated });
-    expect(service.upsertPaymentPlanForAdmin).toHaveBeenCalledWith('yearly', body);
-  });
-});
 
 describe('GET /api/admin/program-topics', () => {
   it('returns the topics with the default limit', async () => {

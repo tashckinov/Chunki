@@ -38,6 +38,7 @@ import {
   type SituationPromptPart,
   type ProductionDialoguePayload,
 } from '../lib/progress';
+import type { Tariff } from '../lib/payments';
 import { fetchPaymentStatus } from '../lib/payments';
 
 export type Screen =
@@ -62,6 +63,12 @@ export type Screen =
   | 'admin';
 
 export type DeckVerdict = 'know' | 'dont' | 'bury';
+
+/** A 403 from a program (grammar/exercises) route means the account's tariff has allowProgram=false — this reads friendlier than the raw "…failed: 403". Every other failure (network, 502 from a judge call, etc.) keeps the generic message, same as before this tariff gating existed. */
+function programErrorMessage(err: unknown): string {
+  if (err instanceof ApiError && err.status === 403) return 'Программа обучения недоступна на вашем тарифе. Оформите подписку.';
+  return err instanceof Error ? err.message : String(err);
+}
 
 const BACK_MAP: Partial<Record<Screen, Screen>> = {
   goals: 'cardslib',
@@ -101,7 +108,6 @@ interface AppState {
   passkeyBusy: boolean;
   passkeyError: string | null;
   interfaceMode: 'ru-en' | 'en-en';
-  plan: 'monthly' | 'yearly';
   /** Server-sourced (GET /api/payments/status) — refreshed on checkAuth(), never persisted (see partialize below). */
   premiumUntil: string | null;
   isPremium: boolean;
@@ -149,8 +155,8 @@ interface AppState {
   sessionProductionResults: Record<string, { kind: 'ok'; verdict: ProductionVerdict; feedback: string; modelAnswer?: string } | { kind: 'error'; message: string }>;
   /** Chunks whose production-check answer was submitted but hasn't resolved yet — drives DeckDoneScreen's "still checking" indicator. */
   sessionProductionPending: Record<string, true>;
-  /** Set when this deck session got kicked to the summary early because a free user hit the 3-check limit — drives DeckDoneScreen's upsell block. */
-  productionLimitReached: boolean;
+  /** Set when this deck session got kicked to the summary early because the account's tariff blocked the production check (daily limit hit, or cards disallowed entirely) — drives DeckDoneScreen's upsell block. */
+  productionBlock: { reason: 'limit_reached' | 'not_allowed'; upsellTariffs: Tariff[] } | null;
   /** Chunks already sent to a recognition check this session, so a repeat "don't know"/"unsure" doesn't loop. */
   recognitionAttemptedThisSession: Record<string, true>;
 
@@ -219,7 +225,6 @@ interface AppState {
   setMinutes: (v: number) => void;
   setTime: (t: string) => void;
   goPaywall: () => void;
-  choosePlan: (key: 'monthly' | 'yearly') => void;
   skipPaywall: () => void;
 
   goHome: () => void;
@@ -270,7 +275,6 @@ export const useAppStore = create<AppState>()(
       passkeyBusy: false,
       passkeyError: null,
       interfaceMode: 'ru-en',
-      plan: 'monthly',
       premiumUntil: null,
       isPremium: false,
 
@@ -310,7 +314,7 @@ export const useAppStore = create<AppState>()(
       sessionVerdicts: {},
       sessionProductionResults: {},
       sessionProductionPending: {},
-      productionLimitReached: false,
+      productionBlock: null,
       recognitionAttemptedThisSession: {},
 
       learnerDialogueByChunk: {},
@@ -405,7 +409,7 @@ export const useAppStore = create<AppState>()(
           const { result, topics } = await apiSubmitPlacementTest({ fromLevel: from, toLevel: to, purpose, mcqAnswers, open9, open10, essay });
           set({ placementResult: result, grading: false, screen: 'result', programStatus: 'active', programTopics: topics });
         } catch (err) {
-          set({ grading: false, gradingError: err instanceof Error ? err.message : String(err), screen: 'result' });
+          set({ grading: false, gradingError: programErrorMessage(err), screen: 'result' });
         }
       },
 
@@ -415,7 +419,6 @@ export const useAppStore = create<AppState>()(
       setMinutes: (v) => set({ minutes: Math.round(v) }),
       setTime: (t) => set({ time: t }),
       goPaywall: () => set({ screen: 'paywall' }),
-      choosePlan: (key) => set({ plan: key }),
       skipPaywall: () => set({ screen: 'program' }),
 
       goHome: () => set({ screen: 'cardslib' }),
@@ -434,7 +437,7 @@ export const useAppStore = create<AppState>()(
           sessionVerdicts: {},
           sessionProductionResults: {},
           sessionProductionPending: {},
-          productionLimitReached: false,
+          productionBlock: null,
           recognitionAttemptedThisSession: {},
           learnerDialogueByChunk: {},
           dialogueChunkId: null,
@@ -482,7 +485,7 @@ export const useAppStore = create<AppState>()(
         } catch (err) {
           // Cache stays unset for this id, so calling openTopic(id) again (the
           // retry button in TopicScreen) naturally re-fetches.
-          set({ topicStudyError: err instanceof Error ? err.message : String(err) });
+          set({ topicStudyError: programErrorMessage(err) });
         }
       },
       setNavTab: (v) => {
@@ -499,7 +502,7 @@ export const useAppStore = create<AppState>()(
           const attempt = await apiStartTopicAttempt(topicId);
           set({ currentAttempt: attempt });
         } catch (err) {
-          set({ screen: 'topic', gradingError: err instanceof Error ? err.message : String(err) });
+          set({ screen: 'topic', gradingError: programErrorMessage(err) });
         }
       },
       setTopicAnswer: (itemIndex, value) => set((s) => ({ topicAnswers: { ...s.topicAnswers, [itemIndex]: value } })),
@@ -515,7 +518,7 @@ export const useAppStore = create<AppState>()(
           set({ exerciseResult: result, newTopicsAddedLastResult: newTopicsAdded, grading: false, screen: 'topicresult' });
           void get().loadProgram();
         } catch (err) {
-          set({ grading: false, gradingError: err instanceof Error ? err.message : String(err), screen: 'exercises' });
+          set({ grading: false, gradingError: programErrorMessage(err), screen: 'exercises' });
         }
       },
 
@@ -711,8 +714,8 @@ export const useAppStore = create<AppState>()(
         try {
           const check = await getProductionCheck(chunkId);
           if (!check.available) {
-            if (check.reason === 'limit_reached') {
-              set({ screen: 'deckdone', productionLimitReached: true });
+            if (check.reason === 'limit_reached' || check.reason === 'not_allowed') {
+              set({ screen: 'deckdone', productionBlock: { reason: check.reason, upsellTariffs: check.upsellTariffs ?? [] } });
             } else {
               get().advanceDeck();
             }

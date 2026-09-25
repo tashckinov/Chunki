@@ -63,20 +63,65 @@ export async function touchLastLogin(userId: string): Promise<Date> {
 export interface AccountStatus {
   premiumUntil: Date | null;
   isAdmin: boolean;
-  productionChecksUsed: number;
+  currentTariffId: string | null;
+  dailyChecksUsed: number;
+  /** ISO date (YYYY-MM-DD) the count above corresponds to, or null if never used — compare against today's UTC date to know if it's stale. */
+  dailyChecksDate: string | null;
 }
 
 export async function findAccountStatus(userId: string): Promise<AccountStatus | null> {
-  const { rows } = await pool.query<{ premium_until: Date | null; is_admin: boolean; production_checks_used: number }>(
-    `SELECT premium_until, is_admin, production_checks_used FROM users WHERE id = $1`,
-    [userId],
-  );
+  const { rows } = await pool.query<{
+    premium_until: Date | null;
+    is_admin: boolean;
+    current_tariff_id: string | null;
+    daily_checks_used: number;
+    daily_checks_date: string | null;
+  }>(`SELECT premium_until, is_admin, current_tariff_id, daily_checks_used, daily_checks_date FROM users WHERE id = $1`, [userId]);
   if (!rows[0]) return null;
-  return { premiumUntil: rows[0].premium_until, isAdmin: rows[0].is_admin, productionChecksUsed: rows[0].production_checks_used };
+  return {
+    premiumUntil: rows[0].premium_until,
+    isAdmin: rows[0].is_admin,
+    currentTariffId: rows[0].current_tariff_id,
+    dailyChecksUsed: rows[0].daily_checks_used,
+    dailyChecksDate: rows[0].daily_checks_date,
+  };
 }
 
-export async function incrementProductionChecksUsed(userId: string): Promise<void> {
-  await pool.query(`UPDATE users SET production_checks_used = production_checks_used + 1 WHERE id = $1`, [userId]);
+/**
+ * Atomic — rolls the counter over to 1 if the stored date isn't today (UTC),
+ * otherwise increments. Always resolve the effective tariff and compare its
+ * dailyCheckLimit against the READ from findAccountStatus (with the same
+ * stale-date rollover applied in application code) BEFORE calling this —
+ * this call itself always succeeds regardless of any limit, same as the old
+ * incrementProductionChecksUsed it replaces.
+ */
+export async function bumpDailyChecksUsed(userId: string): Promise<void> {
+  await pool.query(
+    `UPDATE users
+     SET daily_checks_used = CASE WHEN daily_checks_date IS DISTINCT FROM (now() AT TIME ZONE 'UTC')::date THEN 1 ELSE daily_checks_used + 1 END,
+         daily_checks_date = (now() AT TIME ZONE 'UTC')::date
+     WHERE id = $1`,
+    [userId],
+  );
+}
+
+/**
+ * Called right after a successful checkout — switches the account's active
+ * tariff immediately and gives it a fresh daily quota, per the "a new
+ * purchase resets usage, doesn't inherit whatever was used under the old
+ * tariff today" product decision (premium_until itself is NOT reset here —
+ * see extendPremiumUntil below — only the daily counter is).
+ */
+export async function setCurrentTariffAndResetUsage(userId: string, tariffId: string): Promise<void> {
+  await pool.query(`UPDATE users SET current_tariff_id = $2, daily_checks_used = 0, daily_checks_date = NULL, updated_at = now() WHERE id = $1`, [
+    userId,
+    tariffId,
+  ]);
+}
+
+/** Admin-triggered manual reset (UsersSection's "Сбросить попытки" button) — for support cases where waiting for the UTC-midnight rollover isn't practical. */
+export async function resetDailyChecksUsed(userId: string): Promise<void> {
+  await pool.query(`UPDATE users SET daily_checks_used = 0, daily_checks_date = NULL, updated_at = now() WHERE id = $1`, [userId]);
 }
 
 export function isPremiumActive(premiumUntil: Date | null): boolean {

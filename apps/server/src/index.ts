@@ -15,6 +15,7 @@ import { adminRoutes } from './modules/admin/routes.js';
 import { charactersRoutes } from './modules/characters/routes.js';
 import { paymentsRoutes } from './modules/payments/routes.js';
 import { programRoutes } from './modules/program/routes.js';
+import { subscriptionTariffsRoutes } from './modules/subscriptionTariffs/routes.js';
 
 async function main() {
   const env = loadEnv();
@@ -45,6 +46,7 @@ async function main() {
   await app.register(charactersRoutes, { prefix: '/api/admin/characters' });
   await app.register(paymentsRoutes, { prefix: '/api/payments' });
   await app.register(programRoutes, { prefix: '/api/program' });
+  await app.register(subscriptionTariffsRoutes, { prefix: '/api/admin/tariffs' });
 
   // 0.0.0.0 (not the Fastify default of 127.0.0.1) so the port mapping from
   // Docker Compose / a container host can actually reach it.

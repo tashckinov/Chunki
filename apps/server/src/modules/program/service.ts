@@ -1,6 +1,7 @@
 import type { ExerciseItem, ExercisesGradeResult, PlacementGradeResult, PlacementTestSubmission, TopicStudyContent, TopicSuggestion } from '@app/shared';
 import { getGradingProvider } from '../../grading/index.js';
 import { withAiCallLogging } from '../aiLogs/service.js';
+import { resolveEffectiveTariff, listUpsellTariffs, type PublicTariff } from '../subscriptionTariffs/service.js';
 import {
   createAttempt,
   createPlacementTest,
@@ -56,7 +57,21 @@ export async function getProgramForUser(userId: string): Promise<ProgramForUser>
   return { status: 'active', topics: rows.map(toSummary) };
 }
 
-export async function submitPlacementTest(userId: string, input: PlacementTestSubmission): Promise<{ result: PlacementGradeResult; topics: UserTopicSummary[] }> {
+/** Null means allowed — otherwise the upsell tariffs to show for the blocked "not_allowed" result. */
+async function checkProgramAllowed(userId: string): Promise<PublicTariff[] | null> {
+  const tariff = await resolveEffectiveTariff(userId);
+  if (tariff.unrestricted || tariff.allowProgram) return null;
+  return listUpsellTariffs(tariff.id);
+}
+
+export type SubmitPlacementTestResult =
+  | { kind: 'not_allowed'; upsellTariffs: PublicTariff[] }
+  | { kind: 'ok'; result: PlacementGradeResult; topics: UserTopicSummary[] };
+
+export async function submitPlacementTest(userId: string, input: PlacementTestSubmission): Promise<SubmitPlacementTestResult> {
+  const upsellTariffs = await checkProgramAllowed(userId);
+  if (upsellTariffs) return { kind: 'not_allowed', upsellTariffs };
+
   const provider = getGradingProvider();
   const result = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: null, request: input }, () => provider.gradePlacementTest(input));
 
@@ -80,15 +95,18 @@ export async function submitPlacementTest(userId: string, input: PlacementTestSu
 
   await insertNewUserTopics(userId, result.topics, 'placement');
   const topics = (await findUserTopics(userId)).map(toSummary);
-  return { result, topics };
+  return { kind: 'ok', result, topics };
 }
 
-export type TopicStudyResult = { kind: 'not_found' } | { kind: 'ok'; study: TopicStudyContent };
+export type TopicStudyResult = { kind: 'not_found' } | { kind: 'not_allowed'; upsellTariffs: PublicTariff[] } | { kind: 'ok'; study: TopicStudyContent };
 
 export async function getTopicStudy(userId: string, userTopicId: string): Promise<TopicStudyResult> {
   const row = await findUserTopic(userId, userTopicId);
   if (!row) return { kind: 'not_found' };
   if (row.study_content) return { kind: 'ok', study: row.study_content as TopicStudyContent };
+
+  const upsellTariffs = await checkProgramAllowed(userId);
+  if (upsellTariffs) return { kind: 'not_allowed', upsellTariffs };
 
   const provider = getGradingProvider();
   const topic = toTopicSuggestion(row);
@@ -108,6 +126,7 @@ export type StartAttemptResult =
   | { kind: 'not_found' }
   | { kind: 'already_mastered' }
   | { kind: 'not_due' }
+  | { kind: 'not_allowed'; upsellTariffs: PublicTariff[] }
   | { kind: 'ok'; attemptId: string; attemptKind: TopicAttemptKind; items: RedactedExerciseItem[] };
 
 export async function startTopicAttempt(userId: string, userTopicId: string): Promise<StartAttemptResult> {
@@ -119,6 +138,9 @@ export async function startTopicAttempt(userId: string, userTopicId: string): Pr
   if (attemptKind === 'reconfirm' && row.next_review_at && row.next_review_at.getTime() > Date.now()) {
     return { kind: 'not_due' };
   }
+
+  const upsellTariffs = await checkProgramAllowed(userId);
+  if (upsellTariffs) return { kind: 'not_allowed', upsellTariffs };
 
   const provider = getGradingProvider();
   const topic = toTopicSuggestion(row);
@@ -132,6 +154,7 @@ export type SubmitAttemptResult =
   | { kind: 'not_found' }
   | { kind: 'attempt_not_found' }
   | { kind: 'already_graded' }
+  | { kind: 'not_allowed'; upsellTariffs: PublicTariff[] }
   | { kind: 'ok'; result: ExercisesGradeResult; newTopicsAdded: number };
 
 export async function submitTopicAttempt(userId: string, userTopicId: string, attemptId: string, answers: Record<number, string>): Promise<SubmitAttemptResult> {
@@ -141,6 +164,9 @@ export async function submitTopicAttempt(userId: string, userTopicId: string, at
   const attempt = await findAttempt(attemptId);
   if (!attempt || attempt.user_topic_id !== row.id) return { kind: 'attempt_not_found' };
   if (attempt.graded_at) return { kind: 'already_graded' };
+
+  const upsellTariffs = await checkProgramAllowed(userId);
+  if (upsellTariffs) return { kind: 'not_allowed', upsellTariffs };
 
   const items = attempt.items as ExerciseItem[];
   const topic = toTopicSuggestion(row);

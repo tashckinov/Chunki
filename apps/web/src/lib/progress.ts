@@ -1,4 +1,5 @@
 import { getJson, postJson } from './collections';
+import type { Tariff } from './payments';
 
 export type SortVerdict = 'know' | 'dont' | 'bury';
 
@@ -40,7 +41,7 @@ export interface ProductionDialoguePayload {
 }
 
 export type ProductionCheckAvailability =
-  | { available: false; reason?: 'limit_reached' }
+  | { available: false; reason?: 'limit_reached' | 'not_allowed'; upsellTariffs?: Tariff[] }
   | { available: true; mode: 'situation'; chunkId: string; situationPrompt: string; situationParts: SituationPromptPart[]; chunkText: string; chunkTranslation: string }
   | { available: true; mode: 'dialogue'; chunkId: string; dialogue: ProductionDialoguePayload; chunkText: string; chunkTranslation: string };
 

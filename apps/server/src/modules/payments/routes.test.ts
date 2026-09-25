@@ -10,14 +10,18 @@ vi.mock('./service.js', () => ({
   createCheckoutForUser: vi.fn(),
   getAccountPaymentStatus: vi.fn(),
   handleLavaTopWebhook: vi.fn(),
-  listPublicPaymentPlans: vi.fn(),
+}));
+vi.mock('../subscriptionTariffs/service.js', () => ({
+  listPublicTariffs: vi.fn(),
 }));
 
 const session = await import('../auth/session.js');
 const service = await import('./service.js');
+const tariffsService = await import('../subscriptionTariffs/service.js');
 const { paymentsRoutes } = await import('./routes.js');
 
 const authenticatedSession = { userId: 'user-1', email: 'person@example.com', displayName: 'Person', providerImageUrl: null, isAdmin: false };
+const TARIFF_ID = '11111111-1111-1111-1111-111111111111';
 
 let app: FastifyInstance;
 
@@ -26,7 +30,7 @@ beforeEach(async () => {
   vi.mocked(service.createCheckoutForUser).mockReset();
   vi.mocked(service.getAccountPaymentStatus).mockReset();
   vi.mocked(service.handleLavaTopWebhook).mockReset();
-  vi.mocked(service.listPublicPaymentPlans).mockReset();
+  vi.mocked(tariffsService.listPublicTariffs).mockReset();
 
   app = Fastify();
   await app.register(cookie, { secret: process.env.SESSION_SECRET });
@@ -42,18 +46,18 @@ const authCookie = { [session.SESSION_COOKIE_NAME]: 'a-valid-token' };
 
 describe('POST /api/payments/checkout', () => {
   it('returns 401 when unauthenticated', async () => {
-    const res = await app.inject({ method: 'POST', url: '/api/payments/checkout', payload: { plan: 'monthly' } });
+    const res = await app.inject({ method: 'POST', url: '/api/payments/checkout', payload: { tariffId: TARIFF_ID, currency: 'USD', email: 'person@example.com' } });
     expect(res.statusCode).toBe(401);
     expect(service.createCheckoutForUser).not.toHaveBeenCalled();
   });
 
-  it('returns 400 for an invalid plan', async () => {
+  it('returns 400 for an invalid tariffId', async () => {
     vi.mocked(session.getSession).mockResolvedValue(authenticatedSession);
     const res = await app.inject({
       method: 'POST',
       url: '/api/payments/checkout',
       cookies: authCookie,
-      payload: { plan: 'weekly', currency: 'USD', email: 'person@example.com' },
+      payload: { tariffId: 'not-a-uuid', currency: 'USD', email: 'person@example.com' },
     });
     expect(res.statusCode).toBe(400);
     expect(service.createCheckoutForUser).not.toHaveBeenCalled();
@@ -65,7 +69,7 @@ describe('POST /api/payments/checkout', () => {
       method: 'POST',
       url: '/api/payments/checkout',
       cookies: authCookie,
-      payload: { plan: 'monthly', currency: 'GBP', email: 'person@example.com' },
+      payload: { tariffId: TARIFF_ID, currency: 'GBP', email: 'person@example.com' },
     });
     expect(res.statusCode).toBe(400);
     expect(service.createCheckoutForUser).not.toHaveBeenCalled();
@@ -77,13 +81,13 @@ describe('POST /api/payments/checkout', () => {
       method: 'POST',
       url: '/api/payments/checkout',
       cookies: authCookie,
-      payload: { plan: 'monthly', currency: 'USD', email: 'not-an-email' },
+      payload: { tariffId: TARIFF_ID, currency: 'USD', email: 'not-an-email' },
     });
     expect(res.statusCode).toBe(400);
     expect(service.createCheckoutForUser).not.toHaveBeenCalled();
   });
 
-  it('creates a checkout for the authenticated user with the submitted email/currency and returns the payment URL', async () => {
+  it('creates a checkout for the authenticated user with the submitted tariff/email/currency and returns the payment URL', async () => {
     vi.mocked(session.getSession).mockResolvedValue(authenticatedSession);
     vi.mocked(service.createCheckoutForUser).mockResolvedValue({ kind: 'ok', paymentUrl: 'https://gate.lava.top/pay/abc' });
 
@@ -91,12 +95,12 @@ describe('POST /api/payments/checkout', () => {
       method: 'POST',
       url: '/api/payments/checkout',
       cookies: authCookie,
-      payload: { plan: 'yearly', currency: 'EUR', email: 'chosen@example.com' },
+      payload: { tariffId: TARIFF_ID, currency: 'EUR', email: 'chosen@example.com' },
     });
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ paymentUrl: 'https://gate.lava.top/pay/abc' });
-    expect(service.createCheckoutForUser).toHaveBeenCalledWith('user-1', 'chosen@example.com', 'yearly', 'EUR');
+    expect(service.createCheckoutForUser).toHaveBeenCalledWith('user-1', 'chosen@example.com', TARIFF_ID, 'EUR');
   });
 
   it('returns 502 when the payment provider call throws', async () => {
@@ -107,39 +111,39 @@ describe('POST /api/payments/checkout', () => {
       method: 'POST',
       url: '/api/payments/checkout',
       cookies: authCookie,
-      payload: { plan: 'monthly', currency: 'USD', email: 'person@example.com' },
+      payload: { tariffId: TARIFF_ID, currency: 'USD', email: 'person@example.com' },
     });
 
     expect(res.statusCode).toBe(502);
   });
 
-  it('returns 409 when the plan has no offer link configured in the admin panel', async () => {
+  it('returns 409 when the tariff has no offer link configured in the admin panel', async () => {
     vi.mocked(session.getSession).mockResolvedValue(authenticatedSession);
-    vi.mocked(service.createCheckoutForUser).mockResolvedValue({ kind: 'plan_not_configured' });
+    vi.mocked(service.createCheckoutForUser).mockResolvedValue({ kind: 'not_configured' });
 
     const res = await app.inject({
       method: 'POST',
       url: '/api/payments/checkout',
       cookies: authCookie,
-      payload: { plan: 'monthly', currency: 'USD', email: 'person@example.com' },
+      payload: { tariffId: TARIFF_ID, currency: 'USD', email: 'person@example.com' },
     });
 
     expect(res.statusCode).toBe(409);
-    expect(res.json()).toEqual({ error: 'plan_not_configured' });
+    expect(res.json()).toEqual({ error: 'not_configured' });
   });
 });
 
-describe('GET /api/payments/plans', () => {
-  it('returns the public plan list with no auth required', async () => {
-    vi.mocked(service.listPublicPaymentPlans).mockResolvedValue([
-      { plan: 'monthly', title: 'Месяц', priceUsd: '6.99', priceEur: '5.99', priceRub: '599.00' },
-      { plan: 'yearly', title: 'Год', priceUsd: null, priceEur: null, priceRub: null },
+describe('GET /api/payments/tariffs', () => {
+  it('returns the public tariff list with no auth required', async () => {
+    vi.mocked(tariffsService.listPublicTariffs).mockResolvedValue([
+      { id: TARIFF_ID, name: 'Месяц', periodicity: 'monthly', priceUsd: '6.99', priceEur: '5.99', priceRub: '599.00', allowCards: true, allowProgram: true, dailyCheckLimit: null },
+      { id: '22222222-2222-2222-2222-222222222222', name: 'Год', periodicity: 'yearly', priceUsd: null, priceEur: null, priceRub: null, allowCards: true, allowProgram: true, dailyCheckLimit: null },
     ]);
 
-    const res = await app.inject({ method: 'GET', url: '/api/payments/plans' });
+    const res = await app.inject({ method: 'GET', url: '/api/payments/tariffs' });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json().plans).toHaveLength(2);
+    expect(res.json().tariffs).toHaveLength(2);
   });
 });
 

@@ -2,9 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavigationBar } from '../../components/ui/NavigationBar';
 import { IconButton } from '../../components/ui/IconButton';
 import { Button } from '../../components/ui/Button';
-import { fetchAdminUsers, setUserPremiumUntil, resetProductionChecks, type AdminUser } from '../../lib/admin';
-
-const FREE_PRODUCTION_CHECKS_LIMIT = 3;
+import { fetchAdminUsers, setUserPremiumUntil, resetDailyChecks, fetchAdminTariffs, type AdminUser, type AdminTariff } from '../../lib/admin';
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
@@ -21,8 +19,15 @@ function addDaysIso(days: number): string {
   return d.toISOString();
 }
 
+/** Mirrors the server's effectiveDailyChecksUsed (subscriptionTariffs/service.ts) — the stored count only reflects today's usage when its date matches today. */
+function effectiveDailyChecksUsed(dailyChecksUsed: number, dailyChecksDate: string | null): number {
+  const today = new Date().toISOString().slice(0, 10);
+  return dailyChecksDate === today ? dailyChecksUsed : 0;
+}
+
 export function UsersSection({ onOpenMenu }: { onOpenMenu: () => void }) {
   const [users, setUsers] = useState<AdminUser[] | null>(null);
+  const [tariffs, setTariffs] = useState<AdminTariff[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [customDate, setCustomDate] = useState<Record<string, string>>({});
@@ -31,7 +36,18 @@ export function UsersSection({ onOpenMenu }: { onOpenMenu: () => void }) {
     fetchAdminUsers()
       .then(setUsers)
       .catch(() => setError('Не удалось загрузить пользователей.'));
+    fetchAdminTariffs()
+      .then(setTariffs)
+      .catch(() => {});
   }, []);
+
+  function tariffLabel(u: AdminUser): string {
+    const tariff = tariffs?.find((t) => t.id === u.currentTariffId);
+    if (!tariff) return '—';
+    const used = effectiveDailyChecksUsed(u.dailyChecksUsed, u.dailyChecksDate);
+    const limit = tariff.dailyCheckLimit === null ? '∞' : tariff.dailyCheckLimit;
+    return `${tariff.name} · проверок сегодня: ${used}/${limit}`;
+  }
 
   async function apply(userId: string, premiumUntil: string | null) {
     setBusyId(userId);
@@ -50,7 +66,7 @@ export function UsersSection({ onOpenMenu }: { onOpenMenu: () => void }) {
     setBusyId(userId);
     setError(null);
     try {
-      const updated = await resetProductionChecks(userId);
+      const updated = await resetDailyChecks(userId);
       setUsers((prev) => prev?.map((u) => (u.id === userId ? updated : u)) ?? prev);
     } catch {
       setError('Не удалось сбросить попытки.');
@@ -86,9 +102,7 @@ export function UsersSection({ onOpenMenu }: { onOpenMenu: () => void }) {
                   Подписка до: <span className="font-medium">{formatDate(u.premiumUntil)}</span>
                 </div>
                 <div className="flex items-center justify-between gap-2 text-[13.5px]">
-                  <span>
-                    Проверок предложений: {u.productionChecksUsed}/{FREE_PRODUCTION_CHECKS_LIMIT}
-                  </span>
+                  <span>Тариф: {tariffLabel(u)}</span>
                   <Button size="sm" variant="ghost" disabled={busyId === u.id} onClick={() => resetChecks(u.id)}>
                     Сбросить попытки
                   </Button>

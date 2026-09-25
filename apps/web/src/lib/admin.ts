@@ -8,7 +8,9 @@ export interface AdminUser {
   lastLoginAt: string;
   isAdmin: boolean;
   premiumUntil: string | null;
-  productionChecksUsed: number;
+  currentTariffId: string | null;
+  dailyChecksUsed: number;
+  dailyChecksDate: string | null;
 }
 
 export interface AdminCollection {
@@ -69,8 +71,8 @@ export async function setUserPremiumUntil(userId: string, premiumUntil: string |
   return data.user;
 }
 
-export async function resetProductionChecks(userId: string): Promise<AdminUser> {
-  const data = await postJson<{ user: AdminUser }>(`/api/admin/users/${userId}/reset-production-checks`, {});
+export async function resetDailyChecks(userId: string): Promise<AdminUser> {
+  const data = await postJson<{ user: AdminUser }>(`/api/admin/users/${userId}/reset-daily-checks`, {});
   return data.user;
 }
 
@@ -142,6 +144,7 @@ export interface AdminPayment {
   userEmail: string | null;
   provider: string;
   plan: string;
+  tariffId: string | null;
   status: string;
   amount: string | null;
   currency: string | null;
@@ -153,32 +156,57 @@ export async function fetchAdminPayments(limit = 100): Promise<AdminPayment[]> {
   return data.payments;
 }
 
-export interface AdminPaymentPlan {
-  plan: string;
-  title: string;
+export type TariffPeriodicity = 'monthly' | 'yearly';
+
+export interface AdminTariff {
+  id: string;
+  name: string;
+  periodicity: TariffPeriodicity;
   offerUrl: string | null;
   priceUsd: string | null;
   priceEur: string | null;
   priceRub: string | null;
+  allowCards: boolean;
+  allowProgram: boolean;
+  dailyCheckLimit: number | null;
+  isDefault: boolean;
+  position: number;
+  upsellTariffIds: string[];
   updatedAt: string;
 }
 
-export interface PaymentPlanInput {
-  title: string;
+export interface TariffInput {
+  name: string;
+  periodicity: TariffPeriodicity;
   offerUrl: string | null;
   priceUsd: number | null;
   priceEur: number | null;
   priceRub: number | null;
+  allowCards: boolean;
+  allowProgram: boolean;
+  dailyCheckLimit: number | null;
+  isDefault: boolean;
+  position: number;
+  upsellTariffIds: string[];
 }
 
-export async function fetchAdminPaymentPlans(): Promise<AdminPaymentPlan[]> {
-  const data = await getJson<{ plans: AdminPaymentPlan[] }>('/api/admin/payment-plans');
-  return data.plans;
+export async function fetchAdminTariffs(): Promise<AdminTariff[]> {
+  const data = await getJson<{ tariffs: AdminTariff[] }>('/api/admin/tariffs');
+  return data.tariffs;
 }
 
-export async function saveAdminPaymentPlan(plan: string, input: PaymentPlanInput): Promise<AdminPaymentPlan> {
-  const data = await patchJson<{ plan: AdminPaymentPlan }>(`/api/admin/payment-plans/${plan}`, input);
-  return data.plan;
+export async function createAdminTariff(input: TariffInput): Promise<AdminTariff> {
+  const data = await postJson<{ tariff: AdminTariff }>('/api/admin/tariffs', input);
+  return data.tariff;
+}
+
+export async function updateAdminTariff(id: string, input: TariffInput): Promise<AdminTariff> {
+  const data = await patchJson<{ tariff: AdminTariff }>(`/api/admin/tariffs/${id}`, input);
+  return data.tariff;
+}
+
+export async function deleteAdminTariff(id: string): Promise<void> {
+  await deleteJson(`/api/admin/tariffs/${id}`);
 }
 
 export interface AdminProgramTopic {

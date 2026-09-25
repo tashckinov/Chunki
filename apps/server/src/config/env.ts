@@ -42,9 +42,9 @@ const envSchema = z.object({
 
   // Subscription payments via Lava.top — same optional explicit-override /
   // auto-select-when-a-key-is-present shape as the providers above (see
-  // modules/payments/index.ts). The per-plan offer link and display prices
-  // are admin-managed (payment_plans table, admin "Платежи" page) rather
-  // than env vars — only the provider credentials live here.
+  // modules/payments/index.ts). Tariffs (offer links, prices, entitlements)
+  // are admin-managed (subscription_tariffs table, admin "Тарифы" page)
+  // rather than env vars — only the provider credentials live here.
   PAYMENT_PROVIDER: z.preprocess(emptyToUndefined, z.enum(['mock', 'lava_top']).optional()),
   LAVA_TOP_API_KEY: z.string().optional(),
   // preprocess needed here (unlike the plain .optional() strings around it)

@@ -9,7 +9,7 @@ export interface CheckoutInput {
   email: string;
   plan: Plan;
   currency: Currency;
-  /** Looked up by the caller from the admin-managed payment_plans table — this provider never reads it from env/config itself. */
+  /** Looked up by the caller from the admin-managed subscription_tariffs table — this provider never reads it from env/config itself. */
   offerId: string;
 }
 
