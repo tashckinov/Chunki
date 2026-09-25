@@ -3,6 +3,7 @@ import {
   saveDialogue as repoSaveDialogue,
   deleteDialogueForChunk as repoDeleteDialogueForChunk,
   findLearnerDialogueRows,
+  findRandomBrowseDialogueRows,
   findChunksUsingCharacter as repoFindChunksUsingCharacter,
   type DialogueInput,
   type DialogueKind,
@@ -69,6 +70,21 @@ export async function findLearnerDialogue(chunkId: string): Promise<LearnerDialo
   if (rows.length === 0) return null;
   return {
     chunkId,
+    messages: rows.map((r) => ({ characterName: r.character_name, imageUrl: r.image_url, side: r.side, text: r.text })),
+  };
+}
+
+export interface RandomLearnerDialogue extends LearnerDialogue {
+  chunkText: string;
+}
+
+/** For the public guest gallery preview — one randomly-picked real 'browse' dialogue, no chunk id needed. Null if the library has no browse-kind dialogues yet. */
+export async function findRandomLearnerDialogue(): Promise<RandomLearnerDialogue | null> {
+  const rows = await findRandomBrowseDialogueRows();
+  if (rows.length === 0) return null;
+  return {
+    chunkId: rows[0].chunk_id,
+    chunkText: rows[0].chunk_text,
     messages: rows.map((r) => ({ characterName: r.character_name, imageUrl: r.image_url, side: r.side, text: r.text })),
   };
 }

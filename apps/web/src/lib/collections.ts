@@ -130,6 +130,16 @@ export async function fetchLearnerDialogue(chunkId: string): Promise<LearnerDial
   return data.dialogue;
 }
 
+export interface RandomLearnerDialogue extends LearnerDialogue {
+  chunkText: string;
+}
+
+/** Public — no auth needed. Used by the guest gallery. Null if the library has no browse-kind dialogues yet. */
+export async function fetchRandomDialogue(): Promise<RandomLearnerDialogue | null> {
+  const data = await getJson<{ dialogue: RandomLearnerDialogue | null }>('/api/chunks/random-dialogue');
+  return data.dialogue;
+}
+
 /** Every chunk across the given collections, deduped by id (a chunk can belong to more than one). */
 export function flattenChunks(details: CollectionDetail[]): ChunkSummary[] {
   const seen = new Map<string, ChunkSummary>();
