@@ -6,6 +6,20 @@ import { z } from 'zod';
 // as "not provided" so that doesn't trip up z.enum(...).optional() below.
 const emptyToUndefined = (val: unknown) => (val === '' ? undefined : val);
 
+// Lava.top's dashboard gives you a "copy link" like
+// https://app.lava.top/products/<productId>/<offerId> to copy, not the bare
+// offerId on its own — accept either so it can be pasted directly without
+// manually trimming it down to the last path segment.
+const offerIdFromUrlOrId = (val: unknown): unknown => {
+  if (typeof val !== 'string' || val === '') return undefined;
+  try {
+    const segments = new URL(val).pathname.split('/').filter(Boolean);
+    return segments.length > 0 ? segments[segments.length - 1] : val;
+  } catch {
+    return val;
+  }
+};
+
 // Validated once at startup. Any missing/invalid required variable throws
 // immediately with a readable message instead of letting the app boot into
 // a broken or insecure state.
@@ -53,10 +67,10 @@ const envSchema = z.object({
   // — an empty string (what an unset var arrives as via docker-compose)
   // would otherwise fail .url() validation instead of falling through to it.
   LAVA_TOP_BASE_URL: z.preprocess(emptyToUndefined, z.string().url().default('https://gate.lava.top')),
-  LAVA_TOP_OFFER_ID_MONTHLY_USD: z.string().optional(),
-  LAVA_TOP_OFFER_ID_MONTHLY_EUR: z.string().optional(),
-  LAVA_TOP_OFFER_ID_YEARLY_USD: z.string().optional(),
-  LAVA_TOP_OFFER_ID_YEARLY_EUR: z.string().optional(),
+  LAVA_TOP_OFFER_ID_MONTHLY_USD: z.preprocess(offerIdFromUrlOrId, z.string().optional()),
+  LAVA_TOP_OFFER_ID_MONTHLY_EUR: z.preprocess(offerIdFromUrlOrId, z.string().optional()),
+  LAVA_TOP_OFFER_ID_YEARLY_USD: z.preprocess(offerIdFromUrlOrId, z.string().optional()),
+  LAVA_TOP_OFFER_ID_YEARLY_EUR: z.preprocess(offerIdFromUrlOrId, z.string().optional()),
   // Verifies inbound webhook calls (HTTP Basic auth, configured to match in
   // Lava.top's dashboard under Интеграции → Webhook) — not the same secret
   // as LAVA_TOP_API_KEY, which is used for this app's outbound calls.
