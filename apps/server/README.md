@@ -223,10 +223,12 @@ To go live:
 
 1. In your Lava.top dashboard, create **one product** for Chunki premium with **two offers**:
    monthly (periodicity `MONTHLY`) and yearly (periodicity `PERIOD_YEAR`) — matching the two
-   plans already hardcoded in `PaywallScreen.tsx` (590₽/month, 3990₽/year). Copy each offer's
-   `offerId` from its dashboard page into `LAVA_TOP_OFFER_ID_MONTHLY`/`LAVA_TOP_OFFER_ID_YEARLY`.
+   plans already hardcoded in `PaywallScreen.tsx`. Copy each offer's `offerId` from its dashboard
+   page into `LAVA_TOP_OFFER_ID_MONTHLY`/`LAVA_TOP_OFFER_ID_YEARLY`.
 2. Copy your API key into `LAVA_TOP_API_KEY` (`LAVA_TOP_BASE_URL` defaults to
    `https://gate.lava.top` — only override it if Lava.top gives you a different gateway host).
+   Set `LAVA_TOP_CURRENCY` to whichever of `USD`/`EUR` both offers were actually created in on
+   Lava.top's side (defaults to `USD`) — a mismatch here is rejected by their API at checkout time.
 3. Under **Интеграции → Webhook**, point the webhook at
    `https://<your-backend-domain>/api/payments/webhook/lava-top` and set it to use HTTP Basic
    authentication with a login/password of your choosing — put the same values in
