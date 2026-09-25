@@ -340,8 +340,9 @@ export const useAppStore = create<AppState>()(
       back: () => set((s) => ({ screen: BACK_MAP[s.screen] ?? 'cardslib' })),
       signIn: () => startGoogleLogin(),
       signOut: async () => {
-        set({ user: null });
+        set({ user: null, collections: [], collectionDetails: {}, collectionsStatus: 'idle', collectionsError: null });
         await logout().catch(() => {});
+        void get().loadCollections();
       },
       checkAuth: async () => {
         try {
