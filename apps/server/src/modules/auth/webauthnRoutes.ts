@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { FastifyPluginAsync } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
 import type { RegistrationResponseJSON, AuthenticationResponseJSON } from '@simplewebauthn/server';
@@ -6,6 +7,8 @@ import { buildRegistrationOptions, verifyRegistration, buildAuthenticationOption
 import { findCredentialByCredentialId } from './webauthnCredentials.js';
 import { completeWebauthnRegistration, completeWebauthnLogin } from './service.js';
 import { SESSION_COOKIE_NAME } from './session.js';
+
+const CHALLENGE_HEADER_NAME = 'x-webauthn-challenge';
 
 const CHALLENGE_COOKIE_NAME = 'chunki_webauthn_challenge';
 const CHALLENGE_COOKIE_MAX_AGE_SECONDS = 5 * 60;
@@ -59,6 +62,41 @@ export const webauthnRoutes: FastifyPluginAsync = async (app) => {
     }
   }
 
+  // Safari (and other browsers with strict cross-site-cookie blocking) drops
+  // the challenge cookie above outright, since the frontend (GitHub Pages)
+  // and this backend are different sites — same root cause session.ts's
+  // bearer-token fallback exists for. Mirrors that fix: the options response
+  // also hands back an HMAC-signed challenge token in the JSON body, which
+  // the client resends as a plain header (not a cookie, so it isn't subject
+  // to the same blocking) on the matching verify call.
+  function signChallengeToken(payload: ChallengeCookiePayload): string {
+    const payloadB64 = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+    const sig = createHmac('sha256', env.SESSION_SECRET).update(payloadB64).digest('base64url');
+    return `${payloadB64}.${sig}`;
+  }
+
+  function readChallengeHeader(request: import('fastify').FastifyRequest, expectedType: 'register' | 'login'): string | null {
+    const header = request.headers[CHALLENGE_HEADER_NAME];
+    const token = Array.isArray(header) ? header[0] : header;
+    if (!token) return null;
+    const [payloadB64, sig] = token.split('.');
+    if (!payloadB64 || !sig) return null;
+    const expectedSig = createHmac('sha256', env.SESSION_SECRET).update(payloadB64).digest('base64url');
+    const actual = Buffer.from(sig);
+    const expected = Buffer.from(expectedSig);
+    if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return null;
+    try {
+      const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8')) as ChallengeCookiePayload;
+      return payload.type === expectedType ? payload.challenge : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function resolveChallenge(request: import('fastify').FastifyRequest, reply: import('fastify').FastifyReply, expectedType: 'register' | 'login'): string | null {
+    return readChallengeCookie(request, reply, expectedType) ?? readChallengeHeader(request, expectedType);
+  }
+
   function setSessionCookie(reply: import('fastify').FastifyReply, token: string, expiresAt: Date): void {
     reply.setCookie(SESSION_COOKIE_NAME, token, {
       httpOnly: true,
@@ -72,12 +110,13 @@ export const webauthnRoutes: FastifyPluginAsync = async (app) => {
 
   app.post('/webauthn/register/options', { preHandler: webauthnRateLimit }, async (_request, reply) => {
     const options = await buildRegistrationOptions();
-    setChallengeCookie(reply, { type: 'register', challenge: options.challenge });
-    return { options };
+    const payload: ChallengeCookiePayload = { type: 'register', challenge: options.challenge };
+    setChallengeCookie(reply, payload);
+    return { options, challengeToken: signChallengeToken(payload) };
   });
 
   app.post('/webauthn/register/verify', { preHandler: webauthnRateLimit }, async (request, reply) => {
-    const challenge = readChallengeCookie(request, reply, 'register');
+    const challenge = resolveChallenge(request, reply, 'register');
     if (!challenge) {
       reply.code(400);
       return { error: 'no_pending_challenge' };
@@ -96,12 +135,13 @@ export const webauthnRoutes: FastifyPluginAsync = async (app) => {
 
   app.post('/webauthn/login/options', { preHandler: webauthnRateLimit }, async (_request, reply) => {
     const options = await buildAuthenticationOptions();
-    setChallengeCookie(reply, { type: 'login', challenge: options.challenge });
-    return { options };
+    const payload: ChallengeCookiePayload = { type: 'login', challenge: options.challenge };
+    setChallengeCookie(reply, payload);
+    return { options, challengeToken: signChallengeToken(payload) };
   });
 
   app.post('/webauthn/login/verify', { preHandler: webauthnRateLimit }, async (request, reply) => {
-    const challenge = readChallengeCookie(request, reply, 'login');
+    const challenge = resolveChallenge(request, reply, 'login');
     if (!challenge) {
       reply.code(400);
       return { error: 'no_pending_challenge' };

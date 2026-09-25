@@ -62,7 +62,9 @@ describe('POST /api/auth/webauthn/register/options', () => {
     const res = await app.inject({ method: 'POST', url: '/api/auth/webauthn/register/options' });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ options: { challenge: 'chal-123' } });
+    const body = res.json();
+    expect(body.options).toEqual({ challenge: 'chal-123' });
+    expect(typeof body.challengeToken).toBe('string');
     expect(extractSetCookies(res)).toContain(`${CHALLENGE_COOKIE_NAME}=`);
   });
 });
@@ -147,6 +149,46 @@ describe('POST /api/auth/webauthn/register/verify', () => {
     const setCookies = extractSetCookies(res);
     expect(setCookies).toContain('chunki_session=');
     expect(setCookies).toContain(`${CHALLENGE_COOKIE_NAME}=;`);
+  });
+
+  it('succeeds via the X-Webauthn-Challenge header alone, with no challenge cookie at all (Safari cross-site cookie blocking)', async () => {
+    vi.mocked(webauthn.buildRegistrationOptions).mockResolvedValue({ challenge: 'chal-header' } as never);
+    const optsRes = await app.inject({ method: 'POST', url: '/api/auth/webauthn/register/options' });
+    const { challengeToken } = optsRes.json();
+
+    const verified = { credentialId: 'cred-3', publicKey: new Uint8Array(), counter: 0, transports: null, deviceType: 'singleDevice', backedUp: false };
+    vi.mocked(webauthn.verifyRegistration).mockResolvedValue(verified);
+    vi.mocked(service.completeWebauthnRegistration).mockResolvedValue(loginResult);
+
+    // No `cookie` header at all — simulates the browser dropping the
+    // Set-Cookie from the options response entirely.
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/auth/webauthn/register/verify',
+      headers: { 'x-webauthn-challenge': challengeToken },
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ token: loginResult.token, user: loginResult.user });
+    expect(webauthn.verifyRegistration).toHaveBeenCalledWith({}, 'chal-header');
+  });
+
+  it('rejects a tampered challenge header', async () => {
+    vi.mocked(webauthn.buildRegistrationOptions).mockResolvedValue({ challenge: 'chal-tamper' } as never);
+    const optsRes = await app.inject({ method: 'POST', url: '/api/auth/webauthn/register/options' });
+    const { challengeToken } = optsRes.json();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/auth/webauthn/register/verify',
+      headers: { 'x-webauthn-challenge': `${challengeToken}tampered` },
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: 'no_pending_challenge' });
+    expect(webauthn.verifyRegistration).not.toHaveBeenCalled();
   });
 });
 
