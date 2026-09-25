@@ -51,6 +51,7 @@ export function DeckDoneScreen() {
     productionLimitReached,
     activeDeckChunks,
     goCardsLib,
+    plan,
   } = useAppStore();
   const tally = deckTallyView(sessionVerdicts);
   const productionEntries = Object.entries(sessionProductionResults);
@@ -62,7 +63,7 @@ export function DeckDoneScreen() {
     setCheckingOut(true);
     setCheckoutError(null);
     try {
-      const { paymentUrl } = await createCheckout('monthly');
+      const { paymentUrl } = await createCheckout(plan);
       window.location.href = paymentUrl;
     } catch {
       setCheckoutError('Не удалось начать оплату. Попробуйте позже.');

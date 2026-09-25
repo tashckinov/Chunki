@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { FastifyPluginAsync } from 'fastify';
+import rateLimit from '@fastify/rate-limit';
 import { loadEnv } from '../../config/env.js';
 import { buildGoogleAuthUrl, exchangeGoogleCode, generatePkcePair } from './google.js';
 import { completeGoogleLogin } from './service.js';
@@ -36,7 +37,14 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
 
   await app.register(webauthnRoutes);
 
-  app.get('/google', async (_request, reply) => {
+  // Neither route below carries a session yet (that's the whole point), so
+  // this is IP-keyed rather than userId-keyed like the rest of the app's
+  // rate-limited routes — it's the only throttling this login surface has,
+  // unlike the AI-cost-incurring routes elsewhere in the app.
+  await app.register(rateLimit, { global: false });
+  const authRateLimit = app.rateLimit({ max: 30, timeWindow: '1 minute', keyGenerator: (request) => request.ip });
+
+  app.get('/google', { preHandler: authRateLimit }, async (_request, reply) => {
     const state = randomBytes(24).toString('base64url');
     const nonce = randomBytes(24).toString('base64url');
     const { codeVerifier, codeChallenge } = await generatePkcePair();
@@ -54,7 +62,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     return reply.redirect(buildGoogleAuthUrl({ state, nonce, codeChallenge }));
   });
 
-  app.get('/google/callback', async (request, reply) => {
+  app.get('/google/callback', { preHandler: authRateLimit }, async (request, reply) => {
     const query = request.query as Record<string, string | undefined>;
     const rawCookie = request.cookies[OAUTH_COOKIE_NAME];
     reply.clearCookie(OAUTH_COOKIE_NAME, { path: '/api/auth' });

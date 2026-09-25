@@ -786,6 +786,14 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'chunki/v1',
+      // 'checking' is a pure loading state (see submitTest/exPrimary) with no
+      // way back in the UI (CheckingScreen has no NavigationBar, and
+      // BACK_MAP has no entry for it) — if the tab closed/reloaded mid-check,
+      // `grading` resets to false but the persisted screen doesn't, leaving
+      // a permanent spinner. Bounce back to a safe screen on rehydrate.
+      onRehydrateStorage: () => (state) => {
+        if (state?.screen === 'checking') state.screen = 'cardslib';
+      },
       partialize: (s) => {
         // user/authChecked/authError are derived fresh from the session
         // cookie on every load (see checkAuth) — persisting them would show

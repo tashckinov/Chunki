@@ -269,7 +269,15 @@ export async function submitProductionAnswer(userId: string, chunkId: string, an
     durationMs: Date.now() - startedAt,
   }).catch(() => {});
 
-  if (isFree) await incrementProductionChecksUsed(userId).catch(() => {});
+  // This increment IS the free-tier limit enforcement — if it fails, the
+  // limit silently doesn't apply (the judge call above already happened, so
+  // there's nothing to roll back), which is worth a visible log line rather
+  // than vanishing entirely.
+  if (isFree) {
+    await incrementProductionChecksUsed(userId).catch((err) => {
+      console.error('incrementProductionChecksUsed failed', { userId, message: err instanceof Error ? err.message : String(err) });
+    });
+  }
 
   const row = await upsertProgress(userId, chunkId, {
     state: VERDICT_STATE[result.verdict],

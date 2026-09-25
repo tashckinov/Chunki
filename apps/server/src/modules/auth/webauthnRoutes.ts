@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import rateLimit from '@fastify/rate-limit';
 import type { RegistrationResponseJSON, AuthenticationResponseJSON } from '@simplewebauthn/server';
 import { loadEnv } from '../../config/env.js';
 import { buildRegistrationOptions, verifyRegistration, buildAuthenticationOptions, verifyAuthentication } from './webauthn.js';
@@ -24,6 +25,14 @@ export const webauthnRoutes: FastifyPluginAsync = async (app) => {
   const env = loadEnv();
   const isProd = env.NODE_ENV === 'production';
   const cookieSameSite = isProd ? 'none' : 'lax';
+
+  // None of these routes carry a session (that's the point of them), so
+  // this is IP-keyed — self-registered here rather than relying on the
+  // parent authRoutes plugin's own rate-limit registration, since this file
+  // is a separately encapsulated Fastify plugin (mirrors how every other
+  // rate-limited module in this app registers its own instance).
+  await app.register(rateLimit, { global: false });
+  const webauthnRateLimit = app.rateLimit({ max: 20, timeWindow: '1 minute', keyGenerator: (request) => request.ip });
 
   function setChallengeCookie(reply: import('fastify').FastifyReply, payload: ChallengeCookiePayload): void {
     reply.setCookie(CHALLENGE_COOKIE_NAME, JSON.stringify(payload), {
@@ -61,13 +70,13 @@ export const webauthnRoutes: FastifyPluginAsync = async (app) => {
     });
   }
 
-  app.post('/webauthn/register/options', async (_request, reply) => {
+  app.post('/webauthn/register/options', { preHandler: webauthnRateLimit }, async (_request, reply) => {
     const options = await buildRegistrationOptions();
     setChallengeCookie(reply, { type: 'register', challenge: options.challenge });
     return { options };
   });
 
-  app.post('/webauthn/register/verify', async (request, reply) => {
+  app.post('/webauthn/register/verify', { preHandler: webauthnRateLimit }, async (request, reply) => {
     const challenge = readChallengeCookie(request, reply, 'register');
     if (!challenge) {
       reply.code(400);
@@ -85,13 +94,13 @@ export const webauthnRoutes: FastifyPluginAsync = async (app) => {
     return { token, user };
   });
 
-  app.post('/webauthn/login/options', async (_request, reply) => {
+  app.post('/webauthn/login/options', { preHandler: webauthnRateLimit }, async (_request, reply) => {
     const options = await buildAuthenticationOptions();
     setChallengeCookie(reply, { type: 'login', challenge: options.challenge });
     return { options };
   });
 
-  app.post('/webauthn/login/verify', async (request, reply) => {
+  app.post('/webauthn/login/verify', { preHandler: webauthnRateLimit }, async (request, reply) => {
     const challenge = readChallengeCookie(request, reply, 'login');
     if (!challenge) {
       reply.code(400);

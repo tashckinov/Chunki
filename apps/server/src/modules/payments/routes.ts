@@ -31,10 +31,12 @@ function verifyLavaTopWebhookAuth(header: string | undefined): boolean {
 }
 
 export const paymentsRoutes: FastifyPluginAsync = async (app) => {
-  // Rate-limited, unlike the public webhook route below — this is the one
-  // route here a signed-in user can call freely, so it's the one worth
-  // throttling against spam-created invoices (mirrors progress/routes.ts's
-  // identical treatment of its one paid/expensive route).
+  // Applies to every route below, including the public webhook — /checkout
+  // is throttled per signed-in user against spam-created invoices (mirrors
+  // progress/routes.ts's identical treatment of its one paid/expensive
+  // route), and /webhook/lava-top is throttled per IP since it carries no
+  // session — otherwise it'd be the one route in this app where a Basic-auth
+  // guess could be retried without limit.
   await app.register(rateLimit, { global: false });
 
   app.post(
@@ -73,20 +75,28 @@ export const paymentsRoutes: FastifyPluginAsync = async (app) => {
     return getAccountPaymentStatus(request.session!.userId);
   });
 
-  // Public — called by Lava.top server-to-server, never carries a session cookie.
-  app.post('/webhook/lava-top', async (request, reply) => {
-    if (!verifyLavaTopWebhookAuth(request.headers.authorization)) {
-      reply.code(401);
-      return { error: 'unauthorized' };
-    }
+  // Public — called by Lava.top server-to-server, never carries a session
+  // cookie, so the rate limit below is keyed by IP rather than userId. The
+  // limit is generous (this is a legitimate webhook sender, not a user) but
+  // still bounds how many Basic-auth guesses a single source can throw at
+  // verifyLavaTopWebhookAuth per window.
+  app.post(
+    '/webhook/lava-top',
+    { preHandler: app.rateLimit({ max: 60, timeWindow: '1 minute', keyGenerator: (request) => request.ip }) },
+    async (request, reply) => {
+      if (!verifyLavaTopWebhookAuth(request.headers.authorization)) {
+        reply.code(401);
+        return { error: 'unauthorized' };
+      }
 
-    try {
-      await handleLavaTopWebhook(request.body as Record<string, unknown>);
-    } catch (err) {
-      request.log.error({ message: err instanceof Error ? err.message : String(err) }, 'Lava.top webhook handling failed');
-      reply.code(502);
-      return { error: 'processing_failed' };
-    }
-    return { ok: true };
-  });
+      try {
+        await handleLavaTopWebhook(request.body as Record<string, unknown>);
+      } catch (err) {
+        request.log.error({ message: err instanceof Error ? err.message : String(err) }, 'Lava.top webhook handling failed');
+        reply.code(502);
+        return { error: 'processing_failed' };
+      }
+      return { ok: true };
+    },
+  );
 };

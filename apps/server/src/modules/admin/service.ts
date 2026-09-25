@@ -5,6 +5,7 @@ import {
   listCollectionsAdmin as repoListCollectionsAdmin,
   createCollection as repoCreateCollection,
   updateCollection as repoUpdateCollection,
+  findCollectionById as repoFindCollectionById,
   listChunksForCollectionAdmin as repoListChunksForCollectionAdmin,
   createChunkInCollection as repoCreateChunkInCollection,
   updateChunk as repoUpdateChunk,
@@ -31,6 +32,7 @@ import {
 import type { DialogueInput, DialogueKind } from '../dialogues/repository.js';
 import { listPaymentsForAdmin as paymentsListPaymentsForAdmin, type AdminPaymentSummary } from '../payments/service.js';
 import { listRecentActivityForAdmin as programListRecentActivityForAdmin, type AdminTopicActivitySummary } from '../program/service.js';
+import { deleteUploadedFile } from '../../config/uploads.js';
 
 export interface AdminUserSummary {
   id: string;
@@ -109,8 +111,16 @@ export async function createCollection(input: NewCollectionInput): Promise<Admin
 export type UpdateCollectionResult = { kind: 'ok'; collection: AdminCollectionSummary } | { kind: 'not_found' };
 
 export async function updateCollection(id: string, patch: CollectionPatch): Promise<UpdateCollectionResult> {
+  // Fetched before the update so a replaced banner's old file can be
+  // cleaned up afterward — it would otherwise sit on disk forever.
+  const previous = patch.bannerUrl !== undefined ? await repoFindCollectionById(id) : null;
+
   const row = await repoUpdateCollection(id, patch);
-  return row ? { kind: 'ok', collection: toCollectionSummary({ ...row, chunk_count: 0 }) } : { kind: 'not_found' };
+  if (!row) return { kind: 'not_found' };
+
+  if (previous?.banner_url && previous.banner_url !== patch.bannerUrl) void deleteUploadedFile(previous.banner_url);
+
+  return { kind: 'ok', collection: toCollectionSummary({ ...row, chunk_count: 0 }) };
 }
 
 export interface AdminChunkSummary {
