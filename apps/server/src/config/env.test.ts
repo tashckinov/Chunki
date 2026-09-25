@@ -18,30 +18,30 @@ afterEach(() => {
   process.env = { ...originalEnv };
 });
 
-async function loadOfferIdMonthlyUsd(value: string | undefined) {
+async function loadOfferIdMonthly(value: string | undefined) {
   process.env = { ...originalEnv, ...REQUIRED_ENV };
-  if (value === undefined) delete process.env.LAVA_TOP_OFFER_ID_MONTHLY_USD;
-  else process.env.LAVA_TOP_OFFER_ID_MONTHLY_USD = value;
+  if (value === undefined) delete process.env.LAVA_TOP_OFFER_ID_MONTHLY;
+  else process.env.LAVA_TOP_OFFER_ID_MONTHLY = value;
   vi.resetModules();
   const { loadEnv } = await import('./env.js');
-  return loadEnv().LAVA_TOP_OFFER_ID_MONTHLY_USD;
+  return loadEnv().LAVA_TOP_OFFER_ID_MONTHLY;
 }
 
 describe('loadEnv — LAVA_TOP_OFFER_ID_* accepts a bare id or Lava.top\'s "copy link"', () => {
   it('leaves a bare offerId untouched', async () => {
-    expect(await loadOfferIdMonthlyUsd('45b347bb-4063-4175-b018-69df351313a3')).toBe('45b347bb-4063-4175-b018-69df351313a3');
+    expect(await loadOfferIdMonthly('45b347bb-4063-4175-b018-69df351313a3')).toBe('45b347bb-4063-4175-b018-69df351313a3');
   });
 
   it('extracts the offerId from a full product link', async () => {
     const link = 'https://app.lava.top/products/224c1c3c-3604-4420-84ab-bad09bd1ebd7/45b347bb-4063-4175-b018-69df351313a3';
-    expect(await loadOfferIdMonthlyUsd(link)).toBe('45b347bb-4063-4175-b018-69df351313a3');
+    expect(await loadOfferIdMonthly(link)).toBe('45b347bb-4063-4175-b018-69df351313a3');
   });
 
   it('leaves it unset when omitted entirely', async () => {
-    expect(await loadOfferIdMonthlyUsd(undefined)).toBeUndefined();
+    expect(await loadOfferIdMonthly(undefined)).toBeUndefined();
   });
 
   it('leaves it unset when given an empty string', async () => {
-    expect(await loadOfferIdMonthlyUsd('')).toBeUndefined();
+    expect(await loadOfferIdMonthly('')).toBeUndefined();
   });
 });

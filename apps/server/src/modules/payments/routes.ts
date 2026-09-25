@@ -8,7 +8,7 @@ import { createCheckoutForUser, getAccountPaymentStatus, handleLavaTopWebhook } 
 
 const checkoutBodySchema = z.object({
   plan: z.enum(['monthly', 'yearly']),
-  currency: z.enum(['USD', 'EUR']),
+  currency: z.enum(['USD', 'EUR', 'RUB']),
   email: z.string().email().max(255),
 });
 
