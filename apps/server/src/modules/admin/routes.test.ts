@@ -11,7 +11,10 @@ vi.mock('../auth/session.js', async () => {
   const actual = await vi.importActual<typeof import('../auth/session.js')>('../auth/session.js');
   return { SESSION_COOKIE_NAME: actual.SESSION_COOKIE_NAME, extractSessionToken: actual.extractSessionToken, getSession: vi.fn() };
 });
-vi.mock('../../config/uploads.js', () => ({ UPLOADS_DIR: TEST_UPLOADS_DIR }));
+vi.mock('../../config/uploads.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../config/uploads.js')>();
+  return { ...actual, UPLOADS_DIR: TEST_UPLOADS_DIR };
+});
 vi.mock('./service.js', () => ({
   listUsers: vi.fn(),
   setUserPremiumUntil: vi.fn(),
@@ -304,7 +307,7 @@ describe('collections CRUD', () => {
 const TINY_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
 
 describe('POST /api/admin/uploads/banner', () => {
-  it('resizes+re-encodes the uploaded image to JPEG and returns its URL', async () => {
+  it('resizes+re-encodes a transparent upload as PNG to preserve alpha', async () => {
     vi.mocked(session.getSession).mockResolvedValue(adminSession);
     const { body, boundary } = buildMultipartBody('banner.png', 'image/png', TINY_PNG);
 
@@ -318,10 +321,9 @@ describe('POST /api/admin/uploads/banner', () => {
 
     expect(res.statusCode).toBe(200);
     const { url } = res.json();
-    expect(url).toMatch(/^\/uploads\/banners\/[0-9a-f-]+\.jpg$/);
+    expect(url).toMatch(/^\/uploads\/banners\/[0-9a-f-]+\.png$/);
     const saved = fs.readFileSync(path.join(TEST_UPLOADS_DIR, url.replace('/uploads/', '')));
-    expect(saved.length).toBeGreaterThan(0);
-    expect(saved.subarray(0, 2)).toEqual(Buffer.from([0xff, 0xd8])); // JPEG magic bytes — confirms it was actually re-encoded, not just copied
+    expect(saved.subarray(0, 4)).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47])); // PNG magic bytes — confirms transparency was preserved, not flattened to JPEG
   });
 
   it('rejects an unsupported file type', async () => {
@@ -565,7 +567,7 @@ describe('chunk dialogue', () => {
 
     const res = await app.inject({ method: 'GET', url: `/api/admin/chunks/${validId}/dialogue/bogus`, cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' } });
 
-    expect(res.statusCode).toBe(404);
+    expect(res.statusCode).toBe(400);
     expect(service.getDialogueForChunk).not.toHaveBeenCalled();
   });
 

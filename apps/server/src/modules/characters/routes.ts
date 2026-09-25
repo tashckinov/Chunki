@@ -3,10 +3,9 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { FastifyPluginAsync } from 'fastify';
 import multipart from '@fastify/multipart';
-import sharp from 'sharp';
 import { z } from 'zod';
 import { requireAdmin } from '../auth/requireAuth.js';
-import { UPLOADS_DIR } from '../../config/uploads.js';
+import { MAX_UPLOAD_BYTES, UPLOADS_DIR, resizeImage } from '../../config/uploads.js';
 import {
   listCharacters,
   createCharacter,
@@ -22,7 +21,6 @@ import {
 // Full-body portraits are taller than wide; emotion thumbnails render small
 // in a grid — both just need a comfortable retina-ish cap, same idea as the
 // collection banner's BANNER_MAX_DIMENSION.
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const FULL_BODY_MAX_DIMENSION = 1200;
 const EMOTION_IMAGE_MAX_DIMENSION = 800;
 
@@ -35,19 +33,6 @@ const imagePatchSchema = z
   .object({ emotion: z.string().min(1).optional(), description: z.string().max(300).nullable().optional() })
   .refine((v) => v.emotion !== undefined || v.description !== undefined, { message: 'at least one field required' });
 const reorderSchema = z.object({ emotion: z.string().min(1), imageIds: z.array(z.string().uuid()).min(1) });
-
-// JPEG has no alpha channel — sharp flattens transparent source pixels onto
-// black by default, which silently destroys transparency on PNG uploads.
-// Preserve it by keeping alpha-bearing images as PNG; only genuinely opaque
-// images get re-encoded to the smaller JPEG.
-async function resizeImage(original: Buffer, maxDimension: number): Promise<{ buffer: Buffer; extension: 'png' | 'jpg' }> {
-  const image = sharp(original).resize({ width: maxDimension, height: maxDimension, fit: 'inside', withoutEnlargement: true });
-  const { hasAlpha } = await sharp(original).metadata();
-  if (hasAlpha) {
-    return { buffer: await image.png({ compressionLevel: 8 }).toBuffer(), extension: 'png' };
-  }
-  return { buffer: await image.jpeg({ quality: 82 }).toBuffer(), extension: 'jpg' };
-}
 
 /** Every route here is admin-only — same plugin-wide preHandler pattern as admin/routes.ts. */
 export const charactersRoutes: FastifyPluginAsync = async (app) => {

@@ -1,6 +1,6 @@
 import type { ExerciseItem, ExercisesGradeResult, PlacementGradeResult, PlacementTestSubmission, TopicStudyContent, TopicSuggestion } from '@app/shared';
 import { getGradingProvider } from '../../grading/index.js';
-import { recordAiCallLog } from '../aiLogs/repository.js';
+import { withAiCallLogging } from '../aiLogs/service.js';
 import {
   createAttempt,
   createPlacementTest,
@@ -58,24 +58,7 @@ export async function getProgramForUser(userId: string): Promise<ProgramForUser>
 
 export async function submitPlacementTest(userId: string, input: PlacementTestSubmission): Promise<{ result: PlacementGradeResult; topics: UserTopicSummary[] }> {
   const provider = getGradingProvider();
-  const startedAt = Date.now();
-  let result: PlacementGradeResult;
-  try {
-    result = await provider.gradePlacementTest(input);
-  } catch (err) {
-    await recordAiCallLog({
-      userId,
-      chunkId: null,
-      provider: provider.name,
-      model: null,
-      request: input,
-      response: null,
-      error: err instanceof Error ? err.message : String(err),
-      durationMs: Date.now() - startedAt,
-    }).catch(() => {});
-    throw err;
-  }
-  await recordAiCallLog({ userId, chunkId: null, provider: provider.name, model: null, request: input, response: result, error: null, durationMs: Date.now() - startedAt }).catch(() => {});
+  const result = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: null, request: input }, () => provider.gradePlacementTest(input));
 
   await createPlacementTest({
     userId,
@@ -109,24 +92,7 @@ export async function getTopicStudy(userId: string, userTopicId: string): Promis
 
   const provider = getGradingProvider();
   const topic = toTopicSuggestion(row);
-  const startedAt = Date.now();
-  let study: TopicStudyContent;
-  try {
-    study = await provider.generateTopicStudy(topic);
-  } catch (err) {
-    await recordAiCallLog({
-      userId,
-      chunkId: null,
-      provider: provider.name,
-      model: null,
-      request: topic,
-      response: null,
-      error: err instanceof Error ? err.message : String(err),
-      durationMs: Date.now() - startedAt,
-    }).catch(() => {});
-    throw err;
-  }
-  await recordAiCallLog({ userId, chunkId: null, provider: provider.name, model: null, request: topic, response: study, error: null, durationMs: Date.now() - startedAt }).catch(() => {});
+  const study = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: null, request: topic }, () => provider.generateTopicStudy(topic));
 
   await updateTopicStudyContent(row.id, study);
   return { kind: 'ok', study };
@@ -156,24 +122,7 @@ export async function startTopicAttempt(userId: string, userTopicId: string): Pr
 
   const provider = getGradingProvider();
   const topic = toTopicSuggestion(row);
-  const startedAt = Date.now();
-  let items: ExerciseItem[];
-  try {
-    items = await provider.generateTopicExercises(topic);
-  } catch (err) {
-    await recordAiCallLog({
-      userId,
-      chunkId: null,
-      provider: provider.name,
-      model: null,
-      request: topic,
-      response: null,
-      error: err instanceof Error ? err.message : String(err),
-      durationMs: Date.now() - startedAt,
-    }).catch(() => {});
-    throw err;
-  }
-  await recordAiCallLog({ userId, chunkId: null, provider: provider.name, model: null, request: topic, response: items, error: null, durationMs: Date.now() - startedAt }).catch(() => {});
+  const items = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: null, request: topic }, () => provider.generateTopicExercises(topic));
 
   const attempt = await createAttempt(row.id, attemptKind, items);
   return { kind: 'ok', attemptId: attempt.id, attemptKind, items: redact(items) };
@@ -198,24 +147,7 @@ export async function submitTopicAttempt(userId: string, userTopicId: string, at
   const gradeInput = { topic, items, answers };
 
   const provider = getGradingProvider();
-  const startedAt = Date.now();
-  let result: ExercisesGradeResult;
-  try {
-    result = await provider.gradeExercises(gradeInput);
-  } catch (err) {
-    await recordAiCallLog({
-      userId,
-      chunkId: null,
-      provider: provider.name,
-      model: null,
-      request: gradeInput,
-      response: null,
-      error: err instanceof Error ? err.message : String(err),
-      durationMs: Date.now() - startedAt,
-    }).catch(() => {});
-    throw err;
-  }
-  await recordAiCallLog({ userId, chunkId: null, provider: provider.name, model: null, request: gradeInput, response: result, error: null, durationMs: Date.now() - startedAt }).catch(() => {});
+  const result = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: null, request: gradeInput }, () => provider.gradeExercises(gradeInput));
 
   await updateAttemptResult(attempt.id, { answers, scoreOutOf10: result.scoreOutOf10, passed: result.passed, notes: result.notes, discoveredTopics: result.discoveredTopics });
 

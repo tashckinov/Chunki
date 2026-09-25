@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { FREE_PRODUCTION_CHECKS_LIMIT } from '@app/shared';
 import { useAppStore } from '../store/appStore';
 import type { ProductionVerdict } from '../lib/progress';
 import { deckTallyView } from '../store/derived';
@@ -106,7 +107,7 @@ export function DeckDoneScreen() {
         <div className="rounded-[var(--radius-md)] bg-accent-subtle p-4 flex flex-col gap-2.5">
           <div className="text-[14.5px] font-semibold">Бесплатные проверки закончились</div>
           <div className="text-body-secondary text-[13.5px]">
-            На бесплатном тарифе доступно 3 проверки предложений. Хотите больше? Оформите подписку.
+            На бесплатном тарифе доступно {FREE_PRODUCTION_CHECKS_LIMIT} {plural(FREE_PRODUCTION_CHECKS_LIMIT, 'проверка', 'проверки', 'проверок')} предложений. Хотите больше? Оформите подписку.
           </div>
           {checkoutError && <div className="text-negative text-[13.5px]">{checkoutError}</div>}
           <Button size="sm" onClick={handleSubscribe} disabled={checkingOut}>

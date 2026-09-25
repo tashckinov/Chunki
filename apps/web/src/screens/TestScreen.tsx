@@ -90,7 +90,7 @@ export function TestScreen() {
             <span>{v.essayWords} слов</span>
             <span>нужно 5–8 предложений</span>
           </div>
-          <Button size="lg" onClick={s.submitTest} className="w-full">
+          <Button size="lg" onClick={s.submitTest} disabled={s.grading} className="w-full">
             Отправить на проверку
           </Button>
         </div>

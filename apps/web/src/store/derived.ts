@@ -1,5 +1,10 @@
-import { MCQ } from '@app/shared';
+import { MCQ, READING_QUESTIONS } from '@app/shared';
 import type { CEFRLevel } from '@app/shared';
+
+// Part 1 (MCQ) + part 2 (2 reading questions) + part 3 (1 essay) — the
+// denominator for the test's overall progress bar, derived from the actual
+// question set instead of a hardcoded count that could silently drift from it.
+const TOTAL_TEST_STEPS = MCQ.length + READING_QUESTIONS.length + 1;
 import { useAppStore } from './appStore';
 import { plural } from '../lib/plural';
 import { DAY_LABELS } from '../lib/schedule';
@@ -32,12 +37,12 @@ export function useTestView() {
   return {
     mq,
     mqOptions,
-    mqCounter: `${Math.min(s.qi + 1, MCQ.length)} / 8`,
+    mqCounter: `${Math.min(s.qi + 1, MCQ.length)} / ${MCQ.length}`,
     unknown,
     mqUnanswered: !picked,
     atFirstQ: s.qi === 0,
     nextQLabel: s.qi >= MCQ.length - 1 ? 'Часть 2' : 'Дальше',
-    testValue: s.testPart === 1 ? s.qi / 11 : s.testPart === 2 ? 8 / 11 : 10 / 11,
+    testValue: s.testPart === 1 ? s.qi / TOTAL_TEST_STEPS : s.testPart === 2 ? MCQ.length / TOTAL_TEST_STEPS : (MCQ.length + READING_QUESTIONS.length) / TOTAL_TEST_STEPS,
     testTitle: s.testPart === 1 ? 'Часть 1 из 3' : s.testPart === 2 ? 'Часть 2 из 3' : 'Часть 3 из 3',
     essayWords: s.essay.trim() ? s.essay.trim().split(/\s+/).length : 0,
   };

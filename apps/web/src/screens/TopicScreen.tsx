@@ -33,8 +33,15 @@ export function TopicScreen() {
           <div className="text-meta mt-1.5">{topic.rationale}</div>
         </div>
 
-        {!study && (
-          <div className="text-body-secondary py-8 text-center">Готовим материал…</div>
+        {!study && !s.topicStudyError && <div className="text-body-secondary py-8 text-center">Готовим материал…</div>}
+
+        {!study && s.topicStudyError && (
+          <div className="py-8 flex flex-col items-center gap-4 text-center">
+            <div className="text-body-secondary">Не получилось загрузить материал.</div>
+            <Button size="sm" onClick={() => void s.openTopic(topic.id)}>
+              Повторить
+            </Button>
+          </div>
         )}
 
         {study && (

@@ -10,11 +10,16 @@ import { ApiError } from '../lib/collections';
 const PLAN_COMPARE = [
   { label: 'Карточки с чанками', free: true },
   { label: 'Проверка уровня раз в месяц', free: true },
-  { label: 'Все 14 тем и упражнения', free: false },
+  { label: 'Все темы и упражнения', free: false },
   { label: 'Проверка открытых ответов и письма', free: false },
   { label: 'Доп. уроки по слабым темам', free: false },
 ];
 
+// The real price lives in Lava.top's dashboard (LAVA_TOP_OFFER_ID_MONTHLY/
+// YEARLY — see apps/server/README.md's "Payments (Lava.top)" section) —
+// this backend has no API to read it back, so these are a plain copy for
+// display only. If the price changes in the dashboard, update it here too;
+// nothing enforces they stay in sync.
 const PLANS = {
   monthly: { title: 'Месяц', meta: 'без обязательств', price: '590 ₽' },
   yearly: { title: 'Год', meta: 'выгоднее на 44%', price: '3 990 ₽' },
@@ -44,7 +49,7 @@ export function PaywallScreen() {
     <div className="scroll-clean flex-1 min-h-0 px-5 pt-4 pb-8 flex flex-col gap-8 anim-rise">
       <div>
         <div className="text-meta">План готов</div>
-        <div className="text-page-title mt-1">14 тем до {to}</div>
+        <div className="text-page-title mt-1">Персональный план до {to}</div>
         <div className="text-body-secondary mt-2">{scheduleSummary}</div>
       </div>
 

@@ -1,6 +1,6 @@
-import type { ProductionCheckVerdict } from '@app/shared';
+import { FREE_PRODUCTION_CHECKS_LIMIT, type ProductionCheckVerdict } from '@app/shared';
 import { getProductionJudgeProvider } from '../../openrouter/index.js';
-import { recordAiCallLog } from '../aiLogs/repository.js';
+import { withAiCallLogging } from '../aiLogs/service.js';
 import { findAccountStatus, incrementProductionChecksUsed, isPremiumActive } from '../users/repository.js';
 import { findSituationDialogueForLearner, type SituationDialogueForLearner } from '../dialogues/service.js';
 import {
@@ -13,10 +13,9 @@ import {
   type SituationPromptPart,
 } from './repository.js';
 
-// Free (non-premium, non-admin) users get 3 lifetime production checks —
-// permanent until an admin resets production_checks_used back to 0 (see
-// admin/repository.ts's resetProductionChecksUsed).
-const FREE_PRODUCTION_CHECKS_LIMIT = 3;
+// FREE_PRODUCTION_CHECKS_LIMIT usage is permanent until an admin resets
+// production_checks_used back to 0 (see admin/repository.ts's
+// resetProductionChecksUsed).
 
 export type SortVerdict = 'know' | 'dont' | 'bury';
 
@@ -241,33 +240,7 @@ export async function submitProductionAnswer(userId: string, chunkId: string, an
     situationPrompt: situationPromptText,
     userAnswer: answer,
   };
-  const startedAt = Date.now();
-  let result;
-  try {
-    result = await judge.judgeProduction(judgeInput);
-  } catch (err) {
-    await recordAiCallLog({
-      userId,
-      chunkId,
-      provider: judge.name,
-      model: judge.model,
-      request: judgeInput,
-      response: null,
-      error: err instanceof Error ? err.message : String(err),
-      durationMs: Date.now() - startedAt,
-    }).catch(() => {});
-    throw err;
-  }
-  await recordAiCallLog({
-    userId,
-    chunkId,
-    provider: judge.name,
-    model: judge.model,
-    request: judgeInput,
-    response: result,
-    error: null,
-    durationMs: Date.now() - startedAt,
-  }).catch(() => {});
+  const result = await withAiCallLogging({ userId, chunkId, provider: judge.name, model: judge.model, request: judgeInput }, () => judge.judgeProduction(judgeInput));
 
   // This increment IS the free-tier limit enforcement — if it fails, the
   // limit silently doesn't apply (the judge call above already happened, so

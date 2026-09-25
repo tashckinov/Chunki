@@ -43,7 +43,7 @@ export function ExercisesScreen() {
           </div>
         ))}
 
-        <Button size="lg" onClick={s.exPrimary} className="w-full">
+        <Button size="lg" onClick={s.exPrimary} disabled={s.grading} className="w-full">
           Отправить на проверку
         </Button>
         <div className="text-meta text-center -mt-6">Открытые ответы проверяем по смыслу.</div>

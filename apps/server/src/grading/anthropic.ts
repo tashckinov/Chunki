@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { scoreMcq } from '@app/shared';
+import type { Env } from '../config/env.js';
 import type {
   ExerciseItem,
   ExercisesGradeResult,
@@ -40,19 +41,9 @@ const GRADE_DETAIL_SCHEMA = {
   required: ['correctness', 'chunkUsage', 'grammar', 'naturalness', 'score', 'feedback', 'suggestedAnswer'],
 } as const;
 
-function anthropicClient(): Anthropic {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not set — required for the anthropic grading provider.');
-  return new Anthropic({ apiKey });
-}
-
-function model(): string {
-  return process.env.ANTHROPIC_MODEL || 'claude-sonnet-5';
-}
-
-async function callTool<T>(client: Anthropic, opts: { system: string; user: string; toolName: string; toolDescription: string; schema: unknown }): Promise<T> {
+async function callTool<T>(client: Anthropic, opts: { model: string; system: string; user: string; toolName: string; toolDescription: string; schema: unknown }): Promise<T> {
   const response = await client.messages.create({
-    model: model(),
+    model: opts.model,
     max_tokens: 2048,
     system: opts.system,
     messages: [{ role: 'user', content: opts.user }],
@@ -82,8 +73,24 @@ function scoreChoiceItems(items: ExerciseItem[], answers: Record<number, string>
 export class AnthropicGradingProvider implements GradingProvider {
   name = 'anthropic';
 
+  #env: Pick<Env, 'ANTHROPIC_API_KEY' | 'ANTHROPIC_MODEL'>;
+
+  constructor(env: Pick<Env, 'ANTHROPIC_API_KEY' | 'ANTHROPIC_MODEL'>) {
+    this.#env = env;
+  }
+
+  #client(): Anthropic {
+    const apiKey = this.#env.ANTHROPIC_API_KEY;
+    if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not set — required for the anthropic grading provider.');
+    return new Anthropic({ apiKey });
+  }
+
+  get #model(): string {
+    return this.#env.ANTHROPIC_MODEL;
+  }
+
   async gradePlacementTest(input: PlacementTestSubmission): Promise<PlacementGradeResult> {
-    const client = anthropicClient();
+    const client = this.#client();
     const mcqScore = scoreMcq(input.mcqAnswers);
 
     type ToolOutput = {
@@ -144,6 +151,7 @@ export class AnthropicGradingProvider implements GradingProvider {
     ].join('\n');
 
     const out = await callTool<ToolOutput>(client, {
+      model: this.#model,
       system: 'You are an expert CEFR English examiner grading a Russian-speaking learner and building them a personalized study plan. Be precise, concise, and encouraging. Always respond only via the provided tool.',
       user,
       toolName: 'submit_placement_grade',
@@ -170,7 +178,7 @@ export class AnthropicGradingProvider implements GradingProvider {
   }
 
   async gradeExercises(input: ExercisesSubmission): Promise<ExercisesGradeResult> {
-    const client = anthropicClient();
+    const client = this.#client();
     const choiceScore = scoreChoiceItems(input.items, input.answers);
     const writeItems = input.items
       .map((item, i) => ({ item, i }))
@@ -215,6 +223,7 @@ export class AnthropicGradingProvider implements GradingProvider {
 
     const out = writeItems.length
       ? await callTool<ToolOutput>(client, {
+          model: this.#model,
           system: 'You are an expert CEFR English tutor grading exercise answers for a Russian-speaking learner. Always respond only via the provided tool.',
           user,
           toolName: 'submit_exercise_grade',
@@ -239,7 +248,7 @@ export class AnthropicGradingProvider implements GradingProvider {
   }
 
   async generateTopicStudy(topic: TopicSuggestion): Promise<TopicStudyContent> {
-    const client = anthropicClient();
+    const client = this.#client();
 
     const schema = {
       type: 'object',
@@ -263,6 +272,7 @@ export class AnthropicGradingProvider implements GradingProvider {
     };
 
     return callTool<TopicStudyContent>(client, {
+      model: this.#model,
       system: 'You are an expert English teacher writing concise study material in Russian for a Russian-speaking learner. Always respond only via the provided tool.',
       user: `Write study material for this topic: "${topic.title}" (category: ${topic.category}). Context for why the learner needs it: ${topic.rationale}`,
       toolName: 'submit_topic_study',
@@ -272,7 +282,7 @@ export class AnthropicGradingProvider implements GradingProvider {
   }
 
   async generateTopicExercises(topic: TopicSuggestion): Promise<ExerciseItem[]> {
-    const client = anthropicClient();
+    const client = this.#client();
 
     type ToolOutput = {
       items: { type: 'choice' | 'write'; q: string; options?: string[]; answer?: string; rows?: number; placeholder?: string }[];
@@ -304,6 +314,7 @@ export class AnthropicGradingProvider implements GradingProvider {
     };
 
     const out = await callTool<ToolOutput>(client, {
+      model: this.#model,
       system: 'You are an expert English teacher writing a short practice quiz for a Russian-speaking learner. Always respond only via the provided tool.',
       user: `Write 5-8 practice exercises drilling this exact topic: "${topic.title}" (category: ${topic.category}). Context: ${topic.rationale}`,
       toolName: 'submit_topic_exercises',

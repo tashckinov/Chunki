@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { MCQ } from '@app/shared';
 import type { CEFRLevel, ExercisesGradeResult, PlacementGradeResult } from '@app/shared';
 import {
   fetchProgram,
@@ -128,6 +129,8 @@ interface AppState {
   activeTopicId: string | null;
   /** Study material cache, keyed by user_topic id — generated once server-side and cached there too, so caching here just avoids a redundant fetch. */
   topicStudyByTopic: Record<string, TopicStudy>;
+  /** Set when the last openTopic() fetch failed — cleared on the next attempt. Drives TopicScreen's retry state. */
+  topicStudyError: string | null;
   currentAttempt: TopicAttempt | null;
   topicAnswers: Record<number, string>;
   exerciseResult: ExercisesGradeResult | null;
@@ -297,6 +300,7 @@ export const useAppStore = create<AppState>()(
       programTopics: [],
       activeTopicId: null,
       topicStudyByTopic: {},
+      topicStudyError: null,
       currentAttempt: null,
       topicAnswers: {},
       exerciseResult: null,
@@ -386,7 +390,7 @@ export const useAppStore = create<AppState>()(
       pickMcq: (letter) => set((s) => ({ mcqAnswers: { ...s.mcqAnswers, [s.qi + 1]: letter } })),
       pickUnknown: () => set((s) => ({ mcqAnswers: { ...s.mcqAnswers, [s.qi + 1]: '—' } })),
       nextQ: () =>
-        set((s) => (s.qi >= 7 ? { testPart: 2, qi: s.qi } : { qi: s.qi + 1 })),
+        set((s) => (s.qi >= MCQ.length - 1 ? { testPart: 2, qi: s.qi } : { qi: s.qi + 1 })),
       prevQ: () => set((s) => ({ qi: Math.max(0, s.qi - 1) })),
       setOpen9: (v) => set({ open9: v }),
       setOpen10: (v) => set({ open10: v }),
@@ -473,13 +477,15 @@ export const useAppStore = create<AppState>()(
         }
       },
       openTopic: async (userTopicId) => {
-        set({ activeTopicId: userTopicId, screen: 'topic' });
+        set({ activeTopicId: userTopicId, screen: 'topic', topicStudyError: null });
         if (get().topicStudyByTopic[userTopicId]) return;
         try {
           const study = await fetchTopicStudy(userTopicId);
           set((st) => ({ topicStudyByTopic: { ...st.topicStudyByTopic, [userTopicId]: study } }));
-        } catch {
-          // TopicScreen shows a retry state when the topic id has no cached study.
+        } catch (err) {
+          // Cache stays unset for this id, so calling openTopic(id) again (the
+          // retry button in TopicScreen) naturally re-fetches.
+          set({ topicStudyError: err instanceof Error ? err.message : String(err) });
         }
       },
       setNavTab: (v) => {
@@ -815,6 +821,7 @@ export const useAppStore = create<AppState>()(
           grading,
           gradingError,
           checkingContext,
+          topicStudyError,
           user,
           authChecked,
           authError,
@@ -838,6 +845,7 @@ export const useAppStore = create<AppState>()(
         void grading;
         void gradingError;
         void checkingContext;
+        void topicStudyError;
         void user;
         void authChecked;
         void authError;

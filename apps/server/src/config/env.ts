@@ -27,16 +27,18 @@ const envSchema = z.object({
 
   FRONTEND_URL: z.string().url('FRONTEND_URL must be a valid URL'),
 
-  // Existing grading config (unrelated to auth), kept as-is.
+  // Existing grading config (unrelated to auth), kept as-is. The model
+  // default lives here (not as a `||` fallback in grading/anthropic.ts) so
+  // every provider's default model is discoverable in one place.
   GRADING_PROVIDER: z.preprocess(emptyToUndefined, z.enum(['mock', 'anthropic']).optional()),
   ANTHROPIC_API_KEY: z.string().optional(),
-  ANTHROPIC_MODEL: z.string().optional(),
+  ANTHROPIC_MODEL: z.preprocess(emptyToUndefined, z.string().default('claude-sonnet-5')),
 
   // Chunk production-check judge — same optional/auto-select shape as the
   // grading vars above, via OpenRouter instead of Anthropic directly.
   PRODUCTION_JUDGE_PROVIDER: z.preprocess(emptyToUndefined, z.enum(['mock', 'openrouter']).optional()),
   OPENROUTER_API_KEY: z.string().optional(),
-  OPENROUTER_MODEL: z.string().optional(),
+  OPENROUTER_MODEL: z.preprocess(emptyToUndefined, z.string().default('openai/gpt-4o-mini')),
 
   // Subscription payments via Lava.top — same optional explicit-override /
   // auto-select-when-a-key-is-present shape as the providers above (see

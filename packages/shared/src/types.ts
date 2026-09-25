@@ -108,6 +108,11 @@ export interface GradingProvider {
  * client-side (live counter) and server-side (the actual validation). */
 export const PRODUCTION_ANSWER_MAX_LENGTH = 150;
 
+/** Free (non-premium, non-admin) users get this many lifetime production
+ * checks — enforced server-side (progress/service.ts) and shown to the user
+ * client-side (DeckDoneScreen's upsell copy). One source so the two can't drift. */
+export const FREE_PRODUCTION_CHECKS_LIMIT = 3;
+
 export interface ProductionCheckInput {
   chunkText: string;
   chunkTranslation: string;

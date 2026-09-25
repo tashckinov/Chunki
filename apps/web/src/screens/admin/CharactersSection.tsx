@@ -265,6 +265,7 @@ function CharacterDetailView({
 }) {
   const [name, setName] = useState(character.name);
   const [nameSaving, setNameSaving] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
   const [fullBodyUploading, setFullBodyUploading] = useState(false);
   const [fullBodyError, setFullBodyError] = useState<string | null>(null);
   const [fullBodyDragOver, setFullBodyDragOver] = useState(false);
@@ -284,7 +285,10 @@ function CharacterDetailView({
   const [descriptionSaving, setDescriptionSaving] = useState(false);
   const [descriptionError, setDescriptionError] = useState<string | null>(null);
 
-  useEffect(() => setName(character.name), [character.id, character.name]);
+  useEffect(() => {
+    setName(character.name);
+    setNameError(null);
+  }, [character.id, character.name]);
   useEffect(() => setMoveEmotion(movingImage?.emotion ?? ''), [movingImage]);
   useEffect(() => {
     setDescriptionDraft(editingDescriptionImage?.description ?? '');
@@ -296,11 +300,13 @@ function CharacterDetailView({
   async function saveName() {
     if (!name.trim() || name.trim() === character.name) return;
     setNameSaving(true);
+    setNameError(null);
     try {
       const updated = await updateCharacter(character.id, { name: name.trim() });
       onUpdate(updated);
     } catch {
       setName(character.name);
+      setNameError('Не удалось сохранить имя.');
     } finally {
       setNameSaving(false);
     }
@@ -438,13 +444,16 @@ function CharacterDetailView({
       <NavigationBar title={character.name} onBack={onBack} />
       <div className="scroll-clean flex-1 min-h-0 px-5 py-4">
         <div className="flex flex-col gap-5">
-          <div className="flex items-center gap-2">
-            <Input value={name} onChange={setName} placeholder="Имя" />
-            {name.trim() && name.trim() !== character.name && (
-              <Button size="sm" variant="secondary" onClick={saveName} disabled={nameSaving}>
-                {nameSaving ? '…' : 'Сохранить'}
-              </Button>
-            )}
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-2">
+              <Input value={name} onChange={setName} placeholder="Имя" />
+              {name.trim() && name.trim() !== character.name && (
+                <Button size="sm" variant="secondary" onClick={saveName} disabled={nameSaving}>
+                  {nameSaving ? '…' : 'Сохранить'}
+                </Button>
+              )}
+            </div>
+            {nameError && <span className="text-negative text-[13px]">{nameError}</span>}
           </div>
 
           <Field label="Фото в полный рост">
