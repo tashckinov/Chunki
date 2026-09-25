@@ -15,9 +15,6 @@ import { adminRoutes } from './modules/admin/routes.js';
 import { charactersRoutes } from './modules/characters/routes.js';
 import { paymentsRoutes } from './modules/payments/routes.js';
 import { programRoutes } from './modules/program/routes.js';
-import { getGradingProvider } from './grading/index.js';
-import { getProductionJudgeProvider } from './openrouter/index.js';
-import { getPaymentProvider } from './modules/payments/index.js';
 
 async function main() {
   const env = loadEnv();
@@ -38,12 +35,7 @@ async function main() {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
   await app.register(staticPlugin, { root: UPLOADS_DIR, prefix: '/uploads/' });
 
-  app.get('/api/health', async () => ({
-    ok: true,
-    gradingProvider: getGradingProvider().name,
-    productionJudgeProvider: getProductionJudgeProvider().name,
-    paymentProvider: getPaymentProvider().name,
-  }));
+  app.get('/api/health', async () => ({ ok: true }));
 
   await app.register(authRoutes, { prefix: '/api/auth' });
   await app.register(collectionsRoutes, { prefix: '/api/collections' });

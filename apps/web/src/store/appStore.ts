@@ -120,8 +120,6 @@ interface AppState {
   days: number[]; // 0=Пн .. 6=Вс
   minutes: number;
   time: string;
-  calOpen: boolean;
-  calFocusIndex: number | null;
 
   /** Null while the initial GET /api/program hasn't resolved yet. */
   programStatus: 'none' | 'active' | null;
@@ -219,9 +217,6 @@ interface AppState {
   choosePlan: (key: 'monthly' | 'yearly') => void;
   skipPaywall: () => void;
 
-  toggleCalendar: () => void;
-  focusCalendarDay: (dayIndex: number) => void;
-
   goHome: () => void;
   goProgram: () => void;
   goCardsLib: () => void;
@@ -293,8 +288,6 @@ export const useAppStore = create<AppState>()(
       days: [1, 3, 5],
       minutes: 25,
       time: '19:00',
-      calOpen: false,
-      calFocusIndex: null,
 
       programStatus: null,
       programTopics: [],
@@ -416,10 +409,6 @@ export const useAppStore = create<AppState>()(
       goPaywall: () => set({ screen: 'paywall' }),
       choosePlan: (key) => set({ plan: key }),
       skipPaywall: () => set({ screen: 'program' }),
-
-      toggleCalendar: () => set((s) => ({ calOpen: !s.calOpen })),
-      focusCalendarDay: (dayIndex) =>
-        set((s) => ({ calOpen: !(s.calOpen && s.calFocusIndex === dayIndex), calFocusIndex: dayIndex })),
 
       goHome: () => set({ screen: 'cardslib' }),
       goProgram: () => set({ screen: 'program' }),
