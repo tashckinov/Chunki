@@ -84,3 +84,49 @@ export async function listPaymentsForAdmin(limit: number): Promise<PaymentWithUs
   );
   return rows;
 }
+
+const PAYMENT_PLAN_COLUMNS = 'plan, title, offer_url, price_usd, price_eur, price_rub, updated_at';
+
+export interface PaymentPlanRow {
+  plan: string;
+  title: string;
+  offer_url: string | null;
+  price_usd: string | null;
+  price_eur: string | null;
+  price_rub: string | null;
+  updated_at: Date;
+}
+
+export async function listPaymentPlans(): Promise<PaymentPlanRow[]> {
+  const { rows } = await pool.query<PaymentPlanRow>(`SELECT ${PAYMENT_PLAN_COLUMNS} FROM payment_plans ORDER BY plan`);
+  return rows;
+}
+
+export async function findPaymentPlan(plan: PaymentPlan): Promise<PaymentPlanRow | null> {
+  const { rows } = await pool.query<PaymentPlanRow>(`SELECT ${PAYMENT_PLAN_COLUMNS} FROM payment_plans WHERE plan = $1`, [plan]);
+  return rows[0] ?? null;
+}
+
+export interface UpsertPaymentPlanInput {
+  plan: PaymentPlan;
+  title: string;
+  offerUrl: string | null;
+  priceUsd: number | null;
+  priceEur: number | null;
+  priceRub: number | null;
+}
+
+// payment_plans is seeded (0017_payment_plans.sql) with exactly the two rows
+// this app's plan enum allows, so this is always an UPDATE in practice — the
+// upsert form just makes the seed a non-requirement rather than depending on
+// migrations never being skipped.
+export async function upsertPaymentPlan(input: UpsertPaymentPlanInput): Promise<PaymentPlanRow> {
+  const { rows } = await pool.query<PaymentPlanRow>(
+    `INSERT INTO payment_plans (plan, title, offer_url, price_usd, price_eur, price_rub, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, now())
+     ON CONFLICT (plan) DO UPDATE SET title = $2, offer_url = $3, price_usd = $4, price_eur = $5, price_rub = $6, updated_at = now()
+     RETURNING ${PAYMENT_PLAN_COLUMNS}`,
+    [input.plan, input.title, input.offerUrl, input.priceUsd, input.priceEur, input.priceRub],
+  );
+  return rows[0];
+}

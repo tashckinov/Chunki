@@ -10,6 +10,7 @@ vi.mock('./service.js', () => ({
   createCheckoutForUser: vi.fn(),
   getAccountPaymentStatus: vi.fn(),
   handleLavaTopWebhook: vi.fn(),
+  listPublicPaymentPlans: vi.fn(),
 }));
 
 const session = await import('../auth/session.js');
@@ -25,6 +26,7 @@ beforeEach(async () => {
   vi.mocked(service.createCheckoutForUser).mockReset();
   vi.mocked(service.getAccountPaymentStatus).mockReset();
   vi.mocked(service.handleLavaTopWebhook).mockReset();
+  vi.mocked(service.listPublicPaymentPlans).mockReset();
 
   app = Fastify();
   await app.register(cookie, { secret: process.env.SESSION_SECRET });
@@ -109,6 +111,35 @@ describe('POST /api/payments/checkout', () => {
     });
 
     expect(res.statusCode).toBe(502);
+  });
+
+  it('returns 409 when the plan has no offer link configured in the admin panel', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(authenticatedSession);
+    vi.mocked(service.createCheckoutForUser).mockResolvedValue({ kind: 'plan_not_configured' });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/payments/checkout',
+      cookies: authCookie,
+      payload: { plan: 'monthly', currency: 'USD', email: 'person@example.com' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({ error: 'plan_not_configured' });
+  });
+});
+
+describe('GET /api/payments/plans', () => {
+  it('returns the public plan list with no auth required', async () => {
+    vi.mocked(service.listPublicPaymentPlans).mockResolvedValue([
+      { plan: 'monthly', title: 'Месяц', priceUsd: '6.99', priceEur: '5.99', priceRub: '599.00' },
+      { plan: 'yearly', title: 'Год', priceUsd: null, priceEur: null, priceRub: null },
+    ]);
+
+    const res = await app.inject({ method: 'GET', url: '/api/payments/plans' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().plans).toHaveLength(2);
   });
 });
 

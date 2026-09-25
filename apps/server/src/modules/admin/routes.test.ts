@@ -32,6 +32,8 @@ vi.mock('./service.js', () => ({
   saveDialogueForChunk: vi.fn(),
   deleteDialogueForChunk: vi.fn(),
   listPaymentsForAdmin: vi.fn(),
+  listPaymentPlansForAdmin: vi.fn(),
+  upsertPaymentPlanForAdmin: vi.fn(),
   listProgramTopicsForAdmin: vi.fn(),
 }));
 
@@ -521,6 +523,70 @@ describe('GET /api/admin/payments', () => {
 
     expect(res.statusCode).toBe(400);
     expect(service.listPaymentsForAdmin).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/admin/payment-plans', () => {
+  it('returns the plans', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(adminSession);
+    const plans = [
+      { plan: 'monthly', title: 'Месяц', offerUrl: null, priceUsd: null, priceEur: null, priceRub: null, updatedAt: '2026-01-01T00:00:00.000Z' },
+    ];
+    vi.mocked(service.listPaymentPlansForAdmin).mockResolvedValue(plans);
+
+    const res = await app.inject({ method: 'GET', url: '/api/admin/payment-plans', cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' } });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ plans });
+  });
+});
+
+describe('PATCH /api/admin/payment-plans/:plan', () => {
+  const body = { title: 'Год', offerUrl: 'https://app.lava.top/products/abc/def', priceUsd: 59.99, priceEur: 54.99, priceRub: 3990 };
+
+  it('rejects an invalid plan', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(adminSession);
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/api/admin/payment-plans/weekly',
+      cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' },
+      payload: body,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(service.upsertPaymentPlanForAdmin).not.toHaveBeenCalled();
+  });
+
+  it('rejects an invalid body', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(adminSession);
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/api/admin/payment-plans/yearly',
+      cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' },
+      payload: { title: '', offerUrl: null, priceUsd: null, priceEur: null, priceRub: null },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(service.upsertPaymentPlanForAdmin).not.toHaveBeenCalled();
+  });
+
+  it('upserts the plan and returns it', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(adminSession);
+    const updated = { plan: 'yearly', ...body, updatedAt: '2026-01-01T00:00:00.000Z' };
+    vi.mocked(service.upsertPaymentPlanForAdmin).mockResolvedValue(updated);
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/api/admin/payment-plans/yearly',
+      cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' },
+      payload: body,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ plan: updated });
+    expect(service.upsertPaymentPlanForAdmin).toHaveBeenCalledWith('yearly', body);
   });
 });
 
