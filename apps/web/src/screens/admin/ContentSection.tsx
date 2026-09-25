@@ -5,6 +5,7 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Textarea } from '../../components/ui/Textarea';
 import { Switch } from '../../components/ui/Switch';
+import { SegmentedControl } from '../../components/ui/SegmentedControl';
 import { IconButton } from '../../components/ui/IconButton';
 import { Icon } from '../../components/ui/Icon';
 import { RetryImage } from '../../components/ui/RetryImage';
@@ -371,9 +372,18 @@ function BulkDialogueAiSheet({
   const [preview, setPreview] = useState<BulkParsedDialogue[] | null>(null);
   const { saving, saveSummary, saveAll: runSaveAll, reset: resetSave } = useBulkSave<BulkParsedDialogue, string>();
 
+  // Chunks that don't have this kind of comic yet — the common case when
+  // this is opened after adding new chunks. Defaults the prompt/save scope
+  // to just those, so a routine "cover the new ones" run can't accidentally
+  // re-prompt and overwrite comics that are already fine; "все чанки" stays
+  // available for the rarer "redo everything with an expanded cast" case.
+  const missingChunks = chunks.filter((c) => !(kind === 'situation' ? c.hasSituationDialogue : c.hasDialogue));
+  const [scope, setScope] = useState<'missing' | 'all'>(missingChunks.length > 0 ? 'missing' : 'all');
+  const scopedChunks = scope === 'missing' ? missingChunks : chunks;
+
   async function copy() {
     if (!characters) return;
-    await navigator.clipboard.writeText(buildBulkDialogueAiPrompt(chunks, characters, kind));
+    await navigator.clipboard.writeText(buildBulkDialogueAiPrompt(scopedChunks, characters, kind));
     flashCopied();
   }
 
@@ -411,6 +421,7 @@ function BulkDialogueAiSheet({
     setImportError(null);
     setPreview(null);
     resetSave();
+    setScope(missingChunks.length > 0 ? 'missing' : 'all');
   }
 
   return (
@@ -420,8 +431,18 @@ function BulkDialogueAiSheet({
           <div className="text-[13.5px] text-body-secondary">
             Скопируйте инструкцию для всей коллекции, сгенерируйте диалоги во внешнем ИИ-чате, затем вставьте ответ ниже.
           </div>
-          <Button size="sm" variant="secondary" onClick={copy} disabled={!characters}>
-            {copied ? 'Скопировано' : `Копировать инструкцию (${chunks.length} ${plural(chunks.length, 'чанк', 'чанка', 'чанков')})`}
+          {missingChunks.length > 0 && missingChunks.length < chunks.length && (
+            <SegmentedControl
+              options={[
+                { value: 'missing' as const, label: `Без комикса (${missingChunks.length})` },
+                { value: 'all' as const, label: `Все чанки (${chunks.length})` },
+              ]}
+              value={scope}
+              onChange={setScope}
+            />
+          )}
+          <Button size="sm" variant="secondary" onClick={copy} disabled={!characters || scopedChunks.length === 0}>
+            {copied ? 'Скопировано' : `Копировать инструкцию (${scopedChunks.length} ${plural(scopedChunks.length, 'чанк', 'чанка', 'чанков')})`}
           </Button>
           <Textarea
             value={importText}
@@ -1188,6 +1209,11 @@ export function ContentSection({ onOpenMenu }: { onOpenMenu: () => void }) {
                 </Button>
               </div>
             </div>
+            {chunks && chunks.length > 0 && (
+              <div className="text-meta">
+                Не знаю: {chunks.filter((c) => c.hasDialogue).length}/{chunks.length} · Ситуация (комикс): {chunks.filter((c) => c.hasSituationDialogue).length}/{chunks.length}
+              </div>
+            )}
             <div className="flex flex-col">
               {chunks === null && <div className="text-body-secondary py-2">Загрузка…</div>}
               {chunks?.length === 0 && <div className="text-body-secondary py-2">В коллекции пока нет чанков.</div>}
