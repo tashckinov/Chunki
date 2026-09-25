@@ -30,12 +30,11 @@ export class LavaTopPaymentProvider implements PaymentProvider {
   #offerIdByPlan: Record<Plan, string | undefined>;
   #currency: LavaTopCurrency;
 
-  constructor(env: Pick<Env, 'LAVA_TOP_API_KEY' | 'LAVA_TOP_BASE_URL' | 'LAVA_TOP_OFFER_ID_MONTHLY' | 'LAVA_TOP_OFFER_ID_YEARLY'>) {
+  constructor(env: Pick<Env, 'LAVA_TOP_API_KEY' | 'LAVA_TOP_BASE_URL' | 'LAVA_TOP_CURRENCY' | 'LAVA_TOP_OFFER_ID_MONTHLY' | 'LAVA_TOP_OFFER_ID_YEARLY'>) {
     if (!env.LAVA_TOP_API_KEY) throw new Error('LAVA_TOP_API_KEY is not set — required for the lava_top payment provider.');
     this.#client = new LavaTopClient(env.LAVA_TOP_API_KEY, env.LAVA_TOP_BASE_URL);
     this.#offerIdByPlan = { monthly: env.LAVA_TOP_OFFER_ID_MONTHLY, yearly: env.LAVA_TOP_OFFER_ID_YEARLY };
-    // Existing frontend prices are quoted in ₽ — RUB is the only currency this app sells in for now.
-    this.#currency = 'RUB';
+    this.#currency = env.LAVA_TOP_CURRENCY;
   }
 
   async createCheckout({ email, plan }: CheckoutInput): Promise<CheckoutOutput> {

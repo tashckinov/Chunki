@@ -52,6 +52,9 @@ const envSchema = z.object({
   // — an empty string (what an unset var arrives as via docker-compose)
   // would otherwise fail .url() validation instead of falling through to it.
   LAVA_TOP_BASE_URL: z.preprocess(emptyToUndefined, z.string().url().default('https://gate.lava.top')),
+  // Must match the currency each offer was actually created in on Lava.top's
+  // dashboard — a mismatch here is rejected by their API at checkout time.
+  LAVA_TOP_CURRENCY: z.preprocess(emptyToUndefined, z.enum(['USD', 'EUR']).default('USD')),
   LAVA_TOP_OFFER_ID_MONTHLY: z.string().optional(),
   LAVA_TOP_OFFER_ID_YEARLY: z.string().optional(),
   // Verifies inbound webhook calls (HTTP Basic auth, configured to match in
