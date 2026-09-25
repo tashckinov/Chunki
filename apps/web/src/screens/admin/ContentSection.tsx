@@ -39,7 +39,7 @@ import {
   type BulkParsedSituations,
 } from '../../lib/chunkImport';
 import type { ChunkSentence, SituationPrompt } from '../../lib/collections';
-import { useBulkSave } from '../../lib/bulkSave';
+import { useBulkSave, type BulkSaveSummary } from '../../lib/bulkSave';
 import { useTimedFlag } from '../../lib/timedFlag';
 import { Sheet } from '../../components/ui/Sheet';
 import { DialoguePlayback } from '../../components/dialogue/DialoguePlayback';
@@ -343,6 +343,47 @@ function BulkPreviewRow({ item, chunkText, characters }: { item: BulkParsedDialo
 }
 
 /**
+ * The save-all action for a bulk sheet, shared by all four of them below —
+ * once everything saved with no failures, it locks into a disabled "done"
+ * state instead of springing back to an identical, still-clickable
+ * "Сохранить все (N)" button (which looked like nothing had happened and
+ * invited a pointless re-click). A partial failure keeps it active, and the
+ * label switches to a "remaining" count for the retry — useBulkSave's own
+ * retry-skip logic already makes that safe to click again.
+ */
+function BulkSaveButton({
+  saving,
+  saveSummary,
+  total,
+  verb,
+  progressVerb,
+  doneVerb,
+  onClick,
+}: {
+  saving: boolean;
+  saveSummary: BulkSaveSummary | null;
+  total: number;
+  verb: string;
+  progressVerb: string;
+  doneVerb: string;
+  onClick: () => void;
+}) {
+  if (saveSummary && saveSummary.failedChunkTexts.length === 0) {
+    return (
+      <Button size="sm" disabled>
+        {doneVerb} ✓
+      </Button>
+    );
+  }
+  const remaining = saveSummary ? total - saveSummary.okCount : total;
+  return (
+    <Button size="sm" onClick={onClick} disabled={saving}>
+      {saving ? progressVerb : `${verb} ${saveSummary ? 'оставшиеся' : 'все'} (${remaining})`}
+    </Button>
+  );
+}
+
+/**
  * The same copy/paste-and-preview/approve loop as DialogueBuilderView's
  * single-chunk copy/paste, but for an entire collection at once — one
  * copy/paste round trip covers every chunk, letting the admin redo a whole
@@ -472,9 +513,7 @@ function BulkDialogueAiSheet({
             </div>
           )}
           <div className="flex gap-2">
-            <Button size="sm" onClick={saveAll} disabled={saving}>
-              {saving ? 'Сохраняем…' : `Сохранить все (${preview.length})`}
-            </Button>
+            <BulkSaveButton saving={saving} saveSummary={saveSummary} total={preview.length} verb="Сохранить" progressVerb="Сохраняем…" doneVerb="Сохранено" onClick={saveAll} />
             <Button size="sm" variant="ghost" onClick={() => setPreview(null)}>
               Назад
             </Button>
@@ -628,9 +667,7 @@ function BulkChunkCreateAiSheet({
             </div>
           )}
           <div className="flex gap-2">
-            <Button size="sm" onClick={saveAll} disabled={saving}>
-              {saving ? 'Создаём…' : `Создать все (${preview.length})`}
-            </Button>
+            <BulkSaveButton saving={saving} saveSummary={saveSummary} total={preview.length} verb="Создать" progressVerb="Создаём…" doneVerb="Создано" onClick={saveAll} />
             <Button size="sm" variant="ghost" onClick={() => setPreview(null)}>
               Назад
             </Button>
@@ -769,9 +806,7 @@ function BulkSentencesRegenerateAiSheet({
             </div>
           )}
           <div className="flex gap-2">
-            <Button size="sm" onClick={saveAll} disabled={saving}>
-              {saving ? 'Сохраняем…' : `Сохранить все (${preview.length})`}
-            </Button>
+            <BulkSaveButton saving={saving} saveSummary={saveSummary} total={preview.length} verb="Сохранить" progressVerb="Сохраняем…" doneVerb="Сохранено" onClick={saveAll} />
             <Button size="sm" variant="ghost" onClick={() => setPreview(null)}>
               Назад
             </Button>
@@ -909,9 +944,7 @@ function BulkSituationsRegenerateAiSheet({
             </div>
           )}
           <div className="flex gap-2">
-            <Button size="sm" onClick={saveAll} disabled={saving}>
-              {saving ? 'Сохраняем…' : `Сохранить все (${preview.length})`}
-            </Button>
+            <BulkSaveButton saving={saving} saveSummary={saveSummary} total={preview.length} verb="Сохранить" progressVerb="Сохраняем…" doneVerb="Сохранено" onClick={saveAll} />
             <Button size="sm" variant="ghost" onClick={() => setPreview(null)}>
               Назад
             </Button>
