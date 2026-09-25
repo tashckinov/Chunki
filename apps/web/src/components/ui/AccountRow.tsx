@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { KeyRound } from 'lucide-react';
 import { useAppStore } from '../../store/appStore';
 import { APP_VERSION } from '../../lib/version';
+import { useCheckout } from '../../lib/payments';
 import { Dialog } from './Dialog';
 import { Button } from './Button';
 import { SegmentedControl } from './SegmentedControl';
@@ -58,6 +59,29 @@ function InterfaceModeSetting() {
           ? 'На обороте карточки — перевод и пример.'
           : 'Только английский: перевод скрыт, остаётся пример.'}
       </div>
+    </div>
+  );
+}
+
+/** Premium status + upsell, shown in the account dialog for a logged-in user — "Подписка до <дата>" once active, otherwise the same checkout entry point as Paywall/DeckDoneScreen. */
+function SubscriptionStatus() {
+  const { isPremium, premiumUntil, plan } = useAppStore();
+  const { checkingOut, checkoutError, subscribe } = useCheckout(plan);
+
+  if (isPremium && premiumUntil) {
+    return (
+      <div className="rounded-[var(--radius-md)] bg-surface-subtle px-4 py-3 text-[14px] font-medium">
+        Подписка до {new Date(premiumUntil).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      {checkoutError && <div className="text-negative text-[13px]">{checkoutError}</div>}
+      <Button size="sm" onClick={subscribe} disabled={checkingOut} className="w-full">
+        {checkingOut ? 'Переходим к оплате…' : 'Оформить подписку'}
+      </Button>
     </div>
   );
 }
@@ -128,6 +152,7 @@ export function AccountDialog({ open, onOpenChange }: { open: boolean; onOpenCha
     <Dialog open={open} onOpenChange={onOpenChange} headline={displayNameOf(user)}>
       <div className="flex flex-col gap-5">
         {user.email && <div className="text-body-secondary -mt-2">{user.email}</div>}
+        <SubscriptionStatus />
         <InterfaceModeSetting />
         {user.isAdmin && (
           <Button
