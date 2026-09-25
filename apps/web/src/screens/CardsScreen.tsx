@@ -11,6 +11,7 @@ import { Button } from '../components/ui/Button';
 import { CircularProgress, SegmentedRing } from '../components/ui/Progress';
 import { Chip } from '../components/ui/Chip';
 import { SegmentedControl } from '../components/ui/SegmentedControl';
+import { AccountDialog } from '../components/ui/AccountRow';
 
 // The backend's plain CEFR set (collections.level / chunks.level) — not the
 // richer CEFRLevel from @app/shared used elsewhere for the placement test.
@@ -98,6 +99,7 @@ export function CardsScreen() {
   const s = useAppStore();
   const [level, setLevel] = useState<string | null>(null);
   const [mode, setMode] = useState<'collections' | 'progress'>('collections');
+  const [accountOpen, setAccountOpen] = useState(false);
 
   useEffect(() => {
     s.loadCollections();
@@ -118,10 +120,11 @@ export function CardsScreen() {
         {s.collectionsStatus === 'error' && s.collectionsError === 'unauthorized' && (
           <Card variant="surface" className="border border-border p-6 flex flex-col gap-3">
             <div className="text-[16px] font-semibold">Войдите, чтобы увидеть карточки</div>
-            <div className="text-body-secondary">Колоды и чанки загружаются с сервера — нужен аккаунт Google.</div>
-            <Button onClick={s.signIn} className="self-start">
-              Войти через Google
+            <div className="text-body-secondary">Колоды и чанки загружаются с сервера — нужен аккаунт.</div>
+            <Button onClick={() => setAccountOpen(true)} className="self-start">
+              Войти
             </Button>
+            <AccountDialog open={accountOpen} onOpenChange={setAccountOpen} />
           </Card>
         )}
 
