@@ -28,6 +28,8 @@ vi.mock('./service.js', () => ({
   getDialogueForChunk: vi.fn(),
   saveDialogueForChunk: vi.fn(),
   deleteDialogueForChunk: vi.fn(),
+  listPaymentsForAdmin: vi.fn(),
+  listProgramTopicsForAdmin: vi.fn(),
 }));
 
 const session = await import('../auth/session.js');
@@ -495,6 +497,51 @@ describe('GET /api/admin/ai-logs', () => {
 
     expect(res.statusCode).toBe(400);
     expect(service.listAiCallLogsForAdmin).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/admin/payments', () => {
+  it('returns the payments with the default limit', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(adminSession);
+    vi.mocked(service.listPaymentsForAdmin).mockResolvedValue([]);
+
+    const res = await app.inject({ method: 'GET', url: '/api/admin/payments', cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' } });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ payments: [] });
+    expect(service.listPaymentsForAdmin).toHaveBeenCalledWith(100);
+  });
+
+  it('rejects a limit above the max', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(adminSession);
+
+    const res = await app.inject({ method: 'GET', url: '/api/admin/payments?limit=5000', cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' } });
+
+    expect(res.statusCode).toBe(400);
+    expect(service.listPaymentsForAdmin).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/admin/program-topics', () => {
+  it('returns the topics with the default limit', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(adminSession);
+    const topics = [{ id: validId, userEmail: 'person@example.com', title: 'Артикли', category: 'Грамматика', status: 'assigned', source: 'placement', nextReviewAt: null, updatedAt: '2026-01-01T00:00:00.000Z' }];
+    vi.mocked(service.listProgramTopicsForAdmin).mockResolvedValue(topics);
+
+    const res = await app.inject({ method: 'GET', url: '/api/admin/program-topics', cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' } });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ topics });
+    expect(service.listProgramTopicsForAdmin).toHaveBeenCalledWith(100);
+  });
+
+  it('rejects a limit above the max', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(adminSession);
+
+    const res = await app.inject({ method: 'GET', url: '/api/admin/program-topics?limit=5000', cookies: { [session.SESSION_COOKIE_NAME]: 'a-valid-token' } });
+
+    expect(res.statusCode).toBe(400);
+    expect(service.listProgramTopicsForAdmin).not.toHaveBeenCalled();
   });
 });
 

@@ -13,20 +13,23 @@ Implementation of the `LearningPlan.dc.html` design (see below for the original 
 Grading is provider-agnostic (`GradingProvider` interface in `packages/shared`): a `MockGradingProvider`
 (deterministic, no network — used by default in dev) and an `AnthropicGradingProvider` (used by default
 in production, or whenever `ANTHROPIC_API_KEY` is set) that calls Claude with a forced tool call to get
-structured JSON back. The frontend never talks to the LLM directly — it only calls this app's own
-`/api/grade/*` routes, so provider API keys stay server-side.
+structured JSON back. The same provider also generates each topic's study material and practice
+exercises on demand (see `apps/server/src/modules/program/`) — the placement test, its ~10 follow-up
+topics, per-topic study/exercises, and the later spaced reconfirmation are all real and persisted per
+user, not a client-side mock. The frontend never talks to the LLM directly — it only calls this app's
+own `/api/program/*` routes, so provider API keys stay server-side.
 
 Authentication (Google OAuth, sessions, users) is likewise backend-only for now — see
 `apps/server/README.md`. The frontend doesn't integrate with it yet.
 
 ## Live demo (GitHub Pages)
 
-Every push to `main` builds `apps/web` in a static "demo mode" and deploys it to GitHub Pages
-(`.github/workflows/deploy-pages.yml`) at `https://<owner>.github.io/Chunki/`. Pages has no backend to
-call, so in this mode grading runs client-side with the same deterministic `MockGradingProvider` the dev
-server uses (`VITE_DEMO_MODE=true`, see `apps/web/src/lib/api.ts`) — the whole flow is clickable, but
-scores/feedback are the simple heuristic mock, not real Claude grading. Build it yourself with
-`npm run build:pages -w apps/web`.
+Every push to `main` builds `apps/web` and deploys it to GitHub Pages
+(`.github/workflows/deploy-pages.yml`) at `https://<owner>.github.io/Chunki/`, pointed at a real backend
+(`VITE_API_BASE_URL`, see `package.json`'s `build:pages` script) — grading and the whole placement-test/
+program flow are real end to end there too, not client-side mocked; whether that backend uses real
+Claude or the deterministic mock provider depends on whether it has `ANTHROPIC_API_KEY` set (see
+`apps/server/README.md`). Build it yourself with `npm run build:pages -w apps/web`.
 
 If Pages hasn't been turned on for the repo yet, the workflow's `configure-pages` step enables it
 automatically on first run; if that's blocked by repo permissions, flip **Settings → Pages → Source →
@@ -57,13 +60,6 @@ To use real Claude grading instead of the mock adapter, copy `apps/server/.env.e
 `apps/server/.env` and set `ANTHROPIC_API_KEY` (`GRADING_PROVIDER=anthropic` to force it in dev).
 
 `npm run build` builds shared → server → web in order; `npm run typecheck` typechecks all three.
-
-## Known content limitation carried over from the design
-
-The prototype only ever authored full lesson material/exercises for one topic ("Present Perfect vs Past
-Simple"); the other 13 syllabus topics exist as titles/categories only. The Topic and Exercises screens
-currently show that one authored lesson regardless of which topic is "current" — generating real
-per-topic material is a follow-up, not something this pass invented content for.
 
 ---
 

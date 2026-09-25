@@ -7,7 +7,6 @@ import staticPlugin from '@fastify/static';
 import { loadEnv } from './config/env.js';
 import { UPLOADS_DIR } from './config/uploads.js';
 import { waitForDatabase } from './db/pool.js';
-import { gradeRoutes } from './routes/grade.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { collectionsRoutes } from './modules/collections/routes.js';
 import { chunksRoutes } from './modules/chunks/routes.js';
@@ -15,6 +14,7 @@ import { progressRoutes } from './modules/progress/routes.js';
 import { adminRoutes } from './modules/admin/routes.js';
 import { charactersRoutes } from './modules/characters/routes.js';
 import { paymentsRoutes } from './modules/payments/routes.js';
+import { programRoutes } from './modules/program/routes.js';
 import { getGradingProvider } from './grading/index.js';
 import { getProductionJudgeProvider } from './openrouter/index.js';
 import { getPaymentProvider } from './modules/payments/index.js';
@@ -45,7 +45,6 @@ async function main() {
     paymentProvider: getPaymentProvider().name,
   }));
 
-  await app.register(gradeRoutes, { prefix: '/api/grade' });
   await app.register(authRoutes, { prefix: '/api/auth' });
   await app.register(collectionsRoutes, { prefix: '/api/collections' });
   await app.register(chunksRoutes, { prefix: '/api/chunks' });
@@ -53,6 +52,7 @@ async function main() {
   await app.register(adminRoutes, { prefix: '/api/admin' });
   await app.register(charactersRoutes, { prefix: '/api/admin/characters' });
   await app.register(paymentsRoutes, { prefix: '/api/payments' });
+  await app.register(programRoutes, { prefix: '/api/program' });
 
   // 0.0.0.0 (not the Fastify default of 127.0.0.1) so the port mapping from
   // Docker Compose / a container host can actually reach it.

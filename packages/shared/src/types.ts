@@ -16,28 +16,32 @@ export type ExerciseItem =
   | { type: 'choice'; q: string; options: string[]; answer: string }
   | { type: 'write'; q: string; rows: number; placeholder: string };
 
-export interface ExerciseBlock {
-  key: string;
-  label: string;
-  meta: string;
-  text?: string;
-  items: ExerciseItem[];
-}
+export type TopicCategory = 'Грамматика' | 'Лексика' | 'Использование языка' | 'Понимание' | 'Письмо';
 
-export interface ProgramTopicDef {
-  id: string;
-  title: string;
-  category: 'Грамматика' | 'Лексика' | 'Использование языка' | 'Понимание' | 'Письмо';
-}
-
-export interface ExtraTopicDef {
+/** An open-ended weak spot the AI identified — either one of the ~10 handed
+ * out right after the placement test, or one discovered mid-way through a
+ * later topic test (e.g. wrong article usage). Not a fixed catalog: `key` is
+ * an AI-generated slug, not an enum member. */
+export interface TopicSuggestion {
   key: string;
   title: string;
+  category: TopicCategory;
+  rationale: string;
+}
+
+export interface TopicStudyContent {
+  explanation: string;
+  keyPoints: string[];
+  contrastExamples: { wrong: string; right: string }[];
+  exampleChunks: string[];
 }
 
 // ---- grading: request payloads ----
 
 export interface PlacementTestSubmission {
+  fromLevel: CEFRLevel;
+  toLevel: CEFRLevel;
+  purpose: string[];
   mcqAnswers: Record<number, string>; // question n -> 'A'|'B'|'C'|'D'|'—'
   open9: string;
   open10: string;
@@ -45,13 +49,9 @@ export interface PlacementTestSubmission {
 }
 
 export interface ExercisesSubmission {
-  topicId: string;
-  topicTitle: string;
-  blockAnswers: {
-    blockKey: string;
-    choiceAnswers: Record<number, string>; // item index -> chosen option
-    writeAnswers: Record<number, string>; // item index -> free text
-  }[];
+  topic: TopicSuggestion;
+  items: ExerciseItem[];
+  answers: Record<number, string>; // item index -> chosen option / free text
 }
 
 // ---- grading: structured LLM-shaped output ----
@@ -80,15 +80,17 @@ export interface PlacementGradeResult {
   mcqScore: { correct: number; total: number };
   openGrades: Record<number, GradeDetail>; // by reading question n
   essayGrade: GradeDetail;
-  weakTopicKeys: string[];
+  /** ~10 open-ended topics to work on next, chosen by the grader — not a fixed catalog. */
+  topics: TopicSuggestion[];
 }
 
 export interface ExercisesGradeResult {
   scoreOutOf10: number;
+  passed: boolean;
   verdictLabel: string;
-  blockScores: { label: string; correct: number; total: number }[];
   notes: string[];
-  weakTopicKeys: string[];
+  /** New weak spots the grader noticed in these answers, distinct from the topic being tested. */
+  discoveredTopics: TopicSuggestion[];
   nextReviewInDays: number;
 }
 
@@ -96,6 +98,8 @@ export interface GradingProvider {
   name: string;
   gradePlacementTest(input: PlacementTestSubmission): Promise<PlacementGradeResult>;
   gradeExercises(input: ExercisesSubmission): Promise<ExercisesGradeResult>;
+  generateTopicStudy(topic: TopicSuggestion): Promise<TopicStudyContent>;
+  generateTopicExercises(topic: TopicSuggestion): Promise<ExerciseItem[]>;
 }
 
 // ---- production check: does a free-text answer show active use of a chunk? ----

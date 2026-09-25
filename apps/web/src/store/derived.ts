@@ -1,4 +1,4 @@
-import { EXTRA_TOPIC_DEFS, MCQ, PROGRAM_TOPICS } from '@app/shared';
+import { MCQ } from '@app/shared';
 import type { CEFRLevel } from '@app/shared';
 import { useAppStore } from './appStore';
 import { plural } from '../lib/plural';
@@ -41,36 +41,6 @@ export function useTestView() {
     testTitle: s.testPart === 1 ? 'Часть 1 из 3' : s.testPart === 2 ? 'Часть 2 из 3' : 'Часть 3 из 3',
     essayWords: s.essay.trim() ? s.essay.trim().split(/\s+/).length : 0,
   };
-}
-
-export function programListView(currentTopicIndex: number, completedTopics: Record<string, { scoreOutOf10: number }>) {
-  return PROGRAM_TOPICS.map((topic, i) => {
-    const done = i < currentTopicIndex;
-    const current = i === currentTopicIndex;
-    const state: 'done' | 'current' | 'next' = done ? 'done' : current ? 'current' : 'next';
-    const score = done && completedTopics[topic.id] ? `${completedTopics[topic.id].scoreOutOf10}/10` : current ? 'сейчас' : '';
-    return {
-      id: topic.id,
-      title: topic.title,
-      meta: state === 'next' ? `${topic.category} · откроется по расписанию` : topic.category,
-      score,
-      state,
-      dotLabel: state === 'done' ? '✓' : String(i + 1),
-      dotBg: state === 'done' ? 'var(--color-accent)' : state === 'current' ? 'var(--color-accent-subtle)' : 'var(--color-surface-subtle)',
-      dotFg: state === 'done' ? 'var(--color-on-accent)' : state === 'current' ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
-      titleFg: state === 'next' ? 'var(--color-text-secondary)' : 'var(--color-text)',
-      scoreFg: state === 'current' ? 'var(--color-accent)' : 'var(--color-text-secondary)',
-      cursor: state === 'current' ? 'pointer' : 'default',
-    };
-  });
-}
-
-export function extraListView(extrasEnabled: Record<string, boolean>, extrasRemoved: string[]) {
-  return EXTRA_TOPIC_DEFS.filter((e) => !extrasRemoved.includes(e.key)).map((e) => ({
-    key: e.key,
-    title: e.title,
-    on: !!extrasEnabled[e.key],
-  }));
 }
 
 export function useScheduleView() {

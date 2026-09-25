@@ -30,6 +30,7 @@ import {
 } from '../dialogues/service.js';
 import type { DialogueInput, DialogueKind } from '../dialogues/repository.js';
 import { listPaymentsForAdmin as paymentsListPaymentsForAdmin, type AdminPaymentSummary } from '../payments/service.js';
+import { listRecentActivityForAdmin as programListRecentActivityForAdmin, type AdminTopicActivitySummary } from '../program/service.js';
 
 export interface AdminUserSummary {
   id: string;
@@ -212,4 +213,8 @@ export async function deleteDialogueForChunk(chunkId: string, kind: DialogueKind
 
 export async function listPaymentsForAdmin(limit: number): Promise<AdminPaymentSummary[]> {
   return paymentsListPaymentsForAdmin(limit);
+}
+
+export async function listProgramTopicsForAdmin(limit: number): Promise<AdminTopicActivitySummary[]> {
+  return programListRecentActivityForAdmin(limit);
 }

@@ -1,4 +1,4 @@
-import type { ExerciseBlock, ExtraTopicDef, McqQuestion, ProgramTopicDef, ReadingQuestion } from './types.js';
+import type { McqQuestion, ReadingQuestion } from './types.js';
 
 export const MCQ: McqQuestion[] = [
   { n: 1, q: 'I ___ here since 2022.', options: ['work', 'have worked', 'am working', 'worked'], correct: 'B' },
@@ -41,69 +41,4 @@ export const READING_QUESTIONS: ReadingQuestion[] = [
 export const ESSAY_PROMPT =
   'If you could move to another country next year, where would you go and why? What problems do you think you might face?';
 
-export const EX_BLOCKS: ExerciseBlock[] = [
-  {
-    key: 'comprehension',
-    label: 'Понимание',
-    meta: 'ПОНИМАНИЕ · 1 ТЕКСТ · 2 ЗАДАНИЯ',
-    text:
-      'Since she moved to Dublin, Maria has changed jobs twice. Her first job was in a small café, where she worked for four months before a design studio offered her a junior role. She has been there since March and says she has finally stopped translating everything in her head.',
-    items: [
-      { type: 'choice', q: 'How long has Maria been at the design studio?', options: ['Four months', 'Since March', 'Twice'], answer: 'Since March' },
-      { type: 'write', q: 'Why does the writer use "has changed jobs" and not "changed jobs"? Ответь на английском.', rows: 3, placeholder: 'Your answer' },
-    ],
-  },
-  {
-    key: 'grammar',
-    label: 'Грамматика',
-    meta: 'ГРАММАТИКА · 3 ЗАДАНИЯ',
-    items: [
-      { type: 'choice', q: 'I ___ this film three times, and I still like it.', options: ['saw', 'have seen', 'had seen'], answer: 'have seen' },
-      { type: 'choice', q: 'We ___ to Prague in 2019 and loved it.', options: ['have gone', 'went', 'have been'], answer: 'went' },
-      { type: 'choice', q: 'She ___ her keys, so she is waiting outside.', options: ['lost', 'has lost', 'had lost'], answer: 'has lost' },
-    ],
-  },
-  {
-    key: 'use-of-english',
-    label: 'Use of English',
-    meta: 'USE OF ENGLISH · 2 ЗАДАНИЯ',
-    items: [
-      { type: 'write', q: 'Перепиши естественно: "I am working here since two years."', rows: 2, placeholder: 'Your version' },
-      { type: 'choice', q: 'Какой маркер невозможен с Present Perfect?', options: ['ever', 'yesterday', 'so far'], answer: 'yesterday' },
-    ],
-  },
-  {
-    key: 'writing',
-    label: 'Письмо',
-    meta: 'ПИСЬМО · 1 ЗАДАНИЕ',
-    items: [
-      { type: 'write', q: '3–4 предложения другу: что изменилось в твоей жизни за этот год. Используй Present Perfect хотя бы дважды.', rows: 6, placeholder: 'Your message' },
-    ],
-  },
-];
-
-export const PROGRAM_TOPICS: ProgramTopicDef[] = [
-  { id: 'articles', title: 'Артикли: a / the / нулевой', category: 'Грамматика' },
-  { id: 'word-order', title: 'Порядок слов и наречия частоты', category: 'Использование языка' },
-  { id: 'past-simple', title: 'Past Simple: закрытое время', category: 'Грамматика' },
-  { id: 'chunks-past', title: 'Chunks: рассказ о прошлом', category: 'Лексика' },
-  { id: 'present-perfect', title: 'Present Perfect vs Past Simple', category: 'Грамматика' },
-  { id: 'past-perfect', title: 'Past Perfect и последовательность', category: 'Грамматика' },
-  { id: 'conditionals-2', title: 'Второй тип условных', category: 'Грамматика' },
-  { id: 'reported-speech', title: 'Reported speech: вопросы', category: 'Использование языка' },
-  { id: 'chunks-work', title: 'Chunks: работа и переезд', category: 'Лексика' },
-  { id: 'reading-long', title: 'Reading: длинный текст на время', category: 'Понимание' },
-  { id: 'writing-informal', title: 'Письмо: неформальное сообщение', category: 'Письмо' },
-  { id: 'modals', title: 'Модальные глаголы вероятности', category: 'Грамматика' },
-  { id: 'chunks-opinion', title: 'Chunks: мнение и согласие', category: 'Лексика' },
-  { id: 'final-check', title: 'Итоговая проверка уровня', category: 'Понимание' },
-];
-
-export const EXTRA_TOPIC_DEFS: ExtraTopicDef[] = [
-  { key: 'articles', title: 'Артикли: повтор' },
-  { key: 'modals', title: 'Модальные глаголы' },
-  { key: 'conditionals', title: 'Условные второго типа' },
-  { key: 'word-order', title: 'Наречия и порядок слов' },
-  { key: 'listening', title: 'Аудирование: короткие диалоги' },
-];
 
