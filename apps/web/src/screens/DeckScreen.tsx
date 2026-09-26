@@ -20,10 +20,40 @@ function InteractiveSentence({ sentences, interfaceMode }: { sentences: ChunkSen
   return <InteractiveWords parts={sentence.parts} interfaceMode={interfaceMode} />;
 }
 
+/** Shown after "Пропустить" — offers to permanently exclude that same card from future decks. Auto-dismisses like any toast, treating a timeout the same as "Отмена". */
+function SkipToast({ onCancel, onConfirm }: { onCancel: () => void; onConfirm: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(onCancel, 5000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div className="fixed inset-x-0 z-50 flex justify-center px-4 bottom-[calc(24px+env(safe-area-inset-bottom))]">
+      <div className="w-full max-w-[420px] rounded-[var(--radius-lg)] bg-surface shadow-[var(--shadow-md)] border border-border px-4 py-3.5 flex items-center gap-2 anim-rise">
+        <div className="flex-1 text-[14px] font-medium">Больше не показывать карточку</div>
+        <button type="button" onClick={onCancel} className="pressable flex-none rounded-[var(--radius-md)] text-text-secondary text-[13.5px] font-semibold px-3 py-2">
+          Отмена
+        </button>
+        <button type="button" onClick={onConfirm} className="pressable flex-none rounded-[var(--radius-md)] bg-accent text-on-accent text-[13.5px] font-semibold px-4 py-2">
+          Ок
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function DeckScreen() {
   const s = useAppStore();
   const v = useDeckView();
   const [translationShown, setTranslationShown] = useState(false);
+  const [skipToastChunkId, setSkipToastChunkId] = useState<string | null>(null);
+
+  function handleSkip() {
+    if (!v.cur || s.flying) return;
+    setSkipToastChunkId(v.cur.id);
+    s.skipCard();
+  }
 
   // Resets whenever the card is unflipped (front shown again — either the
   // same card flipped back, or the next card starting fresh), so the
@@ -133,16 +163,35 @@ export function DeckScreen() {
         </div>
       </div>
 
-      <div className="flex-none px-6 pt-4 pb-7 flex items-center justify-center gap-4">
-        <button onClick={() => s.swipe('dont')} className="pressable flex-1 max-w-[168px] h-14 rounded-full flex items-center justify-center gap-2 border border-border text-negative">
-          <Icon name="Close" size={20} />
-          <span className="text-[15px] font-medium">Не знаю</span>
-        </button>
-        <button onClick={() => s.swipe('know')} className="pressable flex-1 max-w-[168px] h-14 rounded-full flex items-center justify-center gap-2 bg-accent text-on-accent">
-          <Icon name="Check" size={20} />
-          <span className="text-[15px] font-medium">Знаю</span>
+      <div className="flex-none px-6 pt-4 pb-5 flex flex-col items-center gap-3">
+        <div className="flex items-center justify-center gap-4 w-full">
+          <button onClick={() => s.swipe('dont')} className="pressable flex-1 max-w-[168px] h-14 rounded-full flex items-center justify-center gap-2 border border-border text-negative">
+            <Icon name="Close" size={20} />
+            <span className="text-[15px] font-medium">Не знаю</span>
+          </button>
+          <button onClick={() => s.swipe('know')} className="pressable flex-1 max-w-[168px] h-14 rounded-full flex items-center justify-center gap-2 bg-accent text-on-accent">
+            <Icon name="Check" size={20} />
+            <span className="text-[15px] font-medium">Знаю</span>
+          </button>
+        </div>
+        <button onClick={handleSkip} className="pressable text-[14px] font-medium text-text-secondary px-3 py-1.5">
+          Пропустить
         </button>
       </div>
+
+      {skipToastChunkId && (
+        // Keyed on the chunk id so a second skip before the first toast's
+        // timer elapses remounts a fresh instance (fresh 5s countdown)
+        // instead of reusing the same one.
+        <SkipToast
+          key={skipToastChunkId}
+          onCancel={() => setSkipToastChunkId(null)}
+          onConfirm={() => {
+            s.blockChunk(skipToastChunkId);
+            setSkipToastChunkId(null);
+          }}
+        />
+      )}
     </div>
   );
 }

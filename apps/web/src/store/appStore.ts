@@ -155,6 +155,8 @@ interface AppState {
 
   deckIndex: number;
   activeDeckChunks: ChunkSummary[];
+  /** Chunks the learner chose "Больше не показывать карточку" for — filtered out of every future goDeck() call. Persisted; purely a client-side display preference, not server-tracked mastery. */
+  blockedChunkIds: Record<string, true>;
   /** Server-side mastery state per chunk — see lib/progress.ts. Never persisted to localStorage; refetched on load. */
   chunkProgress: Record<string, ProgressSummary>;
   /** This deck session's swipe outcomes, for DeckDoneScreen's tally — not mastery bookkeeping. */
@@ -270,6 +272,10 @@ interface AppState {
   flipCard: () => void;
   swipe: (dir: DeckVerdict) => void;
   undoCard: () => void;
+  /** Moves past the current card with no verdict recorded at all — distinct from swipe('bury'), which does record "не уверен". */
+  skipCard: () => void;
+  /** Adds chunkId to blockedChunkIds so it's excluded from every future goDeck() — also drops it from the deferred production-check queue, since it'll never be reviewed again. */
+  blockChunk: (chunkId: string) => void;
   advanceDeck: () => void;
   /** Queues chunkId's production check for a few tasks later instead of showing it right away — see the pendingProductionChecks field doc. */
   enqueueDeferredProductionCheck: (chunkId: string) => void;
@@ -334,6 +340,7 @@ export const useAppStore = create<AppState>()(
 
       deckIndex: 0,
       activeDeckChunks: [],
+      blockedChunkIds: {},
       chunkProgress: {},
       sessionVerdicts: {},
       sessionProductionResults: {},
@@ -451,7 +458,8 @@ export const useAppStore = create<AppState>()(
       goProgram: () => set({ screen: 'program' }),
       goCardsLib: () => set({ screen: 'cardslib' }),
       goDeck: (chunks) => {
-        const resolved = chunks ?? flattenChunks(Object.values(get().collectionDetails));
+        const blocked = get().blockedChunkIds;
+        const resolved = (chunks ?? flattenChunks(Object.values(get().collectionDetails))).filter((c) => !blocked[c.id]);
         set({
           screen: 'deck',
           activeDeckChunks: resolved,
@@ -629,6 +637,12 @@ export const useAppStore = create<AppState>()(
       },
       undoCard: () => set((s) => (s.deckIndex > 0 && !s.flying ? { deckIndex: s.deckIndex - 1, flipped: false, dx: 0, dy: 0 } : {})),
 
+      skipCard: () => {
+        const s = get();
+        if (s.flying || !s.activeDeckChunks[s.deckIndex]) return;
+        get().advanceDeck();
+      },
+
       // Counts as one completed "task" for every queued deferred check —
       // decremented here (not e.g. on every screen change) so a check that's
       // itself an interstitial (recognition/comic/another production check)
@@ -667,6 +681,13 @@ export const useAppStore = create<AppState>()(
             ? st
             : { pendingProductionChecks: [...st.pendingProductionChecks, { chunkId, dueInTasks: randomProductionCheckDelay() }] },
         );
+      },
+
+      blockChunk: (chunkId) => {
+        set((st) => ({
+          blockedChunkIds: { ...st.blockedChunkIds, [chunkId]: true },
+          pendingProductionChecks: st.pendingProductionChecks.filter((p) => p.chunkId !== chunkId),
+        }));
       },
 
       ensureLearnerDialogue: async (chunkId) => {
