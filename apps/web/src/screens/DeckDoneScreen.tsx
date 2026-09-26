@@ -39,6 +39,7 @@ export function DeckDoneScreen() {
     sessionVerdicts,
     sessionProductionResults,
     sessionProductionPending,
+    sessionProductionChunkTexts,
     productionBlock,
     activeDeckChunks,
     goCardsLib,
@@ -67,8 +68,12 @@ export function DeckDoneScreen() {
         <div className="flex flex-col gap-3">
           <div className="text-[15px] font-semibold">Итоги проверки на использование</div>
           {productionEntries.map(([chunkId, result]) => {
-            const chunk = activeDeckChunks.find((c) => c.id === chunkId);
-            return <ProductionResultRow key={chunkId} chunkId={chunkId} chunkText={chunk?.text ?? '—'} result={result} />;
+            // A deferred "Знаю" check's card may have come due in a later
+            // session than the one it was queued in — activeDeckChunks won't
+            // have it, so sessionProductionChunkTexts (filled in whenever the
+            // check actually started) is the reliable source.
+            const chunkText = sessionProductionChunkTexts[chunkId] ?? activeDeckChunks.find((c) => c.id === chunkId)?.text ?? '—';
+            return <ProductionResultRow key={chunkId} chunkId={chunkId} chunkText={chunkText} result={result} />;
           })}
           {pendingCount > 0 && (
             <div className="flex items-center gap-2.5 text-body-secondary text-[13.5px] py-1">
