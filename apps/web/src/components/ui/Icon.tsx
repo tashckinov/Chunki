@@ -29,6 +29,8 @@ import {
   CreditCard,
   GraduationCap,
   Tags,
+  SkipForward,
+  EyeOff,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -63,6 +65,8 @@ const ICONS: Record<string, LucideIcon> = {
   Payments: CreditCard,
   Program: GraduationCap,
   Tags,
+  Skip: SkipForward,
+  EyeOff,
 };
 
 export type IconName = keyof typeof ICONS;
