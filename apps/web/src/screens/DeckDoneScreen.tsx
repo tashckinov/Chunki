@@ -1,34 +1,27 @@
 import { useAppStore } from '../store/appStore';
-import type { ProductionVerdict } from '../lib/progress';
 import { deckTallyView } from '../store/derived';
 import { plural } from '../lib/plural';
 import { Button } from '../components/ui/Button';
 import { Spinner } from '../components/ui/Spinner';
 
-const VERDICT_COPY: Record<string, { label: string; className: string }> = {
-  chunk_used: { label: 'Использовали фразу', className: 'text-positive' },
-  meaning_only: { label: 'Смысл верный, без фразы', className: 'text-accent' },
-  not_conveyed: { label: 'Не получилось', className: 'text-negative' },
-};
+type ProductionResult = { kind: 'ok'; isAppropriate: boolean; usedChunkId: string | null; usedChunkText: string | null; feedback: string; modelAnswer?: string } | { kind: 'error'; message: string };
 
-function ProductionResultRow({
-  chunkText,
-  result,
-}: {
-  chunkText: string;
-  result: { kind: 'ok'; verdict: ProductionVerdict; feedback: string; modelAnswer?: string } | { kind: 'error'; message: string };
-}) {
+/** cardChunkId is the deck card this row is for — usedChunkId may point at a different chunk (a sibling in the same semantic group) that actually got the progress credit. */
+function productionBadge(result: ProductionResult, cardChunkId: string): { label: string; className: string } {
+  if (result.kind === 'error') return { label: 'Не удалось проверить', className: 'text-negative' };
+  if (!result.isAppropriate) return { label: 'Не получилось', className: 'text-negative' };
+  if (!result.usedChunkId) return { label: 'Смысл верный, без знакомой фразы', className: 'text-accent' };
+  if (result.usedChunkId === cardChunkId) return { label: 'Использовали фразу', className: 'text-positive' };
+  return { label: `Использовали «${result.usedChunkText}»`, className: 'text-positive' };
+}
+
+function ProductionResultRow({ chunkText, chunkId, result }: { chunkText: string; chunkId: string; result: ProductionResult }) {
+  const badge = productionBadge(result, chunkId);
   return (
     <div className="rounded-[var(--radius-md)] border border-border p-3.5 flex flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
         <div className="text-[14.5px] font-medium">{chunkText}</div>
-        {result.kind === 'ok' ? (
-          <span className={`text-[12px] font-medium ${VERDICT_COPY[result.verdict]?.className ?? ''}`}>
-            {VERDICT_COPY[result.verdict]?.label ?? result.verdict}
-          </span>
-        ) : (
-          <span className="text-[12px] font-medium text-negative">Не удалось проверить</span>
-        )}
+        <span className={`text-[12px] font-medium ${badge.className}`}>{badge.label}</span>
       </div>
       <div className="text-body-secondary text-[13.5px]">{result.kind === 'ok' ? result.feedback : result.message}</div>
       {result.kind === 'ok' && result.modelAnswer && (
@@ -75,7 +68,7 @@ export function DeckDoneScreen() {
           <div className="text-[15px] font-semibold">Итоги проверки на использование</div>
           {productionEntries.map(([chunkId, result]) => {
             const chunk = activeDeckChunks.find((c) => c.id === chunkId);
-            return <ProductionResultRow key={chunkId} chunkText={chunk?.text ?? '—'} result={result} />;
+            return <ProductionResultRow key={chunkId} chunkId={chunkId} chunkText={chunk?.text ?? '—'} result={result} />;
           })}
           {pendingCount > 0 && (
             <div className="flex items-center gap-2.5 text-body-secondary text-[13.5px] py-1">

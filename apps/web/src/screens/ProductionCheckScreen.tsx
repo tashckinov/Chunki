@@ -10,7 +10,6 @@ import { Button } from '../components/ui/Button';
 export function ProductionCheckScreen() {
   const s = useAppStore();
   const remaining = PRODUCTION_ANSWER_MAX_LENGTH - s.productionAnswer.length;
-  const chunkText = s.activeDeckChunks.find((c) => c.id === s.productionChunkId)?.text;
 
   if (s.productionMode === 'dialogue' && s.productionDialogue) {
     const { precedingMessages, blank } = s.productionDialogue;
@@ -22,7 +21,7 @@ export function ProductionCheckScreen() {
 
         <div className="scroll-clean flex-1 min-h-0 flex flex-col gap-5 px-6 py-6">
           <div className="text-meta">Ситуация — допишите реплику</div>
-          {precedingMessages.length > 0 && <DialoguePlayback messages={precedingMessages} targetText={chunkText} />}
+          {precedingMessages.length > 0 && <DialoguePlayback messages={precedingMessages} />}
           <DialogueAnswerBubble
             characterName={blank.characterName}
             imageUrl={blank.imageUrl}
@@ -31,7 +30,6 @@ export function ProductionCheckScreen() {
             onChange={s.setProductionAnswer}
             maxLength={PRODUCTION_ANSWER_MAX_LENGTH}
           />
-          {chunkText && <div className="text-meta">Подсказка: используйте фразу «{chunkText}»</div>}
           <div className={`self-end text-meta ${remaining <= 10 ? 'text-negative' : ''}`}>
             {s.productionAnswer.length}/{PRODUCTION_ANSWER_MAX_LENGTH}
           </div>
@@ -66,12 +64,6 @@ export function ProductionCheckScreen() {
             inactiveColorClassName="text-text"
           />
         </div>
-
-        {chunkText && (
-          <div className="text-meta">
-            Подсказка: используйте фразу «{chunkText}»
-          </div>
-        )}
 
         <div className="flex flex-col gap-1.5">
           <Textarea

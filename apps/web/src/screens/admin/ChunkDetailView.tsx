@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { AdminChunk } from '../../lib/admin';
 import type { SituationPrompt } from '../../lib/collections';
+import type { AdminChunkGroup } from '../../lib/chunkGroups';
 import { NavigationBar } from '../../components/ui/NavigationBar';
 import { Button } from '../../components/ui/Button';
 import { IconButton } from '../../components/ui/IconButton';
@@ -42,6 +43,7 @@ function SectionCard({ title, subtitle, action, children }: { title: string; sub
  */
 export function ChunkDetailView({
   chunk,
+  groups,
   onBack,
   onEditCore,
   onOpenBrowseDialogue,
@@ -51,6 +53,8 @@ export function ChunkDetailView({
   onDelete,
 }: {
   chunk: AdminChunk;
+  /** For the "ожидаемая группа" picker per scenario — see admin "Типы". */
+  groups: AdminChunkGroup[];
   onBack: () => void;
   onEditCore: () => void;
   onOpenBrowseDialogue: () => void;
@@ -142,17 +146,36 @@ export function ChunkDetailView({
               {situationsSaveError && <div className="text-negative text-[13px]">Не удалось сохранить: {situationsSaveError}</div>}
               <div className="flex flex-col gap-2">
                 {situationDraft.map((prompt, i) => (
-                  <div key={i} className="flex items-start gap-2">
-                    <Textarea
-                      value={prompt.text}
-                      onChange={(v) => setSituationDraft((prev) => prev.map((p, j) => (j === i ? { ...p, text: v } : p)))}
-                      placeholder="A friend suggests meeting at 7pm. You're happy with that. What do you reply?"
-                      rows={2}
-                    />
-                    <IconButton icon="Delete" label="Удалить сценарий" size="sm" tone="muted" onClick={() => setSituationDraft((prev) => prev.filter((_, j) => j !== i))} />
+                  <div key={i} className="flex flex-col gap-1.5 rounded-[var(--radius-md)] border border-border p-2.5">
+                    <div className="flex items-start gap-2">
+                      <Textarea
+                        value={prompt.text}
+                        onChange={(v) => setSituationDraft((prev) => prev.map((p, j) => (j === i ? { ...p, text: v } : p)))}
+                        placeholder="A friend suggests meeting at 7pm. You're happy with that. What do you reply?"
+                        rows={2}
+                      />
+                      <IconButton icon="Delete" label="Удалить сценарий" size="sm" tone="muted" onClick={() => setSituationDraft((prev) => prev.filter((_, j) => j !== i))} />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-meta">Ожидаемая группа ответов:</span>
+                      <select
+                        value={prompt.expectedGroupId ?? ''}
+                        onChange={(e) =>
+                          setSituationDraft((prev) => prev.map((p, j) => (j === i ? { ...p, expectedGroupId: e.target.value || null } : p)))
+                        }
+                        className="rounded-[var(--radius-sm)] bg-surface-subtle px-2 py-1 text-[13px] outline-none"
+                      >
+                        <option value="">Только эта фраза</option>
+                        {groups.map((g) => (
+                          <option key={g.id} value={g.id}>
+                            {g.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 ))}
-                <Button variant="secondary" size="sm" className="self-start" onClick={() => setSituationDraft((prev) => [...prev, { text: '', parts: [] }])}>
+                <Button variant="secondary" size="sm" className="self-start" onClick={() => setSituationDraft((prev) => [...prev, { text: '', parts: [], expectedGroupId: null }])}>
                   + Добавить сценарий
                 </Button>
               </div>

@@ -8,6 +8,7 @@ import { CharactersSection } from './CharactersSection';
 import { AiLogsSection } from './AiLogsSection';
 import { PaymentsSection } from './PaymentsSection';
 import { ProgramSection } from './ProgramSection';
+import { ChunkGroupsSection } from './ChunkGroupsSection';
 import { ADMIN_SECTIONS } from './sections';
 
 export function AdminScreen() {
@@ -38,6 +39,8 @@ export function AdminScreen() {
         <ProgramSection onOpenMenu={openMenu} />
       ) : adminSection === 'payments' ? (
         <PaymentsSection onOpenMenu={openMenu} />
+      ) : adminSection === 'chunkGroups' ? (
+        <ChunkGroupsSection onOpenMenu={openMenu} />
       ) : (
         <AiLogsSection onOpenMenu={openMenu} />
       )}

@@ -26,10 +26,15 @@ export interface MessageRow {
 export interface DialogueWithContent {
   participants: ParticipantRow[];
   messages: MessageRow[];
+  /** Only meaningful for kind='situation' — see chunk_dialogues.expected_group_id. */
+  expected_group_id: string | null;
 }
 
 export async function findDialogueByChunkId(chunkId: string, kind: DialogueKind): Promise<DialogueWithContent | null> {
-  const { rows: dialogueRows } = await pool.query<{ id: string }>(`SELECT id FROM chunk_dialogues WHERE chunk_id = $1 AND kind = $2`, [chunkId, kind]);
+  const { rows: dialogueRows } = await pool.query<{ id: string; expected_group_id: string | null }>(
+    `SELECT id, expected_group_id FROM chunk_dialogues WHERE chunk_id = $1 AND kind = $2`,
+    [chunkId, kind],
+  );
   const dialogue = dialogueRows[0];
   if (!dialogue) return null;
 
@@ -41,12 +46,13 @@ export async function findDialogueByChunkId(chunkId: string, kind: DialogueKind)
     `SELECT id, character_id, character_image_id, text, position, is_blank FROM chunk_dialogue_messages WHERE dialogue_id = $1 ORDER BY position`,
     [dialogue.id],
   );
-  return { participants, messages };
+  return { participants, messages, expected_group_id: dialogue.expected_group_id };
 }
 
 export interface DialogueInput {
   participants: { characterId: string; side: 'left' | 'right' }[];
   messages: { characterId: string; characterImageId: string; text: string; isBlank?: boolean }[];
+  expectedGroupId?: string | null;
 }
 
 export type SaveDialogueResult = { kind: 'ok'; content: DialogueWithContent } | { kind: 'invalid_reference' };
@@ -69,10 +75,10 @@ export async function saveDialogue(chunkId: string, kind: DialogueKind, input: D
     }
 
     const { rows } = await client.query<{ id: string }>(
-      `INSERT INTO chunk_dialogues (chunk_id, kind) VALUES ($1, $2)
-       ON CONFLICT (chunk_id, kind) DO UPDATE SET updated_at = now()
+      `INSERT INTO chunk_dialogues (chunk_id, kind, expected_group_id) VALUES ($1, $2, $3)
+       ON CONFLICT (chunk_id, kind) DO UPDATE SET expected_group_id = EXCLUDED.expected_group_id, updated_at = now()
        RETURNING id`,
-      [chunkId, kind],
+      [chunkId, kind, input.expectedGroupId ?? null],
     );
     const dialogueId = rows[0].id;
 
@@ -182,12 +188,14 @@ export interface LearnerDialogueMessageRow {
   side: 'left' | 'right';
   text: string;
   is_blank: boolean;
+  /** Only meaningful for kind='situation' — the same value repeated on every row of the dialogue, denormalized like the rest of this joined read. Null for an unclassified situation-comic. */
+  expected_group_id: string | null;
 }
 
 /** Resolved read for playback — one row per message, already joined to the character's name and the chosen image's URL. Empty means "no dialogue" one layer up. */
 export async function findLearnerDialogueRows(chunkId: string, kind: DialogueKind): Promise<LearnerDialogueMessageRow[]> {
   const { rows } = await pool.query<LearnerDialogueMessageRow>(
-    `SELECT ch.name AS character_name, ci.image_url, p.side, m.text, m.is_blank
+    `SELECT ch.name AS character_name, ci.image_url, p.side, m.text, m.is_blank, d.expected_group_id
      FROM chunk_dialogues d
      JOIN chunk_dialogue_messages m ON m.dialogue_id = d.id
      JOIN characters ch ON ch.id = m.character_id

@@ -77,6 +77,8 @@ export interface ChunkSentence {
 export interface SituationPrompt {
   text: string;
   parts: ChunkSentencePart[];
+  /** Which chunk_semantic_groups row this scenario expects an answer from — null means "just this chunk's own phrase" (see lib/chunkGroups.ts). */
+  expectedGroupId: string | null;
 }
 
 export interface ChunkSummary {

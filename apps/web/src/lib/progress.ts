@@ -45,11 +45,14 @@ export type ProductionCheckAvailability =
   | { available: true; mode: 'situation'; chunkId: string; situationPrompt: string; situationParts: SituationPromptPart[]; chunkText: string; chunkTranslation: string }
   | { available: true; mode: 'dialogue'; chunkId: string; dialogue: ProductionDialoguePayload; chunkText: string; chunkTranslation: string };
 
-export type ProductionVerdict = 'chunk_used' | 'meaning_only' | 'not_conveyed';
-
 export interface ProductionCheckResult {
-  verdict: ProductionVerdict;
+  /** Does the answer make sense as a reply to the situation, regardless of which (if any) known phrase it used? */
+  isAppropriate: boolean;
+  /** Which chunk (possibly a different one than the card this check was launched for, if it's in the same semantic group) actually got progress credit — null if none was recognized. */
+  usedChunkId: string | null;
+  usedChunkText: string | null;
   feedback: string;
+  /** Progress of whichever chunk actually got credited — usedChunkId if set, otherwise the originally-requested chunk (not-passed attempt). */
   progress: ProgressSummary;
   /** The "Ситуация" comic's hidden line, revealed once the learner has answered — absent for the free-text situation-prompt flow. */
   modelAnswer?: string;

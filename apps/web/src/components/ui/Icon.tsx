@@ -28,6 +28,7 @@ import {
   MessageCircle,
   CreditCard,
   GraduationCap,
+  Tags,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -61,6 +62,7 @@ const ICONS: Record<string, LucideIcon> = {
   Chat: MessageCircle,
   Payments: CreditCard,
   Program: GraduationCap,
+  Tags,
 };
 
 export type IconName = keyof typeof ICONS;

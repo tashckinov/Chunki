@@ -27,12 +27,15 @@ export interface DialogueMessageSummary {
 export interface DialogueSummary {
   participants: DialogueParticipantSummary[];
   messages: DialogueMessageSummary[];
+  /** Only meaningful for kind='situation'. */
+  expectedGroupId: string | null;
 }
 
 function toDialogueSummary(content: DialogueWithContent): DialogueSummary {
   return {
     participants: content.participants.map((p) => ({ characterId: p.character_id, side: p.side })),
     messages: content.messages.map((m) => ({ characterId: m.character_id, characterImageId: m.character_image_id, text: m.text, isBlank: m.is_blank })),
+    expectedGroupId: content.expected_group_id,
   };
 }
 
@@ -96,6 +99,8 @@ export interface SituationDialogueForLearner {
   blank: { characterName: string; imageUrl: string; side: 'left' | 'right' };
   /** The blank message's authored text — used to build the judge's context and shown back to the learner afterward, never sent ahead of an answer. */
   modelAnswer: string;
+  /** Which chunk_semantic_groups row this situation-comic is linked to, if any — see progress/service.ts's buildCandidateChunks. */
+  expectedGroupId: string | null;
 }
 
 /**
@@ -114,6 +119,7 @@ export async function findSituationDialogueForLearner(chunkId: string): Promise<
     precedingMessages: rows.slice(0, -1).map((r) => ({ characterName: r.character_name, imageUrl: r.image_url, side: r.side, text: r.text })),
     blank: { characterName: last.character_name, imageUrl: last.image_url, side: last.side },
     modelAnswer: last.text,
+    expectedGroupId: last.expected_group_id,
   };
 }
 

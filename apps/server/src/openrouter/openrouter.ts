@@ -1,12 +1,6 @@
 import OpenAI from 'openai';
-import type { ProductionCheckInput, ProductionCheckResult, ProductionCheckVerdict, ProductionJudgeProvider } from '@app/shared';
+import type { ProductionCheckInput, ProductionCheckResult, ProductionJudgeProvider } from '@app/shared';
 import type { Env } from '../config/env.js';
-
-const VERDICTS: ProductionCheckVerdict[] = ['chunk_used', 'meaning_only', 'not_conveyed'];
-
-function isVerdict(v: unknown): v is ProductionCheckVerdict {
-  return typeof v === 'string' && (VERDICTS as string[]).includes(v);
-}
 
 /**
  * OpenRouter's API is OpenAI-chat-completions-compatible — the official
@@ -35,14 +29,23 @@ export class OpenRouterProductionJudgeProvider implements ProductionJudgeProvide
   async judgeProduction(input: ProductionCheckInput): Promise<ProductionCheckResult> {
     const client = this.#client();
 
+    const candidateLines = input.candidateChunks.map((c) => `- id "${c.id}": "${c.text}"`).join('\n');
     const user = [
-      `Target chunk: "${input.chunkText}" (${input.chunkTranslation}).`,
-      input.chunkExample ? `Example usage: "${input.chunkExample}"` : '',
       `Situation given to the learner: "${input.situationPrompt}"`,
       `Learner's free-text answer: """${input.userAnswer || '(no answer)'}"""`,
       '',
-      'Judge whether the answer naturally produced the target chunk ITSELF (verbatim or a clear inflected/paraphrased form of the exact same expression) — not just whether the answer conveyed the same meaning some other way.',
+      'Known phrases the learner might have used (any one of these, or none):',
+      candidateLines,
+      '',
+      'Judge whether the answer makes sense as a natural reply to the situation, and — separately — whether it actually produced one of the known phrases above (verbatim or a clear inflected/paraphrased form of the exact same expression, common inserted adverbs like "really"/"so"/"just" still count). If the meaning is conveyed some other way, without any of the known phrases, that is still an appropriate answer — just report usedChunkId as null.',
     ].join('\n');
+
+    // A dynamic enum (the exact candidate ids, plus null) rather than a
+    // freeform string — constrains the model to either a real id it was
+    // actually given or null, so there's nothing to fuzzy-match/typo on
+    // the way back out. Still re-validated against candidateChunks by the
+    // caller (progress/service.ts) as defense in depth.
+    const usedChunkIdEnum: (string | null)[] = [...input.candidateChunks.map((c) => c.id), null];
 
     const response = await client.chat.completions.create({
       model: this.model,
@@ -55,7 +58,7 @@ export class OpenRouterProductionJudgeProvider implements ProductionJudgeProvide
         {
           role: 'system',
           content:
-            'You are judging whether a Russian-speaking English learner actively produced a specific target chunk/collocation in their free-text answer to a situational prompt, versus only conveying the meaning some other way, versus not conveying it at all. Allow common adverbs or intensifiers inserted inside the chunk (e.g. "really", "so", "just") — "sounds really good" still counts as using "sounds good". Always respond only via the provided tool.',
+            'You are judging a Russian-speaking English learner\'s free-text reply to a situational prompt: whether it is an appropriate natural reply, and whether it actually produced one of a small set of known target phrases. Always respond only via the provided tool.',
         },
         { role: 'user', content: user },
       ],
@@ -64,19 +67,19 @@ export class OpenRouterProductionJudgeProvider implements ProductionJudgeProvide
           type: 'function',
           function: {
             name: 'submit_production_verdict',
-            description: 'Submit the judged verdict for whether the target chunk was actively produced.',
+            description: 'Submit the judged verdict for the learner\'s answer.',
             parameters: {
               type: 'object',
               properties: {
-                verdict: {
-                  type: 'string',
-                  enum: VERDICTS,
-                  description:
-                    'chunk_used: the answer used the target chunk itself. meaning_only: the meaning was conveyed but not via the target chunk. not_conveyed: the answer did not convey the situation correctly at all.',
+                isAppropriate: { type: 'boolean', description: 'Does the answer make sense as a reply to the situation?' },
+                usedChunkId: {
+                  type: ['string', 'null'],
+                  enum: usedChunkIdEnum,
+                  description: 'The id of whichever known phrase was actually used, or null if none of them was.',
                 },
                 feedback: { type: 'string', description: 'One short sentence in Russian, the single most useful piece of feedback.' },
               },
-              required: ['verdict', 'feedback'],
+              required: ['isAppropriate', 'usedChunkId', 'feedback'],
             },
           },
         },
@@ -101,11 +104,11 @@ export class OpenRouterProductionJudgeProvider implements ProductionJudgeProvide
       throw new Error(`OpenRouter tool call arguments were not valid JSON. Raw: ${toolCall.function.arguments.slice(0, 2000)}`);
     }
 
-    const { verdict, feedback } = parsed as { verdict?: unknown; feedback?: unknown };
-    if (!isVerdict(verdict) || typeof feedback !== 'string') {
+    const { isAppropriate, usedChunkId, feedback } = parsed as { isAppropriate?: unknown; usedChunkId?: unknown; feedback?: unknown };
+    if (typeof isAppropriate !== 'boolean' || (typeof usedChunkId !== 'string' && usedChunkId !== null) || typeof feedback !== 'string') {
       throw new Error(`OpenRouter tool call returned an unexpected shape. Parsed: ${JSON.stringify(parsed).slice(0, 2000)}`);
     }
 
-    return { verdict, feedback };
+    return { isAppropriate, usedChunkId, feedback };
   }
 }

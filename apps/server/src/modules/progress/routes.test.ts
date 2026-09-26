@@ -149,11 +149,11 @@ describe('GET /api/progress/production-check/:chunkId', () => {
 
   it('returns available:false with reason limit_reached for a capped free user', async () => {
     vi.mocked(session.getSession).mockResolvedValue(authenticatedSession);
-    vi.mocked(service.buildProductionCheck).mockResolvedValue({ kind: 'limit_reached' });
+    vi.mocked(service.buildProductionCheck).mockResolvedValue({ kind: 'limit_reached', upsellTariffs: [] });
 
     const res = await app.inject({ method: 'GET', url: `/api/progress/production-check/${validChunkId}`, cookies: authCookie });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ available: false, reason: 'limit_reached' });
+    expect(res.json()).toEqual({ available: false, reason: 'limit_reached', upsellTariffs: [] });
   });
 
   it('returns the situation when available', async () => {
@@ -213,7 +213,14 @@ describe('POST /api/progress/production-check/:chunkId', () => {
   it('returns the judged verdict on success', async () => {
     vi.mocked(session.getSession).mockResolvedValue(authenticatedSession);
     const progress = { chunkId: validChunkId, state: 'active', timesReviewed: 1, timesProductionAttempted: 1, timesProductionPassed: 1 };
-    vi.mocked(service.submitProductionAnswer).mockResolvedValue({ kind: 'ok', verdict: 'chunk_used', feedback: 'Отлично!', progress });
+    vi.mocked(service.submitProductionAnswer).mockResolvedValue({
+      kind: 'ok',
+      isAppropriate: true,
+      usedChunkId: validChunkId,
+      usedChunkText: 'sounds good',
+      feedback: 'Отлично!',
+      progress,
+    });
 
     const res = await app.inject({
       method: 'POST',
@@ -223,7 +230,7 @@ describe('POST /api/progress/production-check/:chunkId', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ verdict: 'chunk_used', feedback: 'Отлично!', progress });
+    expect(res.json()).toEqual({ isAppropriate: true, usedChunkId: validChunkId, usedChunkText: 'sounds good', feedback: 'Отлично!', progress });
   });
 
   it('returns 502 judge_unavailable when the judge throws', async () => {
@@ -243,7 +250,7 @@ describe('POST /api/progress/production-check/:chunkId', () => {
 
   it('returns 402 limit_reached for a capped free user', async () => {
     vi.mocked(session.getSession).mockResolvedValue(authenticatedSession);
-    vi.mocked(service.submitProductionAnswer).mockResolvedValue({ kind: 'limit_reached' });
+    vi.mocked(service.submitProductionAnswer).mockResolvedValue({ kind: 'limit_reached', upsellTariffs: [] });
 
     const res = await app.inject({
       method: 'POST',
@@ -253,13 +260,20 @@ describe('POST /api/progress/production-check/:chunkId', () => {
     });
 
     expect(res.statusCode).toBe(402);
-    expect(res.json()).toEqual({ error: 'limit_reached' });
+    expect(res.json()).toEqual({ error: 'limit_reached', upsellTariffs: [] });
   });
 
   it('rate-limits after too many requests from the same user', async () => {
     vi.mocked(session.getSession).mockResolvedValue(authenticatedSession);
     const progress = { chunkId: validChunkId, state: 'passive', timesReviewed: 1, timesProductionAttempted: 1, timesProductionPassed: 0 };
-    vi.mocked(service.submitProductionAnswer).mockResolvedValue({ kind: 'ok', verdict: 'meaning_only', feedback: 'Почти.', progress });
+    vi.mocked(service.submitProductionAnswer).mockResolvedValue({
+      kind: 'ok',
+      isAppropriate: true,
+      usedChunkId: null,
+      usedChunkText: null,
+      feedback: 'Почти.',
+      progress,
+    });
 
     // The route's own limit (20/10min) is too generous to hit in a fast unit
     // test — this just confirms the limiter is wired up at all by hammering

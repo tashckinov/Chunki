@@ -39,6 +39,7 @@ import {
   type BulkParsedSituations,
 } from '../../lib/chunkImport';
 import type { ChunkSentence, SituationPrompt } from '../../lib/collections';
+import { fetchChunkGroups, type AdminChunkGroup } from '../../lib/chunkGroups';
 import { useBulkSave, type BulkSaveSummary } from '../../lib/bulkSave';
 import { useTimedFlag } from '../../lib/timedFlag';
 import { Sheet } from '../../components/ui/Sheet';
@@ -1012,6 +1013,7 @@ export function ContentSection({ onOpenMenu }: { onOpenMenu: () => void }) {
   const [collections, setCollections] = useState<AdminCollection[] | null>(null);
   const [chunks, setChunks] = useState<AdminChunk[] | null>(null);
   const [characters, setCharacters] = useState<Character[] | null>(null);
+  const [groups, setGroups] = useState<AdminChunkGroup[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<ContentView>({ kind: 'collections' });
   const [bulkAiMenuOpen, setBulkAiMenuOpen] = useState(false);
@@ -1038,6 +1040,10 @@ export function ContentSection({ onOpenMenu }: { onOpenMenu: () => void }) {
     // (Копировать инструкцию stays disabled without it); everything else works fine without characters.
     fetchCharacters()
       .then(setCharacters)
+      .catch(() => {});
+    // Best-effort — only needed for the "ожидаемая группа" picker on situation scenarios/comics; everything else works fine without it.
+    fetchChunkGroups()
+      .then(setGroups)
       .catch(() => {});
   }, []);
 
@@ -1176,6 +1182,7 @@ export function ContentSection({ onOpenMenu }: { onOpenMenu: () => void }) {
     return (
       <ChunkDetailView
         chunk={chunk}
+        groups={groups}
         onBack={() => setView({ kind: 'chunks', collectionId })}
         onEditCore={() => setView({ kind: 'editChunk', collectionId, chunk })}
         onOpenBrowseDialogue={() => setView({ kind: 'editDialogue', collectionId, chunk })}
@@ -1198,7 +1205,7 @@ export function ContentSection({ onOpenMenu }: { onOpenMenu: () => void }) {
 
   if (view.kind === 'editSituationDialogue') {
     const { collectionId, chunk } = view;
-    return <DialogueBuilderView chunk={chunk} kind="situation" onBack={() => setView({ kind: 'chunkDetail', collectionId, chunk })} />;
+    return <DialogueBuilderView chunk={chunk} kind="situation" groups={groups} onBack={() => setView({ kind: 'chunkDetail', collectionId, chunk })} />;
   }
 
   if (view.kind === 'editCollection') {

@@ -76,6 +76,7 @@ const situationPromptPartSchema = z.object({
 const situationPromptSchema = z.object({
   text: z.string().min(1),
   parts: z.array(situationPromptPartSchema).max(20),
+  expectedGroupId: z.string().uuid().nullable(),
 });
 
 const chunkSentencePartSchema = z.object({
@@ -111,6 +112,8 @@ const dialogueSaveSchema = z
   .object({
     participants: z.array(z.object({ characterId: z.string().uuid(), side: z.enum(['left', 'right']) })).min(1),
     messages: z.array(z.object({ characterId: z.string().uuid(), characterImageId: z.string().uuid(), text: z.string().min(1), isBlank: z.boolean().optional() })).min(1),
+    // Only meaningful for kind='situation' — see chunk_dialogues.expected_group_id.
+    expectedGroupId: z.string().uuid().nullable().optional(),
   })
   // Mirrors dialogues/repository.ts's referencesAreValid: at most one blank, and only as the last message.
   .refine((v) => {

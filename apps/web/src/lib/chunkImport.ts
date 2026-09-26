@@ -65,7 +65,7 @@ export function validateSituationsShape(raw: unknown): ValidateSituationsResult 
       }
       validParts.push({ text: partText, explanationRu, explanationEn });
     }
-    situations.push({ text, parts: validParts });
+    situations.push({ text, parts: validParts, expectedGroupId: null });
   }
   return { kind: 'ok', situations };
 }
@@ -160,7 +160,7 @@ export function parseBulkChunkCreateImport(text: string): ParseBulkChunkCreateRe
     // API expects, with zero parts (a real breakdown only comes from the dedicated
     // bulk-situations-regenerate flow, which asks for the full nested shape).
     const prompts: SituationPrompt[] = Array.isArray(situationPrompts)
-      ? situationPrompts.filter((p): p is string => typeof p === 'string' && !!p.trim()).map((text) => ({ text, parts: [] }))
+      ? situationPrompts.filter((p): p is string => typeof p === 'string' && !!p.trim()).map((text) => ({ text, parts: [], expectedGroupId: null }))
       : [];
     result.push({
       text: chunkText,

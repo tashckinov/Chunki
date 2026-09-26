@@ -166,7 +166,14 @@ export const progressRoutes: FastifyPluginAsync = async (app) => {
         reply.code(403);
         return { error: 'not_allowed', upsellTariffs: result.upsellTariffs };
       }
-      return { verdict: result.verdict, feedback: result.feedback, progress: result.progress, modelAnswer: result.modelAnswer };
+      return {
+        isAppropriate: result.isAppropriate,
+        usedChunkId: result.usedChunkId,
+        usedChunkText: result.usedChunkText,
+        feedback: result.feedback,
+        progress: result.progress,
+        modelAnswer: result.modelAnswer,
+      };
     },
   );
 

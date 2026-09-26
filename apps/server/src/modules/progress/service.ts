@@ -1,9 +1,10 @@
-import type { ProductionCheckVerdict } from '@app/shared';
+import type { ProductionCheckCandidateChunk } from '@app/shared';
 import { getProductionJudgeProvider } from '../../openrouter/index.js';
 import { withAiCallLogging } from '../aiLogs/service.js';
 import { findAccountStatus, bumpDailyChecksUsed } from '../users/repository.js';
 import { resolveEffectiveTariff, effectiveDailyChecksUsed, listUpsellTariffs, type PublicTariff } from '../subscriptionTariffs/service.js';
 import { findSituationDialogueForLearner, type SituationDialogueForLearner } from '../dialogues/service.js';
+import { listGroupMemberChunksBasic } from '../chunkGroups/service.js';
 import {
   findProgress,
   upsertProgress,
@@ -13,6 +14,12 @@ import {
   type ProgressRow,
   type SituationPromptPart,
 } from './repository.js';
+
+// A situation's candidate list is [its own chunk] plus every member of its
+// linked semantic group, if any — capped for judge-prompt economy. Typical
+// groups (accepting_suggestion et al.) are a handful of phrases; this is a
+// safety net, not a realistic limit.
+const MAX_CANDIDATE_CHUNKS = 25;
 
 export type SortVerdict = 'know' | 'dont' | 'bury';
 
@@ -209,15 +216,27 @@ export type ProductionSubmitResult =
   | { kind: 'unavailable' }
   | { kind: 'not_allowed'; upsellTariffs: PublicTariff[] }
   | { kind: 'limit_reached'; upsellTariffs: PublicTariff[] }
-  | { kind: 'ok'; verdict: ProductionCheckVerdict; feedback: string; progress: ProgressSummary; modelAnswer?: string };
+  | { kind: 'ok'; isAppropriate: boolean; usedChunkId: string | null; usedChunkText: string | null; feedback: string; progress: ProgressSummary; modelAnswer?: string };
 
-const VERDICT_STATE: Record<ProductionCheckVerdict, string> = { chunk_used: 'active', meaning_only: 'passive', not_conveyed: 'unknown' };
-
-/** Renders the dialogue's preceding lines + an instruction as the "situation" text fed to the judge — the judge interface itself stays unchanged. */
-function renderDialogueSituationPrompt(dialogue: SituationDialogueForLearner, chunkText: string): string {
+/** Renders the dialogue's preceding lines + an instruction as the "situation" text fed to the judge — deliberately doesn't name any phrase (see buildCandidateChunks: the judge is given the actual candidate list separately, not told which one to expect via the prompt text). */
+function renderDialogueSituationPrompt(dialogue: SituationDialogueForLearner): string {
   const lines = dialogue.precedingMessages.map((m) => `${m.characterName}: ${m.text}`);
   const dialogueBlock = lines.length > 0 ? `Диалог:\n${lines.join('\n')}\n\n` : '';
-  return `${dialogueBlock}Продолжи диалог репликой персонажа ${dialogue.blank.characterName}, естественно используя фразу «${chunkText}».`;
+  return `${dialogueBlock}Продолжи диалог естественной репликой персонажа ${dialogue.blank.characterName}.`;
+}
+
+/** [the situation's own chunk, ...its linked semantic group's members], deduped and capped — the judge's full set of "known phrases that would answer this". Null expectedGroupId (not yet classified) just falls back to the single original chunk, same as before this feature. */
+async function buildCandidateChunks(chunkId: string, chunkText: string, expectedGroupId: string | null): Promise<ProductionCheckCandidateChunk[]> {
+  const candidates: ProductionCheckCandidateChunk[] = [{ id: chunkId, text: chunkText }];
+  if (!expectedGroupId) return candidates;
+
+  const seen = new Set([chunkId]);
+  for (const member of await listGroupMemberChunksBasic(expectedGroupId)) {
+    if (seen.has(member.id) || candidates.length >= MAX_CANDIDATE_CHUNKS) continue;
+    candidates.push({ id: member.id, text: member.text });
+    seen.add(member.id);
+  }
+  return candidates;
 }
 
 export async function submitProductionAnswer(userId: string, chunkId: string, answer: string): Promise<ProductionSubmitResult> {
@@ -242,18 +261,21 @@ export async function submitProductionAnswer(userId: string, chunkId: string, an
     countsTowardDailyLimit = true;
   }
 
-  const situationPromptText = situationDialogue
-    ? renderDialogueSituationPrompt(situationDialogue, chunk.text)
-    : chunk.situation_prompts[current.times_production_attempted % chunk.situation_prompts.length].text;
+  let situationPromptText: string;
+  let expectedGroupId: string | null;
+  if (situationDialogue) {
+    situationPromptText = renderDialogueSituationPrompt(situationDialogue);
+    expectedGroupId = situationDialogue.expectedGroupId;
+  } else {
+    const prompt = chunk.situation_prompts[current.times_production_attempted % chunk.situation_prompts.length];
+    situationPromptText = prompt.text;
+    expectedGroupId = prompt.expected_group_id;
+  }
+
+  const candidateChunks = await buildCandidateChunks(chunkId, chunk.text, expectedGroupId);
 
   const judge = getProductionJudgeProvider();
-  const judgeInput = {
-    chunkText: chunk.text,
-    chunkTranslation: chunk.translation,
-    chunkExample: chunk.example,
-    situationPrompt: situationPromptText,
-    userAnswer: answer,
-  };
+  const judgeInput = { situationPrompt: situationPromptText, userAnswer: answer, candidateChunks };
   const result = await withAiCallLogging({ userId, chunkId, provider: judge.name, model: judge.model, request: judgeInput }, () => judge.judgeProduction(judgeInput));
 
   // This increment IS the daily-limit enforcement — if it fails, the limit
@@ -266,14 +288,49 @@ export async function submitProductionAnswer(userId: string, chunkId: string, an
     });
   }
 
-  const row = await upsertProgress(userId, chunkId, {
-    state: VERDICT_STATE[result.verdict],
-    timesReviewed: current.times_reviewed,
-    timesProductionAttempted: current.times_production_attempted + 1,
-    timesProductionPassed: current.times_production_passed + (result.verdict === 'chunk_used' ? 1 : 0),
-    lastReviewedAt: current.last_reviewed_at ?? null,
-    lastProductionCheckAt: new Date(),
-  });
+  // Defensive re-validation — only ever credit an id the judge was actually
+  // given, never one it might have hallucinated.
+  const creditedChunkId = result.usedChunkId && candidateChunks.some((c) => c.id === result.usedChunkId) ? result.usedChunkId : null;
 
-  return { kind: 'ok', verdict: result.verdict, feedback: result.feedback, progress: toSummary(row), modelAnswer: situationDialogue?.modelAnswer };
+  let progressRow: ProgressRow;
+  if (creditedChunkId) {
+    // A full pass — but credited to whichever chunk was actually produced,
+    // which may be a different card than the one this check was launched
+    // for (a sibling in the same semantic group). That sibling's own
+    // progress row is read/written here; the originally-requested chunkId's
+    // progress is deliberately left untouched in this branch.
+    const creditedCurrent = creditedChunkId === chunkId ? current : ((await findProgress(userId, creditedChunkId)) ?? emptyRow());
+    progressRow = await upsertProgress(userId, creditedChunkId, {
+      state: 'active',
+      timesReviewed: creditedCurrent.times_reviewed,
+      timesProductionAttempted: creditedCurrent.times_production_attempted + 1,
+      timesProductionPassed: creditedCurrent.times_production_passed + 1,
+      lastReviewedAt: creditedCurrent.last_reviewed_at ?? null,
+      lastProductionCheckAt: new Date(),
+    });
+  } else {
+    // No known phrase recognized — the attempt still counts against the
+    // originally-requested card (so its situation-prompt round-robin keeps
+    // advancing), just without a pass.
+    progressRow = await upsertProgress(userId, chunkId, {
+      state: result.isAppropriate ? 'passive' : 'unknown',
+      timesReviewed: current.times_reviewed,
+      timesProductionAttempted: current.times_production_attempted + 1,
+      timesProductionPassed: current.times_production_passed,
+      lastReviewedAt: current.last_reviewed_at ?? null,
+      lastProductionCheckAt: new Date(),
+    });
+  }
+
+  const usedChunkText = creditedChunkId ? (candidateChunks.find((c) => c.id === creditedChunkId)?.text ?? null) : null;
+
+  return {
+    kind: 'ok',
+    isAppropriate: result.isAppropriate,
+    usedChunkId: creditedChunkId,
+    usedChunkText,
+    feedback: result.feedback,
+    progress: toSummary(progressRow),
+    modelAnswer: situationDialogue?.modelAnswer,
+  };
 }
