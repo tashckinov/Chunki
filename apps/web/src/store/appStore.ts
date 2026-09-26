@@ -34,7 +34,6 @@ import {
   postProductionCheck,
   type ProgressSummary,
   type RecognitionOption,
-  type ProductionVerdict,
   type SituationPromptPart,
   type ProductionDialoguePayload,
 } from '../lib/progress';
@@ -95,7 +94,7 @@ const BACK_MAP: Partial<Record<Screen, Screen>> = {
   admin: 'cardslib',
 };
 
-export type AdminSection = 'users' | 'content' | 'characters' | 'program' | 'payments' | 'aiLogs';
+export type AdminSection = 'users' | 'content' | 'characters' | 'program' | 'payments' | 'chunkGroups' | 'aiLogs';
 
 interface AppState {
   screen: Screen;
@@ -152,7 +151,10 @@ interface AppState {
   /** This deck session's swipe outcomes, for DeckDoneScreen's tally — not mastery bookkeeping. */
   sessionVerdicts: Record<string, DeckVerdict>;
   /** This deck session's production-check verdicts, revealed together on DeckDoneScreen rather than inline per card. Judging runs in the background — see submitProductionCheck. */
-  sessionProductionResults: Record<string, { kind: 'ok'; verdict: ProductionVerdict; feedback: string; modelAnswer?: string } | { kind: 'error'; message: string }>;
+  sessionProductionResults: Record<
+    string,
+    { kind: 'ok'; isAppropriate: boolean; usedChunkId: string | null; usedChunkText: string | null; feedback: string; modelAnswer?: string } | { kind: 'error'; message: string }
+  >;
   /** Chunks whose production-check answer was submitted but hasn't resolved yet — drives DeckDoneScreen's "still checking" indicator. */
   sessionProductionPending: Record<string, true>;
   /** Set when this deck session got kicked to the summary early because the account's tariff blocked the production check (daily limit hit, or cards disallowed entirely) — drives DeckDoneScreen's upsell block. */
@@ -769,13 +771,16 @@ export const useAppStore = create<AppState>()(
         get().advanceDeck();
 
         postProductionCheck(chunkId, answer)
-          .then(({ verdict, feedback, progress, modelAnswer }) => {
+          .then(({ isAppropriate, usedChunkId, usedChunkText, feedback, progress, modelAnswer }) => {
             set((st) => {
               const { [chunkId]: _drop, ...pending } = st.sessionProductionPending;
               return {
                 sessionProductionPending: pending,
-                sessionProductionResults: { ...st.sessionProductionResults, [chunkId]: { kind: 'ok', verdict, feedback, modelAnswer } },
-                chunkProgress: { ...st.chunkProgress, [chunkId]: progress },
+                sessionProductionResults: { ...st.sessionProductionResults, [chunkId]: { kind: 'ok', isAppropriate, usedChunkId, usedChunkText, feedback, modelAnswer } },
+                // progress.chunkId may differ from chunkId — a fitting answer
+                // can get credited to a different chunk in the same semantic
+                // group (see progress/service.ts's submitProductionAnswer).
+                chunkProgress: { ...st.chunkProgress, [progress.chunkId]: progress },
               };
             });
           })

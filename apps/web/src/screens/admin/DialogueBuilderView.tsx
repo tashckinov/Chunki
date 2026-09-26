@@ -9,6 +9,7 @@ import { emotionLabel, groupImagesByEmotion } from '../../lib/characterEmotions'
 import { fetchCharacters, type Character } from '../../lib/characters';
 import { fetchAdminDialogue, saveAdminDialogue, deleteAdminDialogue, type AdminDialogueParticipant, type DialogueKind } from '../../lib/dialogues';
 import type { AdminChunk } from '../../lib/admin';
+import type { AdminChunkGroup } from '../../lib/chunkGroups';
 import { buildDialogueAiPrompt } from '../../lib/dialogueAiPrompt';
 import { parseDialogueImport } from '../../lib/dialogueImport';
 import { useTimedFlag } from '../../lib/timedFlag';
@@ -174,12 +175,24 @@ function EditableMessageRow({
   );
 }
 
-export function DialogueBuilderView({ chunk, onBack, kind }: { chunk: DialogueBuilderChunk; onBack: () => void; kind: DialogueKind }) {
+export function DialogueBuilderView({
+  chunk,
+  onBack,
+  kind,
+  groups = [],
+}: {
+  chunk: DialogueBuilderChunk;
+  onBack: () => void;
+  kind: DialogueKind;
+  /** kind==='situation' only — for the "ожидаемая группа" picker, see admin "Типы". */
+  groups?: AdminChunkGroup[];
+}) {
   const [characters, setCharacters] = useState<Character[] | null>(null);
   const [participants, setParticipants] = useState<AdminDialogueParticipant[]>([]);
   const [messages, setMessages] = useState<BuilderMessage[]>([]);
   // kind==='situation' only: whether the currently-last message is the blank the learner fills in. A dialogue-level flag (not per-message) so it follows whichever message ends up last through reordering, rather than sticking to a specific row.
   const [lastIsBlank, setLastIsBlank] = useState(false);
+  const [expectedGroupId, setExpectedGroupId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -202,10 +215,12 @@ export function DialogueBuilderView({ chunk, onBack, kind }: { chunk: DialogueBu
           setParticipants(dialogue.participants);
           setMessages(dialogue.messages.map((m, i) => ({ id: `m-${i}`, ...m })));
           setLastIsBlank(dialogue.messages.some((m) => m.isBlank));
+          setExpectedGroupId(dialogue.expectedGroupId ?? null);
         } else {
           setParticipants([]);
           setMessages([]);
           setLastIsBlank(false);
+          setExpectedGroupId(null);
         }
         setLoaded(true);
       })
@@ -302,10 +317,12 @@ export function DialogueBuilderView({ chunk, onBack, kind }: { chunk: DialogueBu
           text,
           isBlank: kind === 'situation' && lastIsBlank && i === messages.length - 1,
         })),
+        expectedGroupId: kind === 'situation' ? expectedGroupId : null,
       });
       setParticipants(saved.participants);
       setMessages(saved.messages.map((m, i) => ({ id: `m-${i}`, ...m })));
       setLastIsBlank(saved.messages.some((m) => m.isBlank));
+      setExpectedGroupId(saved.expectedGroupId ?? null);
       flashJustSaved();
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : String(err));
@@ -437,6 +454,24 @@ export function DialogueBuilderView({ chunk, onBack, kind }: { chunk: DialogueBu
                   {lastIsBlank && ' В предпросмотре и в приложении её текст будет скрыт.'}
                 </span>
               </label>
+            )}
+
+            {kind === 'situation' && (
+              <div className="flex items-center gap-2">
+                <span className="text-meta">Ожидаемая группа ответов:</span>
+                <select
+                  value={expectedGroupId ?? ''}
+                  onChange={(e) => setExpectedGroupId(e.target.value || null)}
+                  className="rounded-[var(--radius-sm)] bg-surface-subtle px-2 py-1 text-[13px] outline-none"
+                >
+                  <option value="">Только эта фраза</option>
+                  {groups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             )}
 
             {participants.length === 0 ? (

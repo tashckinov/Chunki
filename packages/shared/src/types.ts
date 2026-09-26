@@ -108,18 +108,24 @@ export interface GradingProvider {
  * client-side (live counter) and server-side (the actual validation). */
 export const PRODUCTION_ANSWER_MAX_LENGTH = 150;
 
-export interface ProductionCheckInput {
-  chunkText: string;
-  chunkTranslation: string;
-  chunkExample: string | null;
-  situationPrompt: string;
-  userAnswer: string;
+/** One phrase the learner might have used — the chunk the situation was originally written for, plus every chunk in its linked semantic group (see chunk_semantic_groups), if any. */
+export interface ProductionCheckCandidateChunk {
+  id: string;
+  text: string;
 }
 
-export type ProductionCheckVerdict = 'chunk_used' | 'meaning_only' | 'not_conveyed';
+export interface ProductionCheckInput {
+  situationPrompt: string;
+  userAnswer: string;
+  /** Always at least one entry (the original target chunk) — never empty. */
+  candidateChunks: ProductionCheckCandidateChunk[];
+}
 
 export interface ProductionCheckResult {
-  verdict: ProductionCheckVerdict;
+  /** Does the answer make sense as a reply to the situation, regardless of which (if any) known phrase it used? */
+  isAppropriate: boolean;
+  /** The id of whichever candidateChunks entry the answer actually produced, or null if none of them was recognizably used. Must be one of the ids passed in candidateChunks. */
+  usedChunkId: string | null;
   feedback: string;
 }
 

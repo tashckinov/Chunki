@@ -67,6 +67,7 @@ export interface SituationPromptPart {
 export interface SituationPrompt {
   text: string;
   parts: SituationPromptPart[];
+  expected_group_id: string | null;
 }
 
 export interface ChunkWithSituationsRow {
@@ -88,8 +89,8 @@ export async function findChunkWithSituationPrompts(chunkId: string): Promise<Ch
   const chunk = rows[0];
   if (!chunk) return null;
 
-  const { rows: promptRows } = await pool.query<{ id: string; prompt: string }>(
-    `SELECT id, prompt FROM chunk_situation_prompts WHERE chunk_id = $1 ORDER BY position`,
+  const { rows: promptRows } = await pool.query<{ id: string; prompt: string; expected_group_id: string | null }>(
+    `SELECT id, prompt, expected_group_id FROM chunk_situation_prompts WHERE chunk_id = $1 ORDER BY position`,
     [chunkId],
   );
   const promptIds = promptRows.map((r) => r.id);
@@ -106,7 +107,7 @@ export async function findChunkWithSituationPrompts(chunkId: string): Promise<Ch
       partsByPrompt.set(p.situation_prompt_id, arr);
     }
   }
-  const situation_prompts: SituationPrompt[] = promptRows.map((p) => ({ text: p.prompt, parts: partsByPrompt.get(p.id) ?? [] }));
+  const situation_prompts: SituationPrompt[] = promptRows.map((p) => ({ text: p.prompt, parts: partsByPrompt.get(p.id) ?? [], expected_group_id: p.expected_group_id }));
 
   return { ...chunk, situation_prompts };
 }

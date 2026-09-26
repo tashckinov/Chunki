@@ -15,18 +15,19 @@ export class MockProductionJudgeProvider implements ProductionJudgeProvider {
     const words = answer ? answer.split(/\s+/) : [];
 
     if (words.length < 2) {
-      return { verdict: 'not_conveyed', feedback: 'Мок-проверка: ответ слишком короткий, чтобы понять, что вы имели в виду.' };
+      return { isAppropriate: false, usedChunkId: null, feedback: 'Мок-проверка: ответ слишком короткий, чтобы понять, что вы имели в виду.' };
     }
 
     const normalizedAnswer = answer.toLowerCase();
-    const normalizedChunk = input.chunkText.toLowerCase();
-    if (normalizedAnswer.includes(normalizedChunk)) {
-      return { verdict: 'chunk_used', feedback: `Мок-проверка: вы использовали «${input.chunkText}» — отлично!` };
+    const used = input.candidateChunks.find((c) => normalizedAnswer.includes(c.text.toLowerCase()));
+    if (used) {
+      return { isAppropriate: true, usedChunkId: used.id, feedback: `Мок-проверка: вы использовали «${used.text}» — отлично!` };
     }
 
     return {
-      verdict: 'meaning_only',
-      feedback: `Мок-проверка: смысл понятен, но сама фраза «${input.chunkText}» в ответе не встретилась.`,
+      isAppropriate: true,
+      usedChunkId: null,
+      feedback: 'Мок-проверка: смысл понятен, но ни одна из известных фраз в ответе не встретилась.',
     };
   }
 }

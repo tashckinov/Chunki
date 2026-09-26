@@ -161,6 +161,8 @@ export interface AdminSituationPromptPart {
 export interface AdminSituationPrompt {
   text: string;
   parts: AdminSituationPromptPart[];
+  /** Which chunk_semantic_groups row this situation expects an answer from — see chunkGroups/ and progress/service.ts's buildCandidateChunks. Null = unclassified, falls back to just this prompt's own chunk. */
+  expectedGroupId: string | null;
 }
 
 export interface AdminChunkRow {
@@ -247,6 +249,7 @@ interface RawSituationPromptRow {
   chunk_id: string;
   prompt_id: string;
   prompt: string;
+  expected_group_id: string | null;
 }
 
 interface RawSituationPromptPartRow {
@@ -260,7 +263,7 @@ interface RawSituationPromptPartRow {
 async function fetchSituationPromptsForChunks(chunkIds: string[], client: pg.PoolClient | pg.Pool = pool): Promise<Map<string, AdminSituationPrompt[]>> {
   if (chunkIds.length === 0) return new Map();
   const { rows: promptRows } = await client.query<RawSituationPromptRow>(
-    `SELECT chunk_id, id AS prompt_id, prompt
+    `SELECT chunk_id, id AS prompt_id, prompt, expected_group_id
      FROM chunk_situation_prompts WHERE chunk_id = ANY($1::uuid[]) ORDER BY chunk_id, position`,
     [chunkIds],
   );
@@ -281,7 +284,7 @@ async function fetchSituationPromptsForChunks(chunkIds: string[], client: pg.Poo
   const byChunk = new Map<string, AdminSituationPrompt[]>();
   for (const p of promptRows) {
     const arr = byChunk.get(p.chunk_id) ?? [];
-    arr.push({ text: p.prompt, parts: partsByPrompt.get(p.prompt_id) ?? [] });
+    arr.push({ text: p.prompt, parts: partsByPrompt.get(p.prompt_id) ?? [], expectedGroupId: p.expected_group_id });
     byChunk.set(p.chunk_id, arr);
   }
   return byChunk;
@@ -346,8 +349,8 @@ async function replaceSituationPrompts(client: pg.PoolClient, chunkId: string, p
   for (let i = 0; i < prompts.length; i++) {
     const prompt = prompts[i];
     const { rows } = await client.query<{ id: string }>(
-      `INSERT INTO chunk_situation_prompts (chunk_id, prompt, position) VALUES ($1, $2, $3) RETURNING id`,
-      [chunkId, prompt.text, i],
+      `INSERT INTO chunk_situation_prompts (chunk_id, prompt, position, expected_group_id) VALUES ($1, $2, $3, $4) RETURNING id`,
+      [chunkId, prompt.text, i, prompt.expectedGroupId],
     );
     const promptId = rows[0].id;
     for (let j = 0; j < prompt.parts.length; j++) {

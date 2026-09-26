@@ -22,6 +22,9 @@ vi.mock('../subscriptionTariffs/service.js', () => ({
     return dailyChecksDate === today ? dailyChecksUsed : 0;
   },
 }));
+vi.mock('../chunkGroups/service.js', () => ({
+  listGroupMemberChunksBasic: vi.fn(),
+}));
 vi.mock('../../openrouter/index.js', () => ({
   getProductionJudgeProvider: vi.fn(),
 }));
@@ -35,6 +38,7 @@ vi.mock('../dialogues/service.js', () => ({
 const repo = await import('./repository.js');
 const users = await import('../users/repository.js');
 const tariffs = await import('../subscriptionTariffs/service.js');
+const chunkGroups = await import('../chunkGroups/service.js');
 const openrouter = await import('../../openrouter/index.js');
 const aiLogs = await import('../aiLogs/repository.js');
 const dialogues = await import('../dialogues/service.js');
@@ -42,10 +46,18 @@ const { buildProductionCheck, submitProductionAnswer } = await import('./service
 
 const userId = 'user-1';
 const chunkId = 'chunk-1';
+const siblingChunkId = 'chunk-2';
 const today = new Date().toISOString().slice(0, 10);
 
 function fakeChunk(overrides: Partial<ChunkWithSituationsRow> = {}): ChunkWithSituationsRow {
-  return { id: chunkId, text: 'sounds good', translation: 'звучит хорошо', example: null, situation_prompts: [{ text: 'A friend suggests a plan.', parts: [] }], ...overrides };
+  return {
+    id: chunkId,
+    text: 'sounds good',
+    translation: 'звучит хорошо',
+    example: null,
+    situation_prompts: [{ text: 'A friend suggests a plan.', parts: [], expected_group_id: null }],
+    ...overrides,
+  };
 }
 
 function fakeProgress(overrides: Partial<ProgressRow> = {}): ProgressRow {
@@ -83,6 +95,7 @@ beforeEach(() => {
   vi.mocked(users.bumpDailyChecksUsed).mockReset().mockResolvedValue(undefined);
   vi.mocked(tariffs.resolveEffectiveTariff).mockReset().mockResolvedValue(fakeTariff());
   vi.mocked(tariffs.listUpsellTariffs).mockReset().mockResolvedValue([]);
+  vi.mocked(chunkGroups.listGroupMemberChunksBasic).mockReset().mockResolvedValue([]);
   vi.mocked(openrouter.getProductionJudgeProvider).mockReset().mockReturnValue(fakeJudge);
   fakeJudge.judgeProduction.mockReset();
   vi.mocked(aiLogs.recordAiCallLog).mockReset().mockResolvedValue(undefined as never);
@@ -92,6 +105,16 @@ beforeEach(() => {
   vi.mocked(repo.findChunkWithSituationPrompts).mockResolvedValue(fakeChunk());
   vi.mocked(repo.findProgress).mockResolvedValue(fakeProgress());
   vi.mocked(users.findAccountStatus).mockResolvedValue(fakeAccount());
+  // Default upsertProgress echoes back whatever was written, so assertions can inspect the patch it was called with.
+  vi.mocked(repo.upsertProgress).mockImplementation(async (_userId, targetChunkId, patch) =>
+    fakeProgress({
+      chunk_id: targetChunkId,
+      state: patch.state,
+      times_reviewed: patch.timesReviewed,
+      times_production_attempted: patch.timesProductionAttempted,
+      times_production_passed: patch.timesProductionPassed,
+    }),
+  );
 });
 
 describe('buildProductionCheck — tariff gating', () => {
@@ -145,6 +168,7 @@ describe('buildProductionCheck — "Ситуация" comic (dialogue mode)', ()
     precedingMessages: [{ characterName: 'Alex', imageUrl: '/img/alex.png', side: 'left' as const, text: 'How was your trip?' }],
     blank: { characterName: 'Sam', imageUrl: '/img/sam.png', side: 'right' as const },
     modelAnswer: 'Sounds good to me.',
+    expectedGroupId: null,
   };
 
   it('prefers the dialogue comic over the free-text situation prompt when one is ready', async () => {
@@ -189,14 +213,14 @@ describe('buildProductionCheck — "Ситуация" comic (dialogue mode)', ()
 });
 
 describe('submitProductionAnswer — "Ситуация" comic (dialogue mode)', () => {
-  it('judges against a prompt synthesized from the dialogue and returns modelAnswer', async () => {
+  it('judges against a prompt synthesized from the dialogue, names no phrase, and returns modelAnswer', async () => {
     vi.mocked(dialogues.findSituationDialogueForLearner).mockResolvedValue({
       precedingMessages: [{ characterName: 'Alex', imageUrl: '/img/alex.png', side: 'left', text: 'How was your trip?' }],
       blank: { characterName: 'Sam', imageUrl: '/img/sam.png', side: 'right' },
       modelAnswer: 'Sounds good to me.',
+      expectedGroupId: null,
     });
-    fakeJudge.judgeProduction.mockResolvedValue({ verdict: 'chunk_used', feedback: 'Отлично!' });
-    vi.mocked(repo.upsertProgress).mockResolvedValue(fakeProgress({ state: 'active', times_production_attempted: 1, times_production_passed: 1 }));
+    fakeJudge.judgeProduction.mockResolvedValue({ isAppropriate: true, usedChunkId: chunkId, feedback: 'Отлично!' });
 
     const result = await submitProductionAnswer(userId, chunkId, 'Sounds good, thanks!');
 
@@ -205,7 +229,113 @@ describe('submitProductionAnswer — "Ситуация" comic (dialogue mode)', 
     const judgeInput = fakeJudge.judgeProduction.mock.calls[0][0];
     expect(judgeInput.situationPrompt).toContain('Alex: How was your trip?');
     expect(judgeInput.situationPrompt).toContain('Sam');
+    // Never names the target phrase — the learner must produce it unprompted.
+    expect(judgeInput.situationPrompt).not.toContain('sounds good');
     expect(judgeInput.situationPrompt).not.toContain('Sounds good to me.');
+  });
+});
+
+describe('submitProductionAnswer — candidate chunks + crediting', () => {
+  it('sends just the original chunk as the only candidate when no group is linked', async () => {
+    fakeJudge.judgeProduction.mockResolvedValue({ isAppropriate: true, usedChunkId: chunkId, feedback: 'Отлично!' });
+
+    await submitProductionAnswer(userId, chunkId, 'Sounds good to me.');
+
+    const judgeInput = fakeJudge.judgeProduction.mock.calls[0][0];
+    expect(judgeInput.candidateChunks).toEqual([{ id: chunkId, text: 'sounds good' }]);
+    expect(chunkGroups.listGroupMemberChunksBasic).not.toHaveBeenCalled();
+  });
+
+  it('adds the linked group\'s members to the candidate list, deduped against the original chunk', async () => {
+    vi.mocked(repo.findChunkWithSituationPrompts).mockResolvedValue(
+      fakeChunk({ situation_prompts: [{ text: 'A friend suggests a plan.', parts: [], expected_group_id: 'group-1' }] }),
+    );
+    vi.mocked(chunkGroups.listGroupMemberChunksBasic).mockResolvedValue([
+      { id: chunkId, text: 'sounds good', translation: 'звучит хорошо' },
+      { id: siblingChunkId, text: "I'm in", translation: 'я в деле' },
+    ]);
+    fakeJudge.judgeProduction.mockResolvedValue({ isAppropriate: true, usedChunkId: siblingChunkId, feedback: 'Отлично!' });
+
+    await submitProductionAnswer(userId, chunkId, "I'm in!");
+
+    expect(chunkGroups.listGroupMemberChunksBasic).toHaveBeenCalledWith('group-1');
+    const judgeInput = fakeJudge.judgeProduction.mock.calls[0][0];
+    expect(judgeInput.candidateChunks).toEqual([
+      { id: chunkId, text: 'sounds good' },
+      { id: siblingChunkId, text: "I'm in" },
+    ]);
+  });
+
+  it('credits the original chunk as a full pass when it is the one actually used', async () => {
+    fakeJudge.judgeProduction.mockResolvedValue({ isAppropriate: true, usedChunkId: chunkId, feedback: 'Отлично!' });
+
+    const result = await submitProductionAnswer(userId, chunkId, 'Sounds good to me.');
+
+    expect(result.kind).toBe('ok');
+    expect(result.kind === 'ok' && result.usedChunkId).toBe(chunkId);
+    expect(repo.upsertProgress).toHaveBeenCalledWith(
+      userId,
+      chunkId,
+      expect.objectContaining({ state: 'active', timesProductionAttempted: 1, timesProductionPassed: 1 }),
+    );
+  });
+
+  it('credits a different chunk from the same group, and leaves the originally-requested chunk untouched', async () => {
+    vi.mocked(repo.findChunkWithSituationPrompts).mockResolvedValue(
+      fakeChunk({ situation_prompts: [{ text: 'A friend suggests a plan.', parts: [], expected_group_id: 'group-1' }] }),
+    );
+    vi.mocked(chunkGroups.listGroupMemberChunksBasic).mockResolvedValue([{ id: siblingChunkId, text: "I'm in", translation: 'я в деле' }]);
+    vi.mocked(repo.findProgress).mockImplementation(async (_userId, id) => (id === siblingChunkId ? null : fakeProgress()));
+    fakeJudge.judgeProduction.mockResolvedValue({ isAppropriate: true, usedChunkId: siblingChunkId, feedback: 'Отлично!' });
+
+    const result = await submitProductionAnswer(userId, chunkId, "I'm in!");
+
+    expect(result.kind).toBe('ok');
+    expect(result.kind === 'ok' && result.usedChunkId).toBe(siblingChunkId);
+    expect(result.kind === 'ok' && result.usedChunkText).toBe("I'm in");
+    // Credited chunk: a fresh pass from its own (empty) history.
+    expect(repo.upsertProgress).toHaveBeenCalledWith(
+      userId,
+      siblingChunkId,
+      expect.objectContaining({ state: 'active', timesProductionAttempted: 1, timesProductionPassed: 1 }),
+    );
+    // The originally-requested chunk never gets an upsertProgress call at all — only one call total, targeting the sibling.
+    expect(vi.mocked(repo.upsertProgress).mock.calls.map((c) => c[1])).toEqual([siblingChunkId]);
+  });
+
+  it('ignores a usedChunkId the judge hallucinated outside the candidate list', async () => {
+    fakeJudge.judgeProduction.mockResolvedValue({ isAppropriate: true, usedChunkId: 'not-a-real-candidate', feedback: 'Hmm.' });
+
+    const result = await submitProductionAnswer(userId, chunkId, 'Something reasonable.');
+
+    expect(result.kind).toBe('ok');
+    expect(result.kind === 'ok' && result.usedChunkId).toBeNull();
+    expect(repo.upsertProgress).toHaveBeenCalledWith(userId, chunkId, expect.objectContaining({ state: 'passive', timesProductionPassed: 0 }));
+  });
+
+  it('marks the original chunk passive (attempted, not passed) when appropriate but no known chunk was used', async () => {
+    fakeJudge.judgeProduction.mockResolvedValue({ isAppropriate: true, usedChunkId: null, feedback: 'Смысл верный.' });
+
+    const result = await submitProductionAnswer(userId, chunkId, 'That works for me.');
+
+    expect(result.kind).toBe('ok');
+    expect(result.kind === 'ok' && result.isAppropriate).toBe(true);
+    expect(result.kind === 'ok' && result.usedChunkId).toBeNull();
+    expect(repo.upsertProgress).toHaveBeenCalledWith(
+      userId,
+      chunkId,
+      expect.objectContaining({ state: 'passive', timesProductionAttempted: 1, timesProductionPassed: 0 }),
+    );
+  });
+
+  it('marks the original chunk unknown when the answer does not fit the situation at all', async () => {
+    fakeJudge.judgeProduction.mockResolvedValue({ isAppropriate: false, usedChunkId: null, feedback: 'Не по теме.' });
+
+    const result = await submitProductionAnswer(userId, chunkId, 'Random unrelated sentence.');
+
+    expect(result.kind).toBe('ok');
+    expect(result.kind === 'ok' && result.isAppropriate).toBe(false);
+    expect(repo.upsertProgress).toHaveBeenCalledWith(userId, chunkId, expect.objectContaining({ state: 'unknown', timesProductionPassed: 0 }));
   });
 });
 
@@ -234,8 +364,7 @@ describe('submitProductionAnswer — tariff gating', () => {
   it('bumps the daily counter once after a successful judge call, when subject to a limit', async () => {
     vi.mocked(tariffs.resolveEffectiveTariff).mockResolvedValue(fakeTariff({ dailyCheckLimit: 3 }));
     vi.mocked(users.findAccountStatus).mockResolvedValue(fakeAccount({ dailyChecksUsed: 0, dailyChecksDate: today }));
-    fakeJudge.judgeProduction.mockResolvedValue({ verdict: 'chunk_used', feedback: 'Отлично!' });
-    vi.mocked(repo.upsertProgress).mockResolvedValue(fakeProgress({ state: 'active', times_production_attempted: 1, times_production_passed: 1 }));
+    fakeJudge.judgeProduction.mockResolvedValue({ isAppropriate: true, usedChunkId: chunkId, feedback: 'Отлично!' });
 
     const result = await submitProductionAnswer(userId, chunkId, 'Sounds good to me.');
 
@@ -254,8 +383,7 @@ describe('submitProductionAnswer — tariff gating', () => {
 
   it('does not bump the counter for an unrestricted tariff (unlimited)', async () => {
     vi.mocked(tariffs.resolveEffectiveTariff).mockResolvedValue(fakeTariff({ unrestricted: true, dailyCheckLimit: null }));
-    fakeJudge.judgeProduction.mockResolvedValue({ verdict: 'chunk_used', feedback: 'Отлично!' });
-    vi.mocked(repo.upsertProgress).mockResolvedValue(fakeProgress({ state: 'active' }));
+    fakeJudge.judgeProduction.mockResolvedValue({ isAppropriate: true, usedChunkId: chunkId, feedback: 'Отлично!' });
 
     const result = await submitProductionAnswer(userId, chunkId, 'Sounds good to me.');
 
@@ -265,8 +393,7 @@ describe('submitProductionAnswer — tariff gating', () => {
 
   it('does not bump the counter when dailyCheckLimit is null (unlimited tariff)', async () => {
     vi.mocked(tariffs.resolveEffectiveTariff).mockResolvedValue(fakeTariff({ dailyCheckLimit: null }));
-    fakeJudge.judgeProduction.mockResolvedValue({ verdict: 'chunk_used', feedback: 'Отлично!' });
-    vi.mocked(repo.upsertProgress).mockResolvedValue(fakeProgress({ state: 'active' }));
+    fakeJudge.judgeProduction.mockResolvedValue({ isAppropriate: true, usedChunkId: chunkId, feedback: 'Отлично!' });
 
     const result = await submitProductionAnswer(userId, chunkId, 'Sounds good to me.');
 

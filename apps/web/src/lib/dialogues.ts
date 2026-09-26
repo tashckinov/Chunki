@@ -23,6 +23,8 @@ export interface AdminDialogueMessage {
 export interface AdminDialogue {
   participants: AdminDialogueParticipant[];
   messages: AdminDialogueMessage[];
+  /** 'situation'-kind dialogues only — see lib/chunkGroups.ts. */
+  expectedGroupId?: string | null;
 }
 
 export async function fetchAdminDialogue(chunkId: string, kind: DialogueKind): Promise<AdminDialogue | null> {
