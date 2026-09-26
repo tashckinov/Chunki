@@ -69,6 +69,15 @@ function programErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+// How many other cards go by before a deferred "Знаю" production check comes
+// due — slightly randomized so it doesn't always land on a fixed rhythm.
+const DEFERRED_PRODUCTION_CHECK_MIN_DELAY = 2;
+const DEFERRED_PRODUCTION_CHECK_MAX_DELAY = 4;
+function randomProductionCheckDelay(): number {
+  const span = DEFERRED_PRODUCTION_CHECK_MAX_DELAY - DEFERRED_PRODUCTION_CHECK_MIN_DELAY;
+  return DEFERRED_PRODUCTION_CHECK_MIN_DELAY + Math.floor(Math.random() * (span + 1));
+}
+
 const BACK_MAP: Partial<Record<Screen, Screen>> = {
   goals: 'cardslib',
   test: 'goals',
@@ -157,10 +166,21 @@ interface AppState {
   >;
   /** Chunks whose production-check answer was submitted but hasn't resolved yet — drives DeckDoneScreen's "still checking" indicator. */
   sessionProductionPending: Record<string, true>;
+  /** chunkId → chunk text, filled in whenever a production check starts — a deferred check's chunk may not even be in this session's activeDeckChunks, so DeckDoneScreen can't always look its text up there. */
+  sessionProductionChunkTexts: Record<string, string>;
   /** Set when this deck session got kicked to the summary early because the account's tariff blocked the production check (daily limit hit, or cards disallowed entirely) — drives DeckDoneScreen's upsell block. */
   productionBlock: { reason: 'limit_reached' | 'not_allowed'; upsellTariffs: Tariff[] } | null;
   /** Chunks already sent to a recognition check this session, so a repeat "don't know"/"unsure" doesn't loop. */
   recognitionAttemptedThisSession: Record<string, true>;
+  /**
+   * Chunks swiped "Знаю" whose production check is deliberately delayed —
+   * shown only after a few other cards, instead of right away. Persisted
+   * (see partialize) so an item that never came due before the deck ended
+   * carries over to the next session instead of being lost; countdowns are
+   * NOT deck-scoped, since a chunk's eligibility isn't either. See
+   * advanceDeck()'s queue check and swipe()'s 'know' branch.
+   */
+  pendingProductionChecks: { chunkId: string; dueInTasks: number }[];
 
   /** Dialogue-comic fetch cache, keyed by chunk id. Key absent = not yet fetched (still loading); null = confirmed no dialogue; an object = a real one. */
   learnerDialogueByChunk: Record<string, LearnerDialogue | null>;
@@ -251,6 +271,8 @@ interface AppState {
   swipe: (dir: DeckVerdict) => void;
   undoCard: () => void;
   advanceDeck: () => void;
+  /** Queues chunkId's production check for a few tasks later instead of showing it right away — see the pendingProductionChecks field doc. */
+  enqueueDeferredProductionCheck: (chunkId: string) => void;
   startRecognitionCheck: (chunkId: string) => Promise<void>;
   answerRecognitionCheck: (optionId: string) => Promise<void>;
   startProductionCheck: (chunkId: string) => Promise<void>;
@@ -316,8 +338,10 @@ export const useAppStore = create<AppState>()(
       sessionVerdicts: {},
       sessionProductionResults: {},
       sessionProductionPending: {},
+      sessionProductionChunkTexts: {},
       productionBlock: null,
       recognitionAttemptedThisSession: {},
+      pendingProductionChecks: [],
 
       learnerDialogueByChunk: {},
       dialogueChunkId: null,
@@ -439,6 +463,7 @@ export const useAppStore = create<AppState>()(
           sessionVerdicts: {},
           sessionProductionResults: {},
           sessionProductionPending: {},
+          sessionProductionChunkTexts: {},
           productionBlock: null,
           recognitionAttemptedThisSession: {},
           learnerDialogueByChunk: {},
@@ -590,7 +615,8 @@ export const useAppStore = create<AppState>()(
           }
 
           if (dir === 'know') {
-            await get().startProductionCheck(cur.id);
+            get().enqueueDeferredProductionCheck(cur.id);
+            get().advanceDeck();
           } else if (dir === 'dont') {
             await get().handleDontKnow(cur.id);
           } else if (get().recognitionAttemptedThisSession[cur.id]) {
@@ -603,8 +629,25 @@ export const useAppStore = create<AppState>()(
       },
       undoCard: () => set((s) => (s.deckIndex > 0 && !s.flying ? { deckIndex: s.deckIndex - 1, flipped: false, dx: 0, dy: 0 } : {})),
 
+      // Counts as one completed "task" for every queued deferred check —
+      // decremented here (not e.g. on every screen change) so a check that's
+      // itself an interstitial (recognition/comic/another production check)
+      // counts the same as a plain card. If something comes due, it's shown
+      // in place of the next card (deckIndex does NOT advance yet — the same
+      // way an immediate "Знаю" check already withheld advancing until
+      // answered) rather than always moving on first.
       advanceDeck: () => {
         const s = get();
+        const decremented = s.pendingProductionChecks.map((p) => ({ ...p, dueInTasks: p.dueInTasks - 1 }));
+        const dueIndex = decremented.findIndex((p) => p.dueInTasks <= 0);
+        if (dueIndex !== -1) {
+          const due = decremented[dueIndex];
+          set({ pendingProductionChecks: decremented.filter((_, i) => i !== dueIndex) });
+          void get().startProductionCheck(due.chunkId);
+          return;
+        }
+        set({ pendingProductionChecks: decremented });
+
         const next = s.deckIndex + 1;
         set({
           deckIndex: next,
@@ -616,6 +659,14 @@ export const useAppStore = create<AppState>()(
           productionChunkId: null,
           screen: next >= s.activeDeckChunks.length ? 'deckdone' : 'deck',
         });
+      },
+
+      enqueueDeferredProductionCheck: (chunkId) => {
+        set((st) =>
+          st.pendingProductionChecks.some((p) => p.chunkId === chunkId)
+            ? st
+            : { pendingProductionChecks: [...st.pendingProductionChecks, { chunkId, dueInTasks: randomProductionCheckDelay() }] },
+        );
       },
 
       ensureLearnerDialogue: async (chunkId) => {
@@ -724,16 +775,17 @@ export const useAppStore = create<AppState>()(
             return;
           }
           if (check.mode === 'dialogue') {
-            set({
+            set((st) => ({
               screen: 'productioncheck',
               productionChunkId: check.chunkId,
               productionMode: 'dialogue',
               productionDialogue: check.dialogue,
               productionAnswer: '',
-            });
+              sessionProductionChunkTexts: { ...st.sessionProductionChunkTexts, [check.chunkId]: check.chunkText },
+            }));
             return;
           }
-          set({
+          set((st) => ({
             screen: 'productioncheck',
             productionChunkId: check.chunkId,
             productionMode: 'situation',
@@ -741,7 +793,8 @@ export const useAppStore = create<AppState>()(
             productionSituationParts: check.situationParts,
             productionDialogue: null,
             productionAnswer: '',
-          });
+            sessionProductionChunkTexts: { ...st.sessionProductionChunkTexts, [check.chunkId]: check.chunkText },
+          }));
         } catch {
           get().advanceDeck();
         }
