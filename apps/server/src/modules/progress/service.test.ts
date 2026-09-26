@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ProgressRow, ChunkWithSituationsRow } from './repository.js';
 import type { AccountStatus } from '../users/repository.js';
+import type { EffectiveTariff } from '../subscriptionTariffs/service.js';
 
 vi.mock('./repository.js', () => ({
   findProgress: vi.fn(),
@@ -11,8 +12,15 @@ vi.mock('./repository.js', () => ({
 }));
 vi.mock('../users/repository.js', () => ({
   findAccountStatus: vi.fn(),
-  incrementProductionChecksUsed: vi.fn(),
-  isPremiumActive: (premiumUntil: Date | null) => !!premiumUntil && premiumUntil.getTime() > Date.now(),
+  bumpDailyChecksUsed: vi.fn(),
+}));
+vi.mock('../subscriptionTariffs/service.js', () => ({
+  resolveEffectiveTariff: vi.fn(),
+  listUpsellTariffs: vi.fn(),
+  effectiveDailyChecksUsed: (dailyChecksUsed: number, dailyChecksDate: string | null) => {
+    const today = new Date().toISOString().slice(0, 10);
+    return dailyChecksDate === today ? dailyChecksUsed : 0;
+  },
 }));
 vi.mock('../../openrouter/index.js', () => ({
   getProductionJudgeProvider: vi.fn(),
@@ -26,6 +34,7 @@ vi.mock('../dialogues/service.js', () => ({
 
 const repo = await import('./repository.js');
 const users = await import('../users/repository.js');
+const tariffs = await import('../subscriptionTariffs/service.js');
 const openrouter = await import('../../openrouter/index.js');
 const aiLogs = await import('../aiLogs/repository.js');
 const dialogues = await import('../dialogues/service.js');
@@ -33,6 +42,7 @@ const { buildProductionCheck, submitProductionAnswer } = await import('./service
 
 const userId = 'user-1';
 const chunkId = 'chunk-1';
+const today = new Date().toISOString().slice(0, 10);
 
 function fakeChunk(overrides: Partial<ChunkWithSituationsRow> = {}): ChunkWithSituationsRow {
   return { id: chunkId, text: 'sounds good', translation: 'звучит хорошо', example: null, situation_prompts: [{ text: 'A friend suggests a plan.', parts: [] }], ...overrides };
@@ -56,7 +66,11 @@ function fakeProgress(overrides: Partial<ProgressRow> = {}): ProgressRow {
 }
 
 function fakeAccount(overrides: Partial<AccountStatus> = {}): AccountStatus {
-  return { premiumUntil: null, isAdmin: false, productionChecksUsed: 0, ...overrides };
+  return { premiumUntil: null, isAdmin: false, currentTariffId: null, dailyChecksUsed: 0, dailyChecksDate: null, ...overrides };
+}
+
+function fakeTariff(overrides: Partial<EffectiveTariff> = {}): EffectiveTariff {
+  return { id: 'tariff-1', allowCards: true, allowProgram: true, dailyCheckLimit: 3, unrestricted: false, ...overrides };
 }
 
 const fakeJudge = { name: 'mock', model: 'mock', judgeProduction: vi.fn() };
@@ -66,7 +80,9 @@ beforeEach(() => {
   vi.mocked(repo.upsertProgress).mockReset();
   vi.mocked(repo.findChunkWithSituationPrompts).mockReset();
   vi.mocked(users.findAccountStatus).mockReset();
-  vi.mocked(users.incrementProductionChecksUsed).mockReset().mockResolvedValue(undefined);
+  vi.mocked(users.bumpDailyChecksUsed).mockReset().mockResolvedValue(undefined);
+  vi.mocked(tariffs.resolveEffectiveTariff).mockReset().mockResolvedValue(fakeTariff());
+  vi.mocked(tariffs.listUpsellTariffs).mockReset().mockResolvedValue([]);
   vi.mocked(openrouter.getProductionJudgeProvider).mockReset().mockReturnValue(fakeJudge);
   fakeJudge.judgeProduction.mockReset();
   vi.mocked(aiLogs.recordAiCallLog).mockReset().mockResolvedValue(undefined as never);
@@ -75,41 +91,52 @@ beforeEach(() => {
 
   vi.mocked(repo.findChunkWithSituationPrompts).mockResolvedValue(fakeChunk());
   vi.mocked(repo.findProgress).mockResolvedValue(fakeProgress());
+  vi.mocked(users.findAccountStatus).mockResolvedValue(fakeAccount());
 });
 
-describe('buildProductionCheck — free-tier limit', () => {
-  it('is available for a free user under the limit', async () => {
-    vi.mocked(users.findAccountStatus).mockResolvedValue(fakeAccount({ productionChecksUsed: 2 }));
+describe('buildProductionCheck — tariff gating', () => {
+  it('is available under the daily limit', async () => {
+    vi.mocked(tariffs.resolveEffectiveTariff).mockResolvedValue(fakeTariff({ dailyCheckLimit: 3 }));
+    vi.mocked(users.findAccountStatus).mockResolvedValue(fakeAccount({ dailyChecksUsed: 2, dailyChecksDate: today }));
     const result = await buildProductionCheck(userId, chunkId);
     expect(result.kind).toBe('ok');
   });
 
-  it('is blocked for a free user at the limit', async () => {
-    vi.mocked(users.findAccountStatus).mockResolvedValue(fakeAccount({ productionChecksUsed: 3 }));
+  it('is blocked at the daily limit', async () => {
+    vi.mocked(tariffs.resolveEffectiveTariff).mockResolvedValue(fakeTariff({ dailyCheckLimit: 3 }));
+    vi.mocked(users.findAccountStatus).mockResolvedValue(fakeAccount({ dailyChecksUsed: 3, dailyChecksDate: today }));
     const result = await buildProductionCheck(userId, chunkId);
     expect(result.kind).toBe('limit_reached');
   });
 
-  it('bypasses the limit for an active-premium user', async () => {
-    vi.mocked(users.findAccountStatus).mockResolvedValue(
-      fakeAccount({ productionChecksUsed: 10, premiumUntil: new Date(Date.now() + 86_400_000) }),
-    );
+  it("does not carry over yesterday's usage into today's count", async () => {
+    vi.mocked(tariffs.resolveEffectiveTariff).mockResolvedValue(fakeTariff({ dailyCheckLimit: 3 }));
+    vi.mocked(users.findAccountStatus).mockResolvedValue(fakeAccount({ dailyChecksUsed: 3, dailyChecksDate: '2020-01-01' }));
     const result = await buildProductionCheck(userId, chunkId);
     expect(result.kind).toBe('ok');
   });
 
-  it('bypasses the limit for an admin user', async () => {
-    vi.mocked(users.findAccountStatus).mockResolvedValue(fakeAccount({ productionChecksUsed: 10, isAdmin: true }));
+  it('bypasses every gate for an unrestricted (admin) tariff', async () => {
+    vi.mocked(tariffs.resolveEffectiveTariff).mockResolvedValue(fakeTariff({ unrestricted: true, allowCards: false, dailyCheckLimit: 0 }));
     const result = await buildProductionCheck(userId, chunkId);
     expect(result.kind).toBe('ok');
   });
 
-  it('does not treat an expired premiumUntil as active', async () => {
-    vi.mocked(users.findAccountStatus).mockResolvedValue(
-      fakeAccount({ productionChecksUsed: 3, premiumUntil: new Date(Date.now() - 86_400_000) }),
-    );
+  it('has no daily cap when dailyCheckLimit is null', async () => {
+    vi.mocked(tariffs.resolveEffectiveTariff).mockResolvedValue(fakeTariff({ dailyCheckLimit: null }));
+    vi.mocked(users.findAccountStatus).mockResolvedValue(fakeAccount({ dailyChecksUsed: 999, dailyChecksDate: today }));
     const result = await buildProductionCheck(userId, chunkId);
-    expect(result.kind).toBe('limit_reached');
+    expect(result.kind).toBe('ok');
+  });
+
+  it('is not_allowed with upsell tariffs when the tariff disallows cards', async () => {
+    vi.mocked(tariffs.resolveEffectiveTariff).mockResolvedValue(fakeTariff({ allowCards: false }));
+    vi.mocked(tariffs.listUpsellTariffs).mockResolvedValue([{ id: 'up-1', name: 'Год', periodicity: 'yearly', priceUsd: null, priceEur: null, priceRub: null, allowCards: true, allowProgram: true, dailyCheckLimit: null }]);
+
+    const result = await buildProductionCheck(userId, chunkId);
+
+    expect(result.kind).toBe('not_allowed');
+    expect(result.kind === 'not_allowed' && result.upsellTariffs).toHaveLength(1);
   });
 });
 
@@ -121,7 +148,6 @@ describe('buildProductionCheck — "Ситуация" comic (dialogue mode)', ()
   };
 
   it('prefers the dialogue comic over the free-text situation prompt when one is ready', async () => {
-    vi.mocked(users.findAccountStatus).mockResolvedValue(fakeAccount());
     vi.mocked(dialogues.findSituationDialogueForLearner).mockResolvedValue(fakeDialogue);
 
     const result = await buildProductionCheck(userId, chunkId);
@@ -137,7 +163,6 @@ describe('buildProductionCheck — "Ситуация" comic (dialogue mode)', ()
   });
 
   it('falls back to the free-text situation prompt when no comic is ready', async () => {
-    vi.mocked(users.findAccountStatus).mockResolvedValue(fakeAccount());
     vi.mocked(dialogues.findSituationDialogueForLearner).mockResolvedValue(null);
 
     const result = await buildProductionCheck(userId, chunkId);
@@ -148,7 +173,6 @@ describe('buildProductionCheck — "Ситуация" comic (dialogue mode)', ()
 
   it('is available via the comic even when the chunk has no situation prompts at all', async () => {
     vi.mocked(repo.findChunkWithSituationPrompts).mockResolvedValue(fakeChunk({ situation_prompts: [] }));
-    vi.mocked(users.findAccountStatus).mockResolvedValue(fakeAccount());
     vi.mocked(dialogues.findSituationDialogueForLearner).mockResolvedValue(fakeDialogue);
 
     const result = await buildProductionCheck(userId, chunkId);
@@ -166,7 +190,6 @@ describe('buildProductionCheck — "Ситуация" comic (dialogue mode)', ()
 
 describe('submitProductionAnswer — "Ситуация" comic (dialogue mode)', () => {
   it('judges against a prompt synthesized from the dialogue and returns modelAnswer', async () => {
-    vi.mocked(users.findAccountStatus).mockResolvedValue(fakeAccount());
     vi.mocked(dialogues.findSituationDialogueForLearner).mockResolvedValue({
       precedingMessages: [{ characterName: 'Alex', imageUrl: '/img/alex.png', side: 'left', text: 'How was your trip?' }],
       blank: { characterName: 'Sam', imageUrl: '/img/sam.png', side: 'right' },
@@ -186,43 +209,68 @@ describe('submitProductionAnswer — "Ситуация" comic (dialogue mode)', 
   });
 });
 
-describe('submitProductionAnswer — free-tier limit', () => {
-  it('blocks a free user at the limit without calling the judge', async () => {
-    vi.mocked(users.findAccountStatus).mockResolvedValue(fakeAccount({ productionChecksUsed: 3 }));
+describe('submitProductionAnswer — tariff gating', () => {
+  it('blocks at the daily limit without calling the judge', async () => {
+    vi.mocked(tariffs.resolveEffectiveTariff).mockResolvedValue(fakeTariff({ dailyCheckLimit: 3 }));
+    vi.mocked(users.findAccountStatus).mockResolvedValue(fakeAccount({ dailyChecksUsed: 3, dailyChecksDate: today }));
+
     const result = await submitProductionAnswer(userId, chunkId, 'Sounds good to me.');
+
     expect(result.kind).toBe('limit_reached');
     expect(fakeJudge.judgeProduction).not.toHaveBeenCalled();
-    expect(users.incrementProductionChecksUsed).not.toHaveBeenCalled();
+    expect(users.bumpDailyChecksUsed).not.toHaveBeenCalled();
   });
 
-  it('increments the counter once for a free user after a successful judge call', async () => {
-    vi.mocked(users.findAccountStatus).mockResolvedValue(fakeAccount({ productionChecksUsed: 0 }));
+  it('is not_allowed without calling the judge when the tariff disallows cards', async () => {
+    vi.mocked(tariffs.resolveEffectiveTariff).mockResolvedValue(fakeTariff({ allowCards: false }));
+
+    const result = await submitProductionAnswer(userId, chunkId, 'Sounds good to me.');
+
+    expect(result.kind).toBe('not_allowed');
+    expect(fakeJudge.judgeProduction).not.toHaveBeenCalled();
+    expect(users.bumpDailyChecksUsed).not.toHaveBeenCalled();
+  });
+
+  it('bumps the daily counter once after a successful judge call, when subject to a limit', async () => {
+    vi.mocked(tariffs.resolveEffectiveTariff).mockResolvedValue(fakeTariff({ dailyCheckLimit: 3 }));
+    vi.mocked(users.findAccountStatus).mockResolvedValue(fakeAccount({ dailyChecksUsed: 0, dailyChecksDate: today }));
     fakeJudge.judgeProduction.mockResolvedValue({ verdict: 'chunk_used', feedback: 'Отлично!' });
     vi.mocked(repo.upsertProgress).mockResolvedValue(fakeProgress({ state: 'active', times_production_attempted: 1, times_production_passed: 1 }));
 
     const result = await submitProductionAnswer(userId, chunkId, 'Sounds good to me.');
 
     expect(result.kind).toBe('ok');
-    expect(users.incrementProductionChecksUsed).toHaveBeenCalledTimes(1);
-    expect(users.incrementProductionChecksUsed).toHaveBeenCalledWith(userId);
+    expect(users.bumpDailyChecksUsed).toHaveBeenCalledTimes(1);
+    expect(users.bumpDailyChecksUsed).toHaveBeenCalledWith(userId);
   });
 
-  it('does not increment the counter when the judge call throws', async () => {
-    vi.mocked(users.findAccountStatus).mockResolvedValue(fakeAccount({ productionChecksUsed: 0 }));
+  it('does not bump the counter when the judge call throws', async () => {
+    vi.mocked(tariffs.resolveEffectiveTariff).mockResolvedValue(fakeTariff({ dailyCheckLimit: 3 }));
     fakeJudge.judgeProduction.mockRejectedValue(new Error('judge down'));
 
     await expect(submitProductionAnswer(userId, chunkId, 'Sounds good to me.')).rejects.toThrow('judge down');
-    expect(users.incrementProductionChecksUsed).not.toHaveBeenCalled();
+    expect(users.bumpDailyChecksUsed).not.toHaveBeenCalled();
   });
 
-  it('does not increment the counter for a premium user', async () => {
-    vi.mocked(users.findAccountStatus).mockResolvedValue(fakeAccount({ premiumUntil: new Date(Date.now() + 86_400_000) }));
+  it('does not bump the counter for an unrestricted tariff (unlimited)', async () => {
+    vi.mocked(tariffs.resolveEffectiveTariff).mockResolvedValue(fakeTariff({ unrestricted: true, dailyCheckLimit: null }));
     fakeJudge.judgeProduction.mockResolvedValue({ verdict: 'chunk_used', feedback: 'Отлично!' });
     vi.mocked(repo.upsertProgress).mockResolvedValue(fakeProgress({ state: 'active' }));
 
     const result = await submitProductionAnswer(userId, chunkId, 'Sounds good to me.');
 
     expect(result.kind).toBe('ok');
-    expect(users.incrementProductionChecksUsed).not.toHaveBeenCalled();
+    expect(users.bumpDailyChecksUsed).not.toHaveBeenCalled();
+  });
+
+  it('does not bump the counter when dailyCheckLimit is null (unlimited tariff)', async () => {
+    vi.mocked(tariffs.resolveEffectiveTariff).mockResolvedValue(fakeTariff({ dailyCheckLimit: null }));
+    fakeJudge.judgeProduction.mockResolvedValue({ verdict: 'chunk_used', feedback: 'Отлично!' });
+    vi.mocked(repo.upsertProgress).mockResolvedValue(fakeProgress({ state: 'active' }));
+
+    const result = await submitProductionAnswer(userId, chunkId, 'Sounds good to me.');
+
+    expect(result.kind).toBe('ok');
+    expect(users.bumpDailyChecksUsed).not.toHaveBeenCalled();
   });
 });

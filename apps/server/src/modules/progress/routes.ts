@@ -83,7 +83,10 @@ export const progressRoutes: FastifyPluginAsync = async (app) => {
       return { error: 'wrong_state' };
     }
     if (result.kind === 'limit_reached') {
-      return { available: false, reason: 'limit_reached' };
+      return { available: false, reason: 'limit_reached', upsellTariffs: result.upsellTariffs };
+    }
+    if (result.kind === 'not_allowed') {
+      return { available: false, reason: 'not_allowed', upsellTariffs: result.upsellTariffs };
     }
     if (result.kind === 'unavailable') {
       return { available: false };
@@ -157,7 +160,11 @@ export const progressRoutes: FastifyPluginAsync = async (app) => {
       }
       if (result.kind === 'limit_reached') {
         reply.code(402);
-        return { error: 'limit_reached' };
+        return { error: 'limit_reached', upsellTariffs: result.upsellTariffs };
+      }
+      if (result.kind === 'not_allowed') {
+        reply.code(403);
+        return { error: 'not_allowed', upsellTariffs: result.upsellTariffs };
       }
       return { verdict: result.verdict, feedback: result.feedback, progress: result.progress, modelAnswer: result.modelAnswer };
     },

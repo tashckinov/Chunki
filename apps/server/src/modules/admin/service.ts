@@ -1,7 +1,7 @@
 import {
   listUsers as repoListUsers,
   setUserPremiumUntil as repoSetUserPremiumUntil,
-  resetProductionChecksUsed as repoResetProductionChecksUsed,
+  resetDailyChecksUsedForAdmin as repoResetDailyChecksUsedForAdmin,
   listCollectionsAdmin as repoListCollectionsAdmin,
   createCollection as repoCreateCollection,
   updateCollection as repoUpdateCollection,
@@ -30,15 +30,7 @@ import {
   type SaveDialogueResult,
 } from '../dialogues/service.js';
 import type { DialogueInput, DialogueKind } from '../dialogues/repository.js';
-import {
-  listPaymentsForAdmin as paymentsListPaymentsForAdmin,
-  listPaymentPlansForAdmin as paymentsListPaymentPlansForAdmin,
-  upsertPaymentPlanForAdmin as paymentsUpsertPaymentPlanForAdmin,
-  type AdminPaymentSummary,
-  type AdminPaymentPlan,
-  type UpsertPaymentPlanInput,
-} from '../payments/service.js';
-import type { PaymentPlan } from '../payments/repository.js';
+import { listPaymentsForAdmin as paymentsListPaymentsForAdmin, type AdminPaymentSummary } from '../payments/service.js';
 import { listRecentActivityForAdmin as programListRecentActivityForAdmin, type AdminTopicActivitySummary } from '../program/service.js';
 import { deleteUploadedFile } from '../../config/uploads.js';
 
@@ -50,7 +42,9 @@ export interface AdminUserSummary {
   lastLoginAt: string;
   isAdmin: boolean;
   premiumUntil: string | null;
-  productionChecksUsed: number;
+  currentTariffId: string | null;
+  dailyChecksUsed: number;
+  dailyChecksDate: string | null;
 }
 
 function toUserSummary(row: AdminUserRow): AdminUserSummary {
@@ -62,7 +56,9 @@ function toUserSummary(row: AdminUserRow): AdminUserSummary {
     lastLoginAt: row.last_login_at.toISOString(),
     isAdmin: row.is_admin,
     premiumUntil: row.premium_until ? row.premium_until.toISOString() : null,
-    productionChecksUsed: row.production_checks_used,
+    currentTariffId: row.current_tariff_id,
+    dailyChecksUsed: row.daily_checks_used,
+    dailyChecksDate: row.daily_checks_date,
   };
 }
 
@@ -77,8 +73,8 @@ export async function setUserPremiumUntil(userId: string, premiumUntil: Date | n
   return row ? { kind: 'ok', user: toUserSummary(row) } : { kind: 'not_found' };
 }
 
-export async function resetProductionChecks(userId: string): Promise<SetPremiumResult> {
-  const row = await repoResetProductionChecksUsed(userId);
+export async function resetDailyChecksForAdmin(userId: string): Promise<SetPremiumResult> {
+  const row = await repoResetDailyChecksUsedForAdmin(userId);
   return row ? { kind: 'ok', user: toUserSummary(row) } : { kind: 'not_found' };
 }
 
@@ -231,14 +227,6 @@ export async function deleteDialogueForChunk(chunkId: string, kind: DialogueKind
 
 export async function listPaymentsForAdmin(limit: number): Promise<AdminPaymentSummary[]> {
   return paymentsListPaymentsForAdmin(limit);
-}
-
-export async function listPaymentPlansForAdmin(): Promise<AdminPaymentPlan[]> {
-  return paymentsListPaymentPlansForAdmin();
-}
-
-export async function upsertPaymentPlanForAdmin(plan: PaymentPlan, input: UpsertPaymentPlanInput): Promise<AdminPaymentPlan> {
-  return paymentsUpsertPaymentPlanForAdmin(plan, input);
 }
 
 export async function listProgramTopicsForAdmin(limit: number): Promise<AdminTopicActivitySummary[]> {

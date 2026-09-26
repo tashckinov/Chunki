@@ -9,6 +9,7 @@ export interface PaymentRow {
   provider: string;
   external_id: string;
   plan: string;
+  tariff_id: string | null;
   status: string;
   amount: string | null;
   currency: string | null;
@@ -16,38 +17,39 @@ export interface PaymentRow {
   updated_at: Date;
 }
 
+const PAYMENT_COLUMNS = 'id, user_id, provider, external_id, plan, tariff_id, status, amount, currency, created_at, updated_at';
+
 export interface NewPendingPayment {
   userId: string;
   provider: string;
   externalId: string;
   plan: PaymentPlan;
+  tariffId: string;
 }
 
 export async function createPendingPayment(input: NewPendingPayment): Promise<PaymentRow> {
   const { rows } = await pool.query<PaymentRow>(
-    `INSERT INTO payments (user_id, provider, external_id, plan, status)
-     VALUES ($1, $2, $3, $4, 'pending')
-     RETURNING id, user_id, provider, external_id, plan, status, amount, currency, created_at, updated_at`,
-    [input.userId, input.provider, input.externalId, input.plan],
+    `INSERT INTO payments (user_id, provider, external_id, plan, tariff_id, status)
+     VALUES ($1, $2, $3, $4, $5, 'pending')
+     RETURNING ${PAYMENT_COLUMNS}`,
+    [input.userId, input.provider, input.externalId, input.plan, input.tariffId],
   );
   return rows[0];
 }
 
 export async function findPaymentByExternalId(provider: string, externalId: string): Promise<PaymentRow | null> {
-  const { rows } = await pool.query<PaymentRow>(
-    `SELECT id, user_id, provider, external_id, plan, status, amount, currency, created_at, updated_at
-     FROM payments WHERE provider = $1 AND external_id = $2`,
-    [provider, externalId],
-  );
+  const { rows } = await pool.query<PaymentRow>(`SELECT ${PAYMENT_COLUMNS} FROM payments WHERE provider = $1 AND external_id = $2`, [
+    provider,
+    externalId,
+  ]);
   return rows[0] ?? null;
 }
 
 export async function updatePaymentStatus(id: string, status: PaymentStatus): Promise<PaymentRow> {
-  const { rows } = await pool.query<PaymentRow>(
-    `UPDATE payments SET status = $2, updated_at = now() WHERE id = $1
-     RETURNING id, user_id, provider, external_id, plan, status, amount, currency, created_at, updated_at`,
-    [id, status],
-  );
+  const { rows } = await pool.query<PaymentRow>(`UPDATE payments SET status = $2, updated_at = now() WHERE id = $1 RETURNING ${PAYMENT_COLUMNS}`, [
+    id,
+    status,
+  ]);
   return rows[0];
 }
 
@@ -74,7 +76,7 @@ export interface PaymentWithUserRow extends PaymentRow {
 
 export async function listPaymentsForAdmin(limit: number): Promise<PaymentWithUserRow[]> {
   const { rows } = await pool.query<PaymentWithUserRow>(
-    `SELECT p.id, p.user_id, p.provider, p.external_id, p.plan, p.status, p.amount, p.currency, p.created_at, p.updated_at,
+    `SELECT p.id, p.user_id, p.provider, p.external_id, p.plan, p.tariff_id, p.status, p.amount, p.currency, p.created_at, p.updated_at,
             u.email AS user_email
      FROM payments p
      LEFT JOIN users u ON u.id = p.user_id
@@ -83,50 +85,4 @@ export async function listPaymentsForAdmin(limit: number): Promise<PaymentWithUs
     [limit],
   );
   return rows;
-}
-
-const PAYMENT_PLAN_COLUMNS = 'plan, title, offer_url, price_usd, price_eur, price_rub, updated_at';
-
-export interface PaymentPlanRow {
-  plan: string;
-  title: string;
-  offer_url: string | null;
-  price_usd: string | null;
-  price_eur: string | null;
-  price_rub: string | null;
-  updated_at: Date;
-}
-
-export async function listPaymentPlans(): Promise<PaymentPlanRow[]> {
-  const { rows } = await pool.query<PaymentPlanRow>(`SELECT ${PAYMENT_PLAN_COLUMNS} FROM payment_plans ORDER BY plan`);
-  return rows;
-}
-
-export async function findPaymentPlan(plan: PaymentPlan): Promise<PaymentPlanRow | null> {
-  const { rows } = await pool.query<PaymentPlanRow>(`SELECT ${PAYMENT_PLAN_COLUMNS} FROM payment_plans WHERE plan = $1`, [plan]);
-  return rows[0] ?? null;
-}
-
-export interface UpsertPaymentPlanInput {
-  plan: PaymentPlan;
-  title: string;
-  offerUrl: string | null;
-  priceUsd: number | null;
-  priceEur: number | null;
-  priceRub: number | null;
-}
-
-// payment_plans is seeded (0017_payment_plans.sql) with exactly the two rows
-// this app's plan enum allows, so this is always an UPDATE in practice — the
-// upsert form just makes the seed a non-requirement rather than depending on
-// migrations never being skipped.
-export async function upsertPaymentPlan(input: UpsertPaymentPlanInput): Promise<PaymentPlanRow> {
-  const { rows } = await pool.query<PaymentPlanRow>(
-    `INSERT INTO payment_plans (plan, title, offer_url, price_usd, price_eur, price_rub, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, now())
-     ON CONFLICT (plan) DO UPDATE SET title = $2, offer_url = $3, price_usd = $4, price_eur = $5, price_rub = $6, updated_at = now()
-     RETURNING ${PAYMENT_PLAN_COLUMNS}`,
-    [input.plan, input.title, input.offerUrl, input.priceUsd, input.priceEur, input.priceRub],
-  );
-  return rows[0];
 }

@@ -1,4 +1,3 @@
-import { FREE_PRODUCTION_CHECKS_LIMIT } from '@app/shared';
 import { useAppStore } from '../store/appStore';
 import type { ProductionVerdict } from '../lib/progress';
 import { deckTallyView } from '../store/derived';
@@ -47,7 +46,7 @@ export function DeckDoneScreen() {
     sessionVerdicts,
     sessionProductionResults,
     sessionProductionPending,
-    productionLimitReached,
+    productionBlock,
     activeDeckChunks,
     goCardsLib,
     go,
@@ -87,11 +86,15 @@ export function DeckDoneScreen() {
         </div>
       )}
 
-      {productionLimitReached && (
+      {productionBlock && (
         <div className="rounded-[var(--radius-md)] bg-accent-subtle p-4 flex flex-col gap-2.5">
-          <div className="text-[14.5px] font-semibold">Бесплатные проверки закончились</div>
+          <div className="text-[14.5px] font-semibold">
+            {productionBlock.reason === 'limit_reached' ? 'Дневной лимит проверок исчерпан' : 'Проверка предложений недоступна на вашем тарифе'}
+          </div>
           <div className="text-body-secondary text-[13.5px]">
-            На бесплатном тарифе доступно {FREE_PRODUCTION_CHECKS_LIMIT} {plural(FREE_PRODUCTION_CHECKS_LIMIT, 'проверка', 'проверки', 'проверок')} предложений. Хотите больше? Оформите подписку.
+            {productionBlock.upsellTariffs.length > 0
+              ? `Доступно в тарифах: ${productionBlock.upsellTariffs.map((t) => t.name).join(', ')}.`
+              : 'Хотите больше? Оформите подписку.'}
           </div>
           <Button size="sm" onClick={() => go('checkout')}>
             Оформить подписку

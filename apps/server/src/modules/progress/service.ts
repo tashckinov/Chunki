@@ -1,7 +1,8 @@
-import { FREE_PRODUCTION_CHECKS_LIMIT, type ProductionCheckVerdict } from '@app/shared';
+import type { ProductionCheckVerdict } from '@app/shared';
 import { getProductionJudgeProvider } from '../../openrouter/index.js';
 import { withAiCallLogging } from '../aiLogs/service.js';
-import { findAccountStatus, incrementProductionChecksUsed, isPremiumActive } from '../users/repository.js';
+import { findAccountStatus, bumpDailyChecksUsed } from '../users/repository.js';
+import { resolveEffectiveTariff, effectiveDailyChecksUsed, listUpsellTariffs, type PublicTariff } from '../subscriptionTariffs/service.js';
 import { findSituationDialogueForLearner, type SituationDialogueForLearner } from '../dialogues/service.js';
 import {
   findProgress,
@@ -12,10 +13,6 @@ import {
   type ProgressRow,
   type SituationPromptPart,
 } from './repository.js';
-
-// FREE_PRODUCTION_CHECKS_LIMIT usage is permanent until an admin resets
-// production_checks_used back to 0 (see admin/repository.ts's
-// resetProductionChecksUsed).
 
 export type SortVerdict = 'know' | 'dont' | 'bury';
 
@@ -154,7 +151,8 @@ export type ProductionCheckAvailability =
   | { kind: 'not_found' }
   | { kind: 'wrong_state' }
   | { kind: 'unavailable' }
-  | { kind: 'limit_reached' }
+  | { kind: 'not_allowed'; upsellTariffs: PublicTariff[] }
+  | { kind: 'limit_reached'; upsellTariffs: PublicTariff[] }
   | { kind: 'ok'; mode: 'situation'; chunkId: string; situationPrompt: string; situationParts: SituationPromptPartSummary[]; chunkText: string; chunkTranslation: string }
   | { kind: 'ok'; mode: 'dialogue'; chunkId: string; dialogue: ProductionDialoguePayload; chunkText: string; chunkTranslation: string };
 
@@ -169,9 +167,16 @@ export async function buildProductionCheck(userId: string, chunkId: string): Pro
   const situationDialogue = await findSituationDialogueForLearner(chunkId);
   if (!situationDialogue && chunk.situation_prompts.length === 0) return { kind: 'unavailable' };
 
-  const account = await findAccountStatus(userId);
-  if (account && !account.isAdmin && !isPremiumActive(account.premiumUntil) && account.productionChecksUsed >= FREE_PRODUCTION_CHECKS_LIMIT) {
-    return { kind: 'limit_reached' };
+  const tariff = await resolveEffectiveTariff(userId);
+  if (!tariff.unrestricted && !tariff.allowCards) {
+    return { kind: 'not_allowed', upsellTariffs: await listUpsellTariffs(tariff.id) };
+  }
+  if (!tariff.unrestricted && tariff.dailyCheckLimit !== null) {
+    const account = await findAccountStatus(userId);
+    const used = account ? effectiveDailyChecksUsed(account.dailyChecksUsed, account.dailyChecksDate) : 0;
+    if (used >= tariff.dailyCheckLimit) {
+      return { kind: 'limit_reached', upsellTariffs: await listUpsellTariffs(tariff.id) };
+    }
   }
 
   // "Ситуация" always uses the dialogue-completion comic when the chunk has
@@ -202,7 +207,8 @@ export type ProductionSubmitResult =
   | { kind: 'not_found' }
   | { kind: 'wrong_state' }
   | { kind: 'unavailable' }
-  | { kind: 'limit_reached' }
+  | { kind: 'not_allowed'; upsellTariffs: PublicTariff[] }
+  | { kind: 'limit_reached'; upsellTariffs: PublicTariff[] }
   | { kind: 'ok'; verdict: ProductionCheckVerdict; feedback: string; progress: ProgressSummary; modelAnswer?: string };
 
 const VERDICT_STATE: Record<ProductionCheckVerdict, string> = { chunk_used: 'active', meaning_only: 'passive', not_conveyed: 'unknown' };
@@ -224,9 +230,17 @@ export async function submitProductionAnswer(userId: string, chunkId: string, an
   const situationDialogue = await findSituationDialogueForLearner(chunkId);
   if (!situationDialogue && chunk.situation_prompts.length === 0) return { kind: 'unavailable' };
 
-  const account = await findAccountStatus(userId);
-  const isFree = !!account && !account.isAdmin && !isPremiumActive(account.premiumUntil);
-  if (account && isFree && account.productionChecksUsed >= FREE_PRODUCTION_CHECKS_LIMIT) return { kind: 'limit_reached' };
+  const tariff = await resolveEffectiveTariff(userId);
+  if (!tariff.unrestricted && !tariff.allowCards) {
+    return { kind: 'not_allowed', upsellTariffs: await listUpsellTariffs(tariff.id) };
+  }
+  let countsTowardDailyLimit = false;
+  if (!tariff.unrestricted && tariff.dailyCheckLimit !== null) {
+    const account = await findAccountStatus(userId);
+    const used = account ? effectiveDailyChecksUsed(account.dailyChecksUsed, account.dailyChecksDate) : 0;
+    if (used >= tariff.dailyCheckLimit) return { kind: 'limit_reached', upsellTariffs: await listUpsellTariffs(tariff.id) };
+    countsTowardDailyLimit = true;
+  }
 
   const situationPromptText = situationDialogue
     ? renderDialogueSituationPrompt(situationDialogue, chunk.text)
@@ -242,13 +256,13 @@ export async function submitProductionAnswer(userId: string, chunkId: string, an
   };
   const result = await withAiCallLogging({ userId, chunkId, provider: judge.name, model: judge.model, request: judgeInput }, () => judge.judgeProduction(judgeInput));
 
-  // This increment IS the free-tier limit enforcement — if it fails, the
-  // limit silently doesn't apply (the judge call above already happened, so
+  // This increment IS the daily-limit enforcement — if it fails, the limit
+  // silently doesn't apply (the judge call above already happened, so
   // there's nothing to roll back), which is worth a visible log line rather
   // than vanishing entirely.
-  if (isFree) {
-    await incrementProductionChecksUsed(userId).catch((err) => {
-      console.error('incrementProductionChecksUsed failed', { userId, message: err instanceof Error ? err.message : String(err) });
+  if (countsTowardDailyLimit) {
+    await bumpDailyChecksUsed(userId).catch((err) => {
+      console.error('bumpDailyChecksUsed failed', { userId, message: err instanceof Error ? err.message : String(err) });
     });
   }
 
