@@ -10,12 +10,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (copy .env.example)}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    # Exposed for local development (psql, a GUI client, running the backend
-    # outside Docker against it). Drop this port mapping for anything beyond
-    # local dev — service-to-service traffic never needs it, since the
-    # backend reaches Postgres by service name over the Compose network.
-    ports:
-      - '${POSTGRES_PORT:-5432}:5432'
+    # PostgreSQL is internal-only. Do not expose port 5432 on the VPS.
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-chunki} -d ${POSTGRES_DB:-chunki}']
       interval: 5s
@@ -32,39 +27,23 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      # Admin-uploaded assets (currently collection banners) — persisted
-      # across redeploys, since the image itself is rebuilt from scratch.
       - uploads_data:/app/uploads
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       PORT: 8787
-      # The bare origin (scheme+host[:port], NO path) that's allowed to make
-      # credentialed requests — e.g. https://<user>.github.io, NOT
-      # https://<user>.github.io/Chunki. Deliberately separate from
-      # FRONTEND_URL below, which is a full URL (with path) used only for the
-      # post-login redirect; CORS match against a path-bearing value would
-      # just silently never match the browser's Origin header.
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
-      # Always the Compose service name, never localhost, from inside the container.
       DATABASE_URL: postgresql://${POSTGRES_USER:-chunki}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (copy .env.example)}@postgres:5432/${POSTGRES_DB:-chunki}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?Set GOOGLE_CLIENT_ID in .env — see apps/server/README.md}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?Set GOOGLE_CLIENT_SECRET in .env — see apps/server/README.md}
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:8787/api/auth/google/callback}
       SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in .env (32+ random chars)}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
-      # Grading + production-check judge — both optional, both default to the
-      # mock provider when unset. Passed through here so setting them in .env
-      # actually reaches the container (Compose doesn't forward the whole
-      # host .env automatically — only what's listed in this block).
       GRADING_PROVIDER: ${GRADING_PROVIDER:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
       PRODUCTION_JUDGE_PROVIDER: ${PRODUCTION_JUDGE_PROVIDER:-}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       OPENROUTER_MODEL: ${OPENROUTER_MODEL:-}
-      # Subscription payments via Lava.top — same optional/auto-select shape
-      # as the providers above; see apps/server/README.md's "Payments
-      # (Lava.top)" section for how to get these values.
       PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-}
       LAVA_TOP_API_KEY: ${LAVA_TOP_API_KEY:-}
       LAVA_TOP_BASE_URL: ${LAVA_TOP_BASE_URL:-}
@@ -73,9 +52,9 @@ services:
       LAVA_TOP_WEBHOOK_LOGIN: ${LAVA_TOP_WEBHOOK_LOGIN:-}
       LAVA_TOP_WEBHOOK_PASSWORD: ${LAVA_TOP_WEBHOOK_PASSWORD:-}
     ports:
-      - '${PORT:-8787}:8787'
+      - '127.0.0.1:8787:8787'
     healthcheck:
-      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:8787/api/health']
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://127.0.0.1:8787/api/health']
       interval: 10s
       timeout: 5s
       retries: 5
