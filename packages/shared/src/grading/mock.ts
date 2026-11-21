@@ -1,7 +1,6 @@
 import { BUILTIN_PLACEMENT_TEST } from '../content.js';
 import type {
   ExerciseItem,
-  ExercisesGradeResult,
   ExercisesSubmission,
   GradeDetail,
   GradingProvider,
@@ -9,7 +8,11 @@ import type {
   PlacementTestSubmission,
   TopicStudyContent,
   TopicIdentity,
-  TopicSuggestion,
+  TopicRecommendation,
+  TopicPlanContext,
+  CurriculumTopic,
+  PlacementAssessment,
+  ExercisesAssessment,
 } from '../types.js';
 import { scoreMcq } from './scoring.js';
 
@@ -50,28 +53,15 @@ function gradeFreeText(answer: string, minWords: number): GradeDetail {
   };
 }
 
-/** Deterministic pool the mock provider draws "AI-discovered" topics from —
- * a real provider would invent these freely, this is just enough variety to
- * exercise the whole flow (program list, study, exercises) without a key. */
-const MOCK_TOPIC_POOL: TopicSuggestion[] = [
-  { key: 'articles', level: 'A2', title: 'Артикли: a / the / нулевой', category: 'Грамматика', rationale: 'В открытых ответах артикли часто пропущены или лишние.' },
-  { key: 'present-perfect', level: 'B1', title: 'Present Perfect vs Past Simple', category: 'Грамматика', rationale: 'Past Simple используется там, где нужен Present Perfect.' },
-  { key: 'word-order', level: 'A2', title: 'Порядок слов и наречия частоты', category: 'Использование языка', rationale: 'Наречия частоты стоят не на своём месте в предложении.' },
-  { key: 'conditionals-2', level: 'B1', title: 'Второй тип условных', category: 'Грамматика', rationale: 'Условные конструкции второго типа вызывают ошибки.' },
-  { key: 'modals', level: 'B1', title: 'Модальные глаголы вероятности', category: 'Грамматика', rationale: 'Модальные глаголы для вероятности путаются между собой.' },
-  { key: 'chunks-opinion', level: 'A2', title: 'Chunks: мнение и согласие', category: 'Лексика', rationale: 'Не хватает устойчивых фраз для выражения мнения.' },
-  { key: 'writing-informal', level: 'A2', title: 'Письмо: неформальное сообщение', category: 'Письмо', rationale: 'Письменная речь звучит слишком формально для неформального контекста.' },
-  { key: 'reading-long', level: 'B1', title: 'Reading: длинный текст на время', category: 'Понимание', rationale: 'Понимание текста замедляется на длинных пассажах.' },
-];
-
-function pickTopics(count: number, seed: number): TopicSuggestion[] {
-  return Array.from({ length: Math.min(count, MOCK_TOPIC_POOL.length) }, (_, i) => MOCK_TOPIC_POOL[(seed + i) % MOCK_TOPIC_POOL.length]);
+function pickTopics(plan: TopicPlanContext | undefined, count: number): TopicRecommendation[] {
+  return (plan?.catalog ?? []).filter(({ id }) => !plan?.assignedKeys.includes(id)).slice(0, count)
+    .map(({ id }) => ({ key: id, rationale: 'Тема для практики в демонстрационном режиме.' }));
 }
 
 export class MockGradingProvider implements GradingProvider {
   name = 'mock';
 
-  async gradePlacementTest(input: PlacementTestSubmission, definition = BUILTIN_PLACEMENT_TEST): Promise<PlacementGradeResult> {
+  async gradePlacementTest(input: PlacementTestSubmission, definition = BUILTIN_PLACEMENT_TEST, plan?: TopicPlanContext): Promise<PlacementAssessment> {
     const mcqScore = scoreMcq(input.mcqAnswers, definition.mcq);
     const mcqRatio = mcqScore.correct / mcqScore.total;
 
@@ -101,11 +91,11 @@ export class MockGradingProvider implements GradingProvider {
       mcqScore,
       openGrades,
       essayGrade,
-      topics: pickTopics(MOCK_TOPIC_POOL.length, mcqScore.correct),
+      topics: pickTopics(plan, 8),
     };
   }
 
-  async gradeExercises(input: ExercisesSubmission): Promise<ExercisesGradeResult> {
+  async gradeExercises(input: ExercisesSubmission, plan?: TopicPlanContext): Promise<ExercisesAssessment> {
     let correct = 0;
     let total = 0;
     const writeGrades: GradeDetail[] = [];
@@ -130,25 +120,25 @@ export class MockGradingProvider implements GradingProvider {
       passed: scoreOutOf10 >= 7,
       verdictLabel: verdictFor(scoreOutOf10),
       notes: ['Мок-проверка: качественные заметки появятся при использовании LLM-провайдера.'],
-      discoveredTopics: scoreOutOf10 < 6 ? pickTopics(1, input.topic.key.length) : [],
+      discoveredTopics: scoreOutOf10 < 6 ? pickTopics(plan, 1) : [],
       nextReviewInDays: 3,
     };
   }
 
-  async generateTopicStudy(topic: TopicIdentity): Promise<TopicStudyContent> {
+  async generateTopicStudy(topic: TopicIdentity, curriculum?: CurriculumTopic): Promise<TopicStudyContent> {
     return {
-      explanation: `${topic.title} — мок-материал. Для реального объяснения подключите провайдера LLM.`,
+      explanation: `${curriculum?.title ?? topic.title} — мок-материал. Для реального объяснения подключите провайдера LLM.`,
       keyPoints: ['Ключевой момент 1 (мок)', 'Ключевой момент 2 (мок)', 'Ключевой момент 3 (мок)'],
       contrastExamples: [{ wrong: 'Пример с ошибкой (мок).', right: 'Правильный вариант (мок).' }],
       exampleChunks: ['example chunk one', 'example chunk two'],
     };
   }
 
-  async generateTopicExercises(topic: ExercisesSubmission['topic']): Promise<ExerciseItem[]> {
+  async generateTopicExercises(topic: ExercisesSubmission['topic'], curriculum?: CurriculumTopic): Promise<ExerciseItem[]> {
     return [
-      { type: 'choice', q: `[Мок] Вопрос по теме «${topic.title}» — вариант 1`, options: ['A', 'B', 'C'], answer: 'A' },
-      { type: 'choice', q: `[Мок] Вопрос по теме «${topic.title}» — вариант 2`, options: ['A', 'B', 'C'], answer: 'B' },
-      { type: 'write', q: `[Мок] Напиши предложение, используя «${topic.title}».`, rows: 2, placeholder: 'Your answer' },
+      { type: 'choice', q: `[Мок] Вопрос по теме «${curriculum?.title ?? topic.title}» — вариант 1`, options: ['A', 'B', 'C'], answer: 'A' },
+      { type: 'choice', q: `[Мок] Вопрос по теме «${curriculum?.title ?? topic.title}» — вариант 2`, options: ['A', 'B', 'C'], answer: 'B' },
+      { type: 'write', q: `[Мок] Напиши предложение, используя «${curriculum?.title ?? topic.title}».`, rows: 2, placeholder: 'Your answer' },
     ];
   }
 }

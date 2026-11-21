@@ -1,13 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
-import { CEFR_LEVELS, TOPIC_CATEGORIES, type TopicIdentity } from '@app/shared';
+import { CEFR_LEVELS, TOPIC_CATEGORIES, type TopicIdentity, type CurriculumTopic } from '@app/shared';
 import { ChatMD } from '../../components/chatmd/ChatMD';
 import { Button } from '../../components/ui/Button';
+import { CurriculumEditor } from './CurriculumEditor';
 import { ApiError } from '../../lib/collections';
-import { fetchAdminCatalogTopic, fetchAdminTopicCatalog, saveAdminCatalogTopic, type AdminCatalogTopic } from '../../lib/admin';
+import { fetchAdminCatalogTopic, fetchAdminTopicCatalog, fetchCurriculumTopics, saveAdminCatalogTopic, setTopicCurriculumLink, type AdminCatalogTopic } from '../../lib/admin';
 
 const field = 'min-h-11 rounded-xl border border-border bg-surface px-3 text-text';
 
 export function ProgramCatalogPanel() {
+  const [curriculum, setCurriculum] = useState<CurriculumTopic[]>();
+  const [curriculumError, setCurriculumError] = useState(false);
+  const [link, setLink] = useState('');
+  const [linkSaved, setLinkSaved] = useState(false);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState({ q: '', offset: 0 });
   const [data, setData] = useState<Awaited<ReturnType<typeof fetchAdminTopicCatalog>>>();
@@ -21,6 +26,13 @@ export function ProgramCatalogPanel() {
 
   useEffect(() => {
     let active = true;
+    fetchCurriculumTopics().then((topics) => { if (active) setCurriculum(topics); })
+      .catch(() => { if (active) setCurriculumError(true); });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
     fetchAdminTopicCatalog(page.q, page.offset).then((value) => { if (active) setData(value); })
       .catch(() => { if (active) setListError(true); });
     return () => { active = false; };
@@ -30,7 +42,12 @@ export function ProgramCatalogPanel() {
     if (!key) return;
     detail.current?.scrollIntoView({ block: 'start' });
     let active = true;
-    fetchAdminCatalogTopic(key).then((value) => { if (active) setTopic(value); })
+    fetchAdminCatalogTopic(key).then((value) => {
+      if (!active) return;
+      setTopic(value);
+      setLink(value.curriculumId ?? '');
+      setLinkSaved(false);
+    })
       .catch(() => { if (active) setError('Не удалось открыть тему.'); });
     return () => { active = false; };
   }, [key]);
@@ -64,6 +81,22 @@ export function ProgramCatalogPanel() {
     }
   }
 
+  async function saveLink() {
+    if (!topic || saving) return;
+    setSaving(true);
+    setError('');
+    try {
+      await setTopicCurriculumLink(topic.key, link || null);
+      setTopic({ ...topic, curriculumId: link || null });
+      setLinkSaved(true);
+    } catch {
+      setError('Не удалось сохранить связь с учебной целью.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const linked = curriculum?.find((item) => item.id === topic?.curriculumId);
   if (key) return (
     <section ref={detail} className="flex flex-col gap-4">
       <Button variant="ghost" size="sm" className="self-start" disabled={saving} onClick={() => {
@@ -73,7 +106,7 @@ export function ProgramCatalogPanel() {
       {!topic && !error && <p className="text-body-secondary">Загрузка темы…</p>}
       {topic && (
         <>
-          <form onSubmit={(event) => { event.preventDefault(); void save(); }} className="flex flex-col gap-3 rounded-xl border border-border p-4">
+          {!topic.curriculumSlot && <form onSubmit={(event) => { event.preventDefault(); void save(); }} className="flex flex-col gap-3 rounded-xl border border-border p-4">
             <fieldset disabled={saving} className="flex flex-col gap-3">
               <label className="flex flex-col gap-1 text-meta">Название темы
                 <input value={topic.title} onChange={(event) => update({ title: event.target.value })}
@@ -98,7 +131,25 @@ export function ProgramCatalogPanel() {
             <p className="text-meta wrap-anywhere">{[topic.key, ...topic.aliases].join(' · ')}</p>
             <Button type="submit" size="sm" className="self-start" disabled={saving || !topic.title.trim()}>Сохранить тему</Button>
             {saved && <p role="status" className="text-positive">Тема сохранена.</p>}
-          </form>
+          </form>}
+          <section className="flex flex-col gap-3 rounded-xl border border-border p-4">
+            <h2 className="text-section-title">Учебная цель</h2>
+            {linked && <p className="text-body-secondary">{linked.level} · {linked.title} — {linked.objective}</p>}
+            {curriculumError && <p className="text-negative">Не удалось загрузить учебные цели.</p>}
+            {!topic.curriculumSlot && curriculum && (
+              <>
+                <label className="flex flex-col gap-1 text-meta">Связать существующую тему
+                  <select className={field} disabled={saving} value={link} onChange={(event) => { setLink(event.target.value); setLinkSaved(false); }}>
+                    <option value="">Без связи с CEFR-каталогом</option>
+                    {curriculum.map((item) => <option key={item.id} value={item.id}>{item.level} · {item.title}</option>)}
+                  </select>
+                </label>
+                <Button size="sm" variant="secondary" className="self-start" disabled={saving || link === (topic.curriculumId ?? '')}
+                  onClick={() => void saveLink()}>Сохранить связь</Button>
+                {linkSaved && <p role="status" className="text-positive">Связь сохранена.</p>}
+              </>
+            )}
+          </section>
           <section aria-label="Предпросмотр урока" className="flex flex-col gap-3 rounded-xl border border-border p-4">
             <h2 className="text-section-title">Предпросмотр урока</h2>
             {topic.study ? (
@@ -120,7 +171,9 @@ export function ProgramCatalogPanel() {
   const nextOffset = data?.nextOffset;
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="text-section-title">Каталог тем</h2>
+      <CurriculumEditor topics={curriculum} onCreated={(topic) => setCurriculum((previous) => [...(previous ?? []), topic])} />
+      {curriculumError && <p className="text-negative">Не удалось загрузить учебные цели.</p>}
+      <h2 className="text-section-title">Темы и материалы</h2>
       <form className="flex flex-wrap gap-2" onSubmit={(event) => { event.preventDefault(); loadPage(search.trim(), 0); }}>
         <input value={search} onChange={(event) => setSearch(event.target.value)} type="search" aria-label="Поиск тем"
           placeholder="Название или ключ" className={`${field} min-w-40 flex-1`} maxLength={160} />

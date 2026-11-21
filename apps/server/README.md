@@ -406,3 +406,11 @@ Automated tests never make a real network call to Google — the provider-verifi
 (`modules/auth/google.ts`) is mocked/bypassed, and business logic is tested from an
 already-verified profile object, matching how the route handlers use it after
 `exchangeGoogleCode` returns.
+
+## Учебные цели CEFR
+
+В `curriculum_topics` хранится фиксированный каталог. Начальная подборка и учебные цели Chunki опираются на [British Council / Eaquals Core Inventory for General English](https://www.eaquals.org/resources/the-core-inventory-for-general-english/).
+
+Добавить учебную цель можно в «Админка → Программа → Учебные цели CEFR». ID — постоянный ключ. Назначение темы использует уровень и содержание цели из каталога. Для существенно другой цели создайте новую запись с другим ID.
+
+Связь со старой темой задаётся в карточке темы в разделе «Темы и материалы». Уже сохранённые уроки и попытки остаются на прежних записях. После привязки существующее назначение учитывается при выборе учебных целей для ученика. Материалы новых назначений хранятся отдельно от прежних уроков.

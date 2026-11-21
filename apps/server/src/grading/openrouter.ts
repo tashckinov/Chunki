@@ -1,17 +1,19 @@
 import OpenAI from 'openai';
 import { Ajv } from 'ajv';
-import { CEFR_LEVELS, TOPIC_CATEGORIES, scoreMcq } from '@app/shared';
+import { scoreMcq } from '@app/shared';
 import type { Env } from '../config/env.js';
 import type {
   ExerciseItem,
-  ExercisesGradeResult,
   ExercisesSubmission,
   GradeDetail,
   GradingProvider,
   PlacementGradeResult,
   PlacementTestSubmission,
   TopicStudyContent,
-  TopicSuggestion,
+  TopicRecommendation,
+  CurriculumTopic,
+  PlacementAssessment,
+  ExercisesAssessment,
   TopicIdentity,
   TopicPlanContext,
 } from '@app/shared';
@@ -20,24 +22,30 @@ import { BUILTIN_PLACEMENT_TEST } from '@app/shared';
 const TOPIC_SCHEMA = {
   type: 'object',
   properties: {
-    key: { type: 'string', pattern: '^[a-z0-9]+(-[a-z0-9]+)*$', maxLength: 100, description: 'Copy the catalog key for an existing concept. Otherwise use a short English kebab-case key.' },
-    title: { type: 'string', minLength: 1, maxLength: 160, description: 'Copy the catalog title or write a concise standard Russian title for a new concept.' },
-    level: { type: 'string', enum: CEFR_LEVELS },
-    category: { type: 'string', enum: TOPIC_CATEGORIES },
-    rationale: { type: 'string', description: 'One short Russian sentence — concrete evidence from this answer for why this topic is weak.' },
+    key: { type: 'string', minLength: 1, maxLength: 72, description: 'An existing curriculum ID from the supplied list.' },
+    rationale: { type: 'string', minLength: 1, maxLength: 800, description: 'One Russian sentence linking the recommendation to evidence in the answers.' },
   },
-  required: ['key', 'title', 'category', 'level', 'rationale'],
+  required: ['key', 'rationale'],
+  additionalProperties: false,
 } as const;
 
 function topicPlanInstructions(plan: TopicPlanContext | undefined, currentLevel: string): string {
-  if (!plan) return 'Recommend only supported weak topics at the learner’s level.';
-  const catalog = plan.catalog.map(({ key, title, level }) => [key, level ?? '?', title]);
+  if (!plan) return 'Return an empty topic recommendation list. No curriculum was provided.';
+  const catalog = plan.catalog.filter(({ id }) => !plan.assignedKeys.includes(id))
+    .map(({ id, title, level, category, objective }) => [id, level, category, title, objective]);
   return [
-    `Recommend only evidenced weak topics from ${currentLevel} through target ${plan.targetLevel} inclusive. If the current level exceeds the target, use only the target level. Do not fill a quota.`,
-    'Look in the catalog first, matching concepts by meaning even if wording differs. Copy an existing key, title and level exactly. For an entry with unknown level, supply a CEFR level. Use a new key only for a genuinely absent concept, never a rename or narrower restatement.',
-    'Keep titles and keys reusable. Put learner-specific evidence only in the rationale.',
-    `Catalog [key, level, title]: ${JSON.stringify(catalog)}`,
-    `Already assigned keys (including completed topics): ${JSON.stringify(plan.assignedKeys)}. Do not recommend these again, even under another name.`,
+    `Recommend only evidenced weak topics from ${currentLevel} through target ${plan.targetLevel} inclusive. If the current level exceeds the target, use only the target level.`,
+    'Select only supplied IDs. Return just the ID as key and a Russian rationale. Never invent a topic, level, or objective. If none match, return an empty list.',
+    `Available curriculum [ID, CEFR, category, title, objective]: ${JSON.stringify(catalog)}`,
+  ].join('\n');
+}
+
+function topicScope(topic: TopicIdentity, curriculum?: CurriculumTopic): string {
+  if (!curriculum) return `Topic: "${topic.title}" (${topic.category}). CEFR: ${topic.level ?? 'unspecified'}.`;
+  const { id, title, category, level, objective, subtopics } = curriculum;
+  return [
+    `Fixed curriculum scope: ${JSON.stringify({ id, title, category, level, objective, subtopics })}`,
+    'Teach or practise this objective at this exact CEFR level. Use only the listed subtopics when present. Choose your own examples, but do not introduce a separate objective, topic or level.',
   ].join('\n');
 }
 
@@ -136,7 +144,7 @@ export class OpenRouterGradingProvider implements GradingProvider {
     return output as T;
   }
 
-  async gradePlacementTest(input: PlacementTestSubmission, definition = BUILTIN_PLACEMENT_TEST, plan?: TopicPlanContext): Promise<PlacementGradeResult> {
+  async gradePlacementTest(input: PlacementTestSubmission, definition = BUILTIN_PLACEMENT_TEST, plan?: TopicPlanContext): Promise<PlacementAssessment> {
     const mcqScore = scoreMcq(input.mcqAnswers, definition.mcq);
     const letters = ['A', 'B', 'C', 'D'];
     const missedQuestions = definition.mcq.flatMap(({ n, q, correct, options }) => {
@@ -153,7 +161,7 @@ export class OpenRouterGradingProvider implements GradingProvider {
       skills: PlacementGradeResult['skills'];
       aboveLevel: string;
       belowLevel: string;
-      topics: TopicSuggestion[];
+      topics: TopicRecommendation[];
     };
 
     const schema = {
@@ -238,7 +246,7 @@ export class OpenRouterGradingProvider implements GradingProvider {
     };
   }
 
-  async gradeExercises(input: ExercisesSubmission, plan?: TopicPlanContext): Promise<ExercisesGradeResult> {
+  async gradeExercises(input: ExercisesSubmission, plan?: TopicPlanContext): Promise<ExercisesAssessment> {
     const choiceScore = scoreChoiceItems(input.items, input.answers);
     const writeItems = input.items
       .map((item, i) => ({ item, i }))
@@ -247,7 +255,7 @@ export class OpenRouterGradingProvider implements GradingProvider {
     type ToolOutput = {
       writeGrades: (GradeDetail & { itemIndex: number })[];
       notes: string[];
-      discoveredTopics: TopicSuggestion[];
+      discoveredTopics: TopicRecommendation[];
     };
 
     const schema = {
@@ -313,7 +321,7 @@ export class OpenRouterGradingProvider implements GradingProvider {
     };
   }
 
-  async generateTopicStudy(topic: TopicIdentity): Promise<TopicStudyContent> {
+  async generateTopicStudy(topic: TopicIdentity, curriculum?: CurriculumTopic): Promise<TopicStudyContent> {
     const schema = {
       type: 'object',
       properties: {
@@ -337,10 +345,11 @@ export class OpenRouterGradingProvider implements GradingProvider {
     return this.#callTool<TopicStudyContent>({
       system: 'You are an expert English teacher writing concise study material in Russian for a Russian-speaking learner. Always respond only via the provided tool.',
       user: [
-        `Topic: "${topic.title}" (${topic.category}). CEFR: ${topic.level ?? 'unspecified'}. Use neutral examples suitable for this level.`,
+        topicScope(topic, curriculum),
+        'Use neutral examples suitable for this level.',
         'Use Markdown in explanation, without HTML. Optional ChatMD blocks use :::tip (rule), :::note (clarification), :::example (example with translation or explanation), :::compare (two lines: wrong: … and right: …), or :::question. Put each marker on its own line and close with :::. Do not nest blocks.',
         'Use blocks only when useful. Usually 1–2 questions near the relevant rule suffice. Each needs a prompt, exactly one + option, at least one - option, and specific Russian feedback for every option:',
-        ':::question\nI bought ___ book yesterday. Ты впервые упоминаешь книгу.\n+ a | Книга упоминается впервые.\n- the | Так говорят, если собеседник уже знает, о какой книге речь.\n:::',
+        ':::question\n[Question about this objective]\n+ [Correct option] | [Why it works]\n- [Distractor] | [Why it does not work]\n:::',
         'Use the other fields only for material that adds to the lesson.',
       ].join('\n'),
       toolName: 'submit_topic_study',
@@ -349,7 +358,7 @@ export class OpenRouterGradingProvider implements GradingProvider {
     });
   }
 
-  async generateTopicExercises(topic: ExercisesSubmission['topic']): Promise<ExerciseItem[]> {
+  async generateTopicExercises(topic: ExercisesSubmission['topic'], curriculum?: CurriculumTopic): Promise<ExerciseItem[]> {
 
     type ToolOutput = {
       items: { type: 'choice' | 'write'; q: string; options?: string[]; answer?: string; rows?: number; placeholder?: string }[];
@@ -382,7 +391,11 @@ export class OpenRouterGradingProvider implements GradingProvider {
 
     const out = await this.#callTool<ToolOutput>({
       system: 'You are an expert English teacher writing a short practice quiz for a Russian-speaking learner. Always respond only via the provided tool.',
-      user: `Write 5-8 practice exercises drilling this exact topic: "${topic.title}" (category: ${topic.category}). Context: ${topic.rationale}`,
+      user: [
+        'Write 5–8 practice exercises.',
+        topicScope(topic, curriculum),
+        ...(curriculum ? [] : [`Learner context: ${topic.rationale}`]),
+      ].join('\n'),
       toolName: 'submit_topic_exercises',
       toolDescription: 'Submit a structured practice quiz for one topic.',
       schema,

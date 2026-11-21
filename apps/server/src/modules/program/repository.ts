@@ -1,5 +1,5 @@
 import type { PoolClient } from 'pg';
-import type { CEFRLevel, PlacementGradeResult, TopicCategory, TopicSuggestion, TopicStudyContent } from '@app/shared';
+import type { CEFRLevel, PlacementGradeResult, TopicCategory, TopicSuggestion, TopicStudyContent, TopicRecommendation, CurriculumTopic } from '@app/shared';
 import { pool } from '../../db/pool.js';
 import { buildValuesClause } from '../../db/bulkInsert.js';
 import { resolveTopics } from './topicCatalog.js';
@@ -16,6 +16,7 @@ export interface UserTopicRow {
   catalog_category: TopicCategory;
   level: CEFRLevel | null;
   catalog_study: TopicStudyContent | null;
+  curriculum: CurriculumTopic | null;
   rationale: string;
   source: UserTopicSource;
   status: UserTopicStatus;
@@ -107,7 +108,7 @@ export async function findPlacementResult(userId: string, id: string): Promise<P
   return rows[0] ?? null;
 }
 
-export async function savePlacementTest(input: NewPlacementTest, topics: TopicSuggestion[], levels: readonly CEFRLevel[], token: string): Promise<TopicSuggestion[]> {
+export async function savePlacementTest(input: NewPlacementTest, topics: TopicRecommendation[], levels: readonly CEFRLevel[], token: string): Promise<TopicSuggestion[]> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -159,14 +160,13 @@ async function createPlacementTest(input: NewPlacementTest, client: PoolClient):
 
 async function insertNewUserTopics(
   userId: string,
-  candidates: TopicSuggestion[],
+  candidates: TopicRecommendation[],
   levels: readonly CEFRLevel[],
   source: UserTopicSource,
   db: PoolClient,
 ): Promise<TopicSuggestion[]> {
   if (candidates.length === 0 || levels.length === 0) return [];
-  const { rows: assigned } = await db.query<{ catalog_key: string }>('SELECT catalog_key FROM user_topics WHERE user_id = $1', [userId]);
-  const topics = await resolveTopics(db, candidates, levels, new Set(assigned.map(({ catalog_key }) => catalog_key)));
+  const topics = await resolveTopics(db, userId, candidates, levels);
   const rows = buildValuesClause(topics.map((topic) => [userId, topic.key, topic.key, topic.title, topic.category, topic.rationale, source]));
   if (!rows) return [];
   const { rows: inserted } = await db.query<{ catalog_key: string }>(
@@ -181,14 +181,17 @@ async function insertNewUserTopics(
 }
 
 const USER_TOPIC_SELECT = `SELECT t.*, c.title AS catalog_title, c.category AS catalog_category, c.level,
-  c.study_content AS catalog_study FROM user_topics t JOIN program_topics c ON c.key = t.catalog_key`;
+  c.study_content AS catalog_study, to_jsonb(curriculum) AS curriculum
+  FROM user_topics t JOIN program_topics c ON c.key = t.catalog_key
+  LEFT JOIN curriculum_topics curriculum ON curriculum.id = c.curriculum_id`;
 
 export async function listAssignedTopicKeys(userId: string): Promise<string[]> {
-  const { rows } = await pool.query<{ catalog_key: string }>(
-    'SELECT catalog_key FROM user_topics WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 80',
+  const { rows } = await pool.query<{ curriculum_id: string }>(
+    `SELECT DISTINCT c.curriculum_id FROM user_topics u JOIN program_topics c ON c.key = u.catalog_key
+     WHERE u.user_id = $1 AND c.curriculum_id IS NOT NULL`,
     [userId],
   );
-  return rows.map(({ catalog_key }) => catalog_key);
+  return rows.map(({ curriculum_id }) => curriculum_id);
 }
 
 export async function findUserTopics(userId: string): Promise<UserTopicRow[]> {
@@ -244,7 +247,7 @@ export interface AttemptResultPatch {
   scoreOutOf10: number;
   passed: boolean;
   notes: unknown;
-  discoveredTopics: TopicSuggestion[];
+  discoveredTopics: TopicRecommendation[];
 }
 
 export async function saveTopicGrade(

@@ -1,5 +1,5 @@
 import type { PoolClient } from 'pg';
-import { CEFR_LEVELS, type CEFRLevel, type TopicIdentity, type TopicStudyContent, type TopicSuggestion } from '@app/shared';
+import { CEFR_LEVELS, type CEFRLevel, type CurriculumTopic, type TopicCategory, type TopicIdentity, type TopicRecommendation, type TopicStudyContent, type TopicSuggestion } from '@app/shared';
 import { pool } from '../../db/pool.js';
 
 export function topicLevels(current: CEFRLevel, target: CEFRLevel): readonly CEFRLevel[] {
@@ -7,68 +7,92 @@ export function topicLevels(current: CEFRLevel, target: CEFRLevel): readonly CEF
   return CEFR_LEVELS.slice(Math.min(CEFR_LEVELS.indexOf(current), end), end + 1);
 }
 
-export async function listTopicCatalog(target: CEFRLevel): Promise<TopicIdentity[]> {
-  const { rows } = await pool.query<TopicIdentity>(
-    `SELECT key, title, category, level FROM program_topics
-     WHERE level IS NULL OR level = ANY($1::text[])
-     ORDER BY (cardinality(aliases) > 0) DESC, key LIMIT 80`,
-    [topicLevels('A1', target)],
+export async function listCurriculumTopics(target?: CEFRLevel): Promise<CurriculumTopic[]> {
+  const { rows } = await pool.query<CurriculumTopic>(
+    `SELECT id, title, level, category, objective, subtopics, source FROM curriculum_topics
+     WHERE $1::text[] IS NULL OR level = ANY($1) ORDER BY level, category, title, id`,
+    [target ? topicLevels('A1', target) : null],
   );
   return rows;
 }
 
-async function findCatalogTopic(db: PoolClient, candidate: TopicSuggestion): Promise<TopicIdentity | undefined> {
-  const { rows } = await db.query<TopicIdentity>(
-    `SELECT key, title, category, level FROM program_topics
-     WHERE key = $1 OR (category = $3 AND title_key = program_topic_name($2))
-       OR aliases && ARRAY[program_topic_name($1), program_topic_name($2)]
-     ORDER BY (key = $1) DESC, (title_key = program_topic_name($2)) DESC, key LIMIT 1`,
-    [candidate.key, candidate.title, candidate.category],
-  );
-  return rows[0];
-}
+const PROGRAM_CATEGORY: Record<CurriculumTopic['category'], TopicCategory> = {
+  Grammar: 'Грамматика', Vocabulary: 'Лексика', Functions: 'Использование языка',
+  Discourse: 'Использование языка', Reading: 'Понимание', Writing: 'Письмо',
+  Listening: 'Понимание', Speaking: 'Использование языка',
+};
 
 export async function resolveTopics(
-  db: PoolClient,
-  candidates: TopicSuggestion[],
-  levels: readonly CEFRLevel[],
-  assigned: ReadonlySet<string>,
+  db: PoolClient, userId: string, candidates: TopicRecommendation[], levels: readonly CEFRLevel[],
 ): Promise<TopicSuggestion[]> {
-  if (candidates.length === 0 || levels.length === 0) return [];
-  // Both review flows write only after grading. Serialize catalog decisions in
-  // these short transactions so concurrent submissions reuse the same records.
+  if (!candidates.length || !levels.length) return [];
+  // Includes linked legacy assignments. Their progress satisfies this same
+  // catalog topic without moving any existing assignment or stored lesson.
   await db.query("SELECT pg_advisory_xact_lock(hashtext('program-topic-catalog'))");
-  const resolved = new Map<string, TopicSuggestion>();
-  for (const candidate of candidates) {
-    const title = candidate.title.trim();
-    if (!title) continue;
-    const existing = await findCatalogTopic(db, candidate);
-    const level = existing?.level ?? candidate.level;
-    const key = existing?.key ?? candidate.key;
-    if (!levels.includes(level) || resolved.has(key)) continue;
-    if (assigned.has(key) && existing?.level) continue;
-
-    if (!existing) {
-      await db.query(
-        'INSERT INTO program_topics (key, title, category, level) VALUES ($1, $2, $3, $4)',
-        [key, title, candidate.category, level],
-      );
-    } else if (!existing.level) {
-      await db.query('UPDATE program_topics SET level = $2, study_content = NULL WHERE key = $1', [key, level]);
-    }
-
-    if (assigned.has(key)) continue;
-    resolved.set(key, { key, title: existing?.title ?? title,
-      category: existing?.category ?? candidate.category, level, rationale: candidate.rationale });
+  const { rows } = await db.query<CurriculumTopic>(
+    `SELECT c.* FROM curriculum_topics c WHERE c.id = ANY($1::text[]) AND c.level = ANY($2::text[])
+       AND NOT EXISTS (
+         SELECT 1 FROM user_topics u JOIN program_topics p ON p.key = u.catalog_key
+         WHERE u.user_id = $3 AND p.curriculum_id = c.id
+       )`,
+    [candidates.map(({ key }) => key), levels, userId],
+  );
+  const available = new Map(rows.map((topic) => [topic.id, topic]));
+  const resolved: TopicSuggestion[] = [];
+  for (const { key, rationale } of candidates) {
+    const topic = available.get(key);
+    if (!topic) continue;
+    available.delete(key);
+    const category = PROGRAM_CATEGORY[topic.category];
+    // The slot uses independent study storage. Existing authored lessons stay
+    // on their original records and never become input to catalog generation.
+    const { rows: [slot] } = await db.query<{ key: string }>(
+      `INSERT INTO program_topics (key, title, category, level, curriculum_id, curriculum_slot)
+       VALUES ('curriculum-' || gen_random_uuid(), $1, $2, $3, $4, true)
+       ON CONFLICT (curriculum_id) WHERE curriculum_slot
+       DO UPDATE SET curriculum_id = EXCLUDED.curriculum_id
+       RETURNING key`,
+      [topic.title, category, topic.level, topic.id],
+    );
+    resolved.push({ key: slot.key, title: topic.title, category, level: topic.level, rationale });
   }
-  return [...resolved.values()];
+  return resolved;
 }
 
-export async function saveCatalogStudy(topic: TopicIdentity, study: TopicStudyContent): Promise<TopicStudyContent> {
+export async function createCurriculumTopic(topic: CurriculumTopic): Promise<boolean> {
+  const { rowCount } = await pool.query(
+    `INSERT INTO curriculum_topics (id, title, level, category, objective, subtopics)
+     VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`,
+    [topic.id, topic.title, topic.level, topic.category, topic.objective, topic.subtopics],
+  );
+  return rowCount === 1;
+}
+
+export async function linkCurriculumTopic(key: string, curriculumId: string | null): Promise<boolean> {
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    await db.query("SELECT pg_advisory_xact_lock(hashtext('program-topic-catalog'))");
+    const { rowCount } = await db.query(
+      `UPDATE program_topics p SET curriculum_id = $2 WHERE p.key = $1 AND NOT p.curriculum_slot
+       AND ($2::text IS NULL OR EXISTS (SELECT 1 FROM curriculum_topics WHERE id = $2))`,
+      [key, curriculumId],
+    );
+    await db.query('COMMIT');
+    return rowCount === 1;
+  } catch (error) {
+    await db.query('ROLLBACK');
+    throw error;
+  } finally {
+    db.release();
+  }
+}
+
+export async function saveCatalogStudy(topic: TopicIdentity, study: TopicStudyContent, curriculumId: string | null): Promise<TopicStudyContent> {
   const { rows } = await pool.query<{ study_content: TopicStudyContent }>(
     `UPDATE program_topics SET study_content = COALESCE(study_content, $3::jsonb)
-     WHERE key = $1 AND level IS NOT DISTINCT FROM $2 RETURNING study_content`,
-    [topic.key, topic.level, JSON.stringify(study)],
+     WHERE key = $1 AND level IS NOT DISTINCT FROM $2 AND curriculum_id IS NOT DISTINCT FROM $4 RETURNING study_content`,
+    [topic.key, topic.level, JSON.stringify(study), curriculumId],
   );
   return rows[0]?.study_content ?? study;
 }
@@ -76,6 +100,8 @@ export async function saveCatalogStudy(topic: TopicIdentity, study: TopicStudyCo
 export interface AdminTopicDetail extends TopicIdentity {
   aliases: string[];
   study: TopicStudyContent | null;
+  curriculumId: string | null;
+  curriculumSlot: boolean;
 }
 
 export async function listTopicsForReview(search: string, offset: number) {
@@ -93,7 +119,7 @@ export async function listTopicsForReview(search: string, offset: number) {
 
 export async function getTopicForReview(key: string): Promise<AdminTopicDetail | null> {
   const { rows } = await pool.query<AdminTopicDetail>(
-    'SELECT key, title, category, level, aliases, study_content AS study FROM program_topics WHERE key = $1', [key],
+    'SELECT key, title, category, level, aliases, study_content AS study, curriculum_id AS "curriculumId", curriculum_slot AS "curriculumSlot" FROM program_topics WHERE key = $1', [key],
   );
   return rows[0] ?? null;
 }
@@ -103,10 +129,15 @@ export async function updateTopicForReview(topic: TopicIdentity) {
   try {
     await db.query('BEGIN');
     await db.query("SELECT pg_advisory_xact_lock(hashtext('program-topic-catalog'))");
-    const current = await db.query('SELECT 1 FROM program_topics WHERE key = $1', [topic.key]);
+    const current = await db.query<{ curriculum_slot: boolean }>('SELECT curriculum_slot FROM program_topics WHERE key = $1', [topic.key]);
     if (!current.rowCount) {
       await db.query('ROLLBACK');
       return { kind: 'not_found' } as const;
+    }
+
+    if (current.rows[0].curriculum_slot) {
+      await db.query('ROLLBACK');
+      return { kind: 'fixed' } as const;
     }
 
     const { rows } = await db.query<AdminTopicDetail>(
@@ -116,12 +147,12 @@ export async function updateTopicForReview(topic: TopicIdentity) {
                      THEN array_append(aliases, title_key) ELSE aliases END
        WHERE key = $1 AND NOT EXISTS (
          SELECT 1 FROM program_topics other
-         WHERE other.key <> t.key AND (
+         WHERE other.key <> t.key AND NOT other.curriculum_slot AND (
            (other.category = $3 AND other.title_key = program_topic_name($2))
            OR other.key = program_topic_name($2) OR program_topic_name($2) = ANY(other.aliases)
          )
        )
-       RETURNING key, title, category, level, aliases, study_content AS study`,
+       RETURNING key, title, category, level, aliases, study_content AS study, curriculum_id AS "curriculumId", curriculum_slot AS "curriculumSlot"`,
       [topic.key, topic.title, topic.category, topic.level],
     );
     await db.query('COMMIT');

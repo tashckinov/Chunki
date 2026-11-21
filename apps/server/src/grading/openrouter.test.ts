@@ -20,7 +20,7 @@ const complete = {
   essayGrade: grade, overallLevel: 'A1',
   skills: [{ label: 'Грамматика', tag: 'A1', score: 0 }],
   aboveLevel: 'Уровень пока не превышен.', belowLevel: 'Не хватает письменной практики.',
-  topics: [{ key: 'articles', title: 'Артикли: a, an, the', category: 'Грамматика', level: 'A2', rationale: 'Нужно повторить основы.' }],
+  topics: [{ key: 'a2-articles', rationale: 'Нужно повторить основы.' }],
 };
 
 function completion(output: unknown, reason = 'tool_calls', name = 'submit_placement_grade') {
@@ -73,13 +73,19 @@ describe('OpenRouter grammar grading', () => {
     const study = { explanation, keyPoints: [], contrastExamples: [], exampleChunks: [] };
     create.mockResolvedValue(completion(study, 'tool_calls', 'submit_topic_study'));
 
-    const result = await grader.generateTopicStudy({ key: 'articles', title: 'Артикли', category: 'Грамматика', level: 'A2' });
+    const result = await grader.generateTopicStudy({ key: 'articles', title: 'Старое название', category: 'Грамматика', level: 'A2' }, {
+      id: 'a2-articles', title: 'Артикли', category: 'Grammar', level: 'A2',
+      objective: 'Выбрать артикль при первом упоминании', subtopics: ['a и an'],
+    });
 
     expect(result).toEqual(study);
     const instruction = create.mock.calls[0][0].messages[1].content;
     expect(instruction).toContain(':::question');
-    expect(instruction).toContain('+ a |');
+    expect(instruction).toContain('+ [Correct option] |');
     expect(instruction).toContain('1–2 questions near the relevant rule');
-    expect(instruction).toContain('CEFR: A2');
+    expect(instruction).toContain('Выбрать артикль при первом упоминании');
+    expect(instruction).toContain('"level":"A2"');
+    expect(instruction).toContain('a и an');
+    expect(instruction).not.toContain('Старое название');
   });
 });

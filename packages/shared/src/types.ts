@@ -32,8 +32,24 @@ export interface TopicSuggestion extends TopicIdentity {
   rationale: string;
 }
 
+export const CURRICULUM_CATEGORIES = ['Grammar', 'Vocabulary', 'Functions', 'Discourse', 'Reading', 'Writing', 'Listening', 'Speaking'] as const;
+
+export interface CurriculumTopic {
+  id: string;
+  title: string;
+  level: CEFRLevel;
+  category: typeof CURRICULUM_CATEGORIES[number];
+  objective: string;
+  subtopics: string[];
+  source?: string | null;
+}
+
+export type TopicRecommendation = Pick<TopicSuggestion, 'key' | 'rationale'>;
+export type PlacementAssessment = Omit<PlacementGradeResult, 'topics'> & { topics: TopicRecommendation[] };
+export type ExercisesAssessment = Omit<ExercisesGradeResult, 'discoveredTopics'> & { discoveredTopics: TopicRecommendation[] };
+
 export interface TopicPlanContext {
-  catalog: TopicIdentity[];
+  catalog: CurriculumTopic[];
   assignedKeys: string[];
   currentLevel: CEFRLevel | null;
   targetLevel: CEFRLevel;
@@ -153,10 +169,10 @@ export interface ExercisesGradeResult {
 export interface GradingProvider {
   name: string;
   model?: string;
-  gradePlacementTest(input: PlacementTestSubmission, definition?: PlacementTestDefinition, plan?: TopicPlanContext): Promise<PlacementGradeResult>;
-  gradeExercises(input: ExercisesSubmission, plan?: TopicPlanContext): Promise<ExercisesGradeResult>;
-  generateTopicStudy(topic: TopicIdentity): Promise<TopicStudyContent>;
-  generateTopicExercises(topic: ExercisesSubmission['topic']): Promise<ExerciseItem[]>;
+  gradePlacementTest(input: PlacementTestSubmission, definition?: PlacementTestDefinition, plan?: TopicPlanContext): Promise<PlacementAssessment>;
+  gradeExercises(input: ExercisesSubmission, plan?: TopicPlanContext): Promise<ExercisesAssessment>;
+  generateTopicStudy(topic: TopicIdentity, curriculum?: CurriculumTopic): Promise<TopicStudyContent>;
+  generateTopicExercises(topic: ExercisesSubmission['topic'], curriculum?: CurriculumTopic): Promise<ExerciseItem[]>;
 }
 
 // ---- production check: does a free-text answer show active use of a chunk? ----
