@@ -73,7 +73,7 @@ export async function submitPlacementTest(userId: string, input: PlacementTestSu
   if (upsellTariffs) return { kind: 'not_allowed', upsellTariffs };
 
   const provider = getGradingProvider();
-  const result = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: null, request: input }, () => provider.gradePlacementTest(input));
+  const result = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: provider.model ?? null, request: input }, () => provider.gradePlacementTest(input));
 
   await createPlacementTest({
     userId,
@@ -110,7 +110,7 @@ export async function getTopicStudy(userId: string, userTopicId: string): Promis
 
   const provider = getGradingProvider();
   const topic = toTopicSuggestion(row);
-  const study = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: null, request: topic }, () => provider.generateTopicStudy(topic));
+  const study = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: provider.model ?? null, request: topic }, () => provider.generateTopicStudy(topic));
 
   await updateTopicStudyContent(row.id, study);
   return { kind: 'ok', study };
@@ -144,7 +144,7 @@ export async function startTopicAttempt(userId: string, userTopicId: string): Pr
 
   const provider = getGradingProvider();
   const topic = toTopicSuggestion(row);
-  const items = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: null, request: topic }, () => provider.generateTopicExercises(topic));
+  const items = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: provider.model ?? null, request: topic }, () => provider.generateTopicExercises(topic));
 
   const attempt = await createAttempt(row.id, attemptKind, items);
   return { kind: 'ok', attemptId: attempt.id, attemptKind, items: redact(items) };
@@ -173,7 +173,7 @@ export async function submitTopicAttempt(userId: string, userTopicId: string, at
   const gradeInput = { topic, items, answers };
 
   const provider = getGradingProvider();
-  const result = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: null, request: gradeInput }, () => provider.gradeExercises(gradeInput));
+  const result = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: provider.model ?? null, request: gradeInput }, () => provider.gradeExercises(gradeInput));
 
   await updateAttemptResult(attempt.id, { answers, scoreOutOf10: result.scoreOutOf10, passed: result.passed, notes: result.notes, discoveredTopics: result.discoveredTopics });
 
