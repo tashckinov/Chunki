@@ -276,7 +276,7 @@ interface AppState {
 
   onCardPointerDown: (x: number, y: number) => void;
   onCardPointerMove: (x: number, y: number) => void;
-  onCardPointerUp: () => void;
+  onCardPointerUp: (cancelled?: boolean) => void;
   flipCard: () => void;
   swipe: (dir: DeckVerdict) => void;
   undoCard: () => void;
@@ -621,9 +621,13 @@ export const useAppStore = create<AppState>()(
         if (!dragStart || !get().dragging) return;
         set({ dx: x - dragStart.x, dy: y - dragStart.y });
       },
-      onCardPointerUp: () => {
+      onCardPointerUp: (cancelled = false) => {
         if (!dragStart) return;
         dragStart = null;
+        if (cancelled) {
+          set({ dx: 0, dy: 0, dragging: false });
+          return;
+        }
         const { dx, dy, swipe } = get();
         if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 90) swipe(dx > 0 ? 'know' : 'dont');
         else if (dy > 90) swipe('bury');

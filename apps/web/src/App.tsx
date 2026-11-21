@@ -240,6 +240,9 @@ export default function App() {
   // window before the initial checkAuth() resolves.
   const loggedOut = authChecked && !user;
   const inAdmin = screen === 'admin' && user?.isAdmin;
+  const dialogueContinuation = useAppStore((state) => state.dialogueContinuation);
+  const studying = screen === 'deck' || screen === 'deckdone' || screen === 'recognitioncheck'
+    || screen === 'productioncheck' || (screen === 'dialogue' && dialogueContinuation !== 'browse');
   const studyGoal = useAppStore((s) => s.studyGoal);
   const completedIntroOwner = useAppStore((s) => s.completedIntroOwner);
   const showStudyGoal = user && screen !== 'deckdone' && !studyGoal?.dailyCardGoal
@@ -268,7 +271,7 @@ export default function App() {
   return (
     <>
       {showStudyGoal ? <StudyGoalScreen key={user.id} /> : (
-        <div className="h-dvh w-full flex justify-center bg-bg overflow-hidden">
+        <div className={`h-dvh w-full flex justify-center bg-bg overflow-hidden ${studying ? 'study-session text-text' : ''}`}>
           {!loggedOut && !sidebarCollapsed && (
             <div className="hidden w-[248px] flex-none min-[1200px]:block">
               <SidebarNav value={navTab} onChange={setNavTab} />
@@ -278,7 +281,7 @@ export default function App() {
             <SidebarMenuContext.Provider value={user ? { collapsed: sidebarCollapsed, toggle: () => setSidebarCollapsed((value) => !value) } : null}>
               <CurrentScreen onOpenAdminMenu={openSidebar} />
             </SidebarMenuContext.Provider>
-            {screen !== 'admin' && !loggedOut && (
+            {screen !== 'admin' && !loggedOut && !studying && (
               <div className="flex-none min-[1200px]:hidden">
                 <BottomNavigation items={MOBILE_NAV_ITEMS} value={navTab} onChange={setNavTab} />
               </div>
