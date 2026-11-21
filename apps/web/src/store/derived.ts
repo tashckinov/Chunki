@@ -10,8 +10,8 @@ import { plural } from '../lib/plural';
 import { DAY_LABELS } from '../lib/schedule';
 
 const LEVELS_FROM: CEFRLevel[] = ['A1', 'A2', 'A2+', 'B1', 'B1+', 'B2'];
-const LEVELS_TO: CEFRLevel[] = ['B1', 'B1+', 'B2', 'C1'];
-const PURPOSES = ['Работа', 'Переезд', 'Учёба', 'IELTS', 'Общение'];
+const LEVELS_TO: CEFRLevel[] = ['A1', 'A2', 'B1', 'B1+', 'B2', 'C1'];
+const PURPOSES = ['Работа', 'Переезд', 'Учёба', 'IELTS', 'Общение', 'Для себя'];
 
 export function useGoalsView() {
   const { from, to, purpose, pickFrom, pickTo, togglePurpose } = useAppStore();
