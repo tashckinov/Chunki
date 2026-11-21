@@ -9,7 +9,7 @@ export function ProgramScreen() {
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      <NavigationBar size="large" title={`Программа до ${s.to}`} onBack={s.back} hideBackOnDesktop />
+      <NavigationBar size="large" title={`Программа до ${s.to}`} sidebarMenu hideBackOnDesktop />
       <div className="scroll-clean flex-1 min-h-0 px-5 pb-6 flex flex-col">
         <div className="text-body-secondary mb-2">
           {topics.length} {topics.length === 1 ? 'тема' : 'тем'} · {masteredCount} подтверждено

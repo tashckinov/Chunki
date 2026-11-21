@@ -5,12 +5,12 @@ import { Chip } from '../components/ui/Chip';
 import { Button } from '../components/ui/Button';
 
 export function GoalsScreen() {
-  const { back, startTest } = useAppStore();
+  const { startTest } = useAppStore();
   const { levelsFrom, levelsTo, purposes } = useGoalsView();
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      <NavigationBar onBack={back} hideBackOnDesktop />
+      <NavigationBar sidebarMenu hideBackOnDesktop />
       <div className="scroll-clean flex-1 min-h-0 px-5 pb-8 flex flex-col gap-8">
         <div>
           <div className="text-page-title">С чего начнём</div>
