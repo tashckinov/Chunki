@@ -4,6 +4,7 @@ import { useAppStore } from '../../store/appStore';
 import { APP_VERSION } from '../../lib/version';
 import { Dialog } from './Dialog';
 import { Button } from './Button';
+import { StudyGoalForm } from './StudyGoalDialog';
 import { SegmentedControl } from './SegmentedControl';
 import { Icon } from './Icon';
 
@@ -45,6 +46,25 @@ function PremiumBadge() {
     <span className="inline-flex shrink-0 rounded-full border border-accent bg-accent-subtle px-2 py-0.5 text-[11px] font-medium text-accent">
       Premium
     </span>
+  );
+}
+
+function StudyGoalSetting() {
+  const goal = useAppStore((s) => s.studyGoal?.dailyCardGoal);
+  const [editing, setEditing] = useState(false);
+  if (!goal) return null;
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <div className="text-[14px] font-medium">Цель по карточкам</div>
+          <div className="text-meta">{goal} в день · до {goal} за сессию</div>
+        </div>
+        {!editing && <Button size="sm" variant="secondary" onClick={() => setEditing(true)}>Изменить</Button>}
+      </div>
+      {editing && <StudyGoalForm currentGoal={goal} onClose={() => setEditing(false)} />}
+    </div>
   );
 }
 
@@ -163,6 +183,7 @@ export function AccountDialog({ open, onOpenChange }: { open: boolean; onOpenCha
           }}
         />
         <InterfaceModeSetting />
+        {open && <StudyGoalSetting />}
         {user.isAdmin && (
           <Button
             variant="secondary"
