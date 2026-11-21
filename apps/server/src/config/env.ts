@@ -38,7 +38,6 @@ const envSchema = z.object({
   // grading vars above, via OpenRouter instead of Anthropic directly.
   PRODUCTION_JUDGE_PROVIDER: z.preprocess(emptyToUndefined, z.enum(['mock', 'openrouter']).optional()),
   OPENROUTER_API_KEY: z.string().optional(),
-  OPENROUTER_MODEL: z.preprocess(emptyToUndefined, z.string().default('openai/gpt-4o-mini')),
 
   // Subscription payments via Lava.top — same optional explicit-override /
   // auto-select-when-a-key-is-present shape as the providers above (see

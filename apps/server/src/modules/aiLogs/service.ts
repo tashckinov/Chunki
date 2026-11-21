@@ -16,7 +16,7 @@ export interface AiCallMeta {
  * but a failure to write it IS logged (to stderr) rather than silently
  * dropped, since that log is the only way anyone would notice it happening.
  */
-export async function withAiCallLogging<T>(meta: AiCallMeta, fn: () => Promise<T>): Promise<T> {
+export async function withAiCallLogging<T>(meta: AiCallMeta, fn: () => Promise<T>, onLogged?: (id: string) => void): Promise<T> {
   const startedAt = Date.now();
   let result: T;
   try {
@@ -27,8 +27,9 @@ export async function withAiCallLogging<T>(meta: AiCallMeta, fn: () => Promise<T
     });
     throw err;
   }
-  await recordAiCallLog({ ...meta, response: result, error: null, durationMs: Date.now() - startedAt }).catch((logErr) => {
+  const id = await recordAiCallLog({ ...meta, response: result, error: null, durationMs: Date.now() - startedAt }).catch((logErr) => {
     console.error('recordAiCallLog failed', { message: logErr instanceof Error ? logErr.message : String(logErr) });
   });
+  if (id) onLogged?.(id);
   return result;
 }

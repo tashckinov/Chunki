@@ -216,7 +216,7 @@ export type ProductionSubmitResult =
   | { kind: 'unavailable' }
   | { kind: 'not_allowed'; upsellTariffs: PublicTariff[] }
   | { kind: 'limit_reached'; upsellTariffs: PublicTariff[] }
-  | { kind: 'ok'; isAppropriate: boolean; usedChunkId: string | null; usedChunkText: string | null; feedback: string; progress: ProgressSummary; modelAnswer?: string };
+  | { kind: 'ok'; isAppropriate: boolean; usedChunkId: string | null; usedChunkText: string | null; feedback: string; progress: ProgressSummary; modelAnswer?: string; checkId?: string };
 
 /** Renders the dialogue's preceding lines + an instruction as the "situation" text fed to the judge — deliberately doesn't name any phrase (see buildCandidateChunks: the judge is given the actual candidate list separately, not told which one to expect via the prompt text). */
 function renderDialogueSituationPrompt(dialogue: SituationDialogueForLearner): string {
@@ -276,7 +276,22 @@ export async function submitProductionAnswer(userId: string, chunkId: string, an
 
   const judge = getProductionJudgeProvider();
   const judgeInput = { situationPrompt: situationPromptText, userAnswer: answer, candidateChunks };
-  const result = await withAiCallLogging({ userId, chunkId, provider: judge.name, model: judge.model, request: judgeInput }, () => judge.judgeProduction(judgeInput));
+  let checkId: string | undefined;
+  let result;
+  let lastError: unknown;
+  for (const attempt of judge.nextAttempts?.() ?? [judge]) {
+    try {
+      result = await withAiCallLogging(
+        { userId, chunkId, provider: attempt.name, model: attempt.model, request: judgeInput },
+        () => attempt.judgeProduction(judgeInput),
+        (id) => { if (attempt.name === 'openrouter') checkId = id; },
+      );
+      break;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  if (!result) throw lastError;
 
   // This increment IS the daily-limit enforcement — if it fails, the limit
   // silently doesn't apply (the judge call above already happened, so
@@ -332,5 +347,6 @@ export async function submitProductionAnswer(userId: string, chunkId: string, an
     feedback: result.feedback,
     progress: toSummary(progressRow),
     modelAnswer: situationDialogue?.modelAnswer,
+    checkId,
   };
 }

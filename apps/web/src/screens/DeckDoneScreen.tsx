@@ -1,10 +1,13 @@
+import { useState } from 'react';
+import { ThumbsDown, ThumbsUp } from 'lucide-react';
+import { postProductionRating, type ProductionRating } from '../lib/progress';
 import { useAppStore } from '../store/appStore';
 import { deckTallyView } from '../store/derived';
 import { plural } from '../lib/plural';
 import { Button } from '../components/ui/Button';
 import { Spinner } from '../components/ui/Spinner';
 
-type ProductionResult = { kind: 'ok'; isAppropriate: boolean; usedChunkId: string | null; usedChunkText: string | null; feedback: string; modelAnswer?: string } | { kind: 'error'; message: string };
+type ProductionResult = { kind: 'ok'; isAppropriate: boolean; usedChunkId: string | null; usedChunkText: string | null; feedback: string; modelAnswer?: string; checkId?: string } | { kind: 'error'; message: string };
 
 /** cardChunkId is the deck card this row is for — usedChunkId may point at a different chunk (a sibling in the same semantic group) that actually got the progress credit. */
 function productionBadge(result: ProductionResult, cardChunkId: string): { label: string; className: string } {
@@ -13,6 +16,39 @@ function productionBadge(result: ProductionResult, cardChunkId: string): { label
   if (!result.usedChunkId) return { label: 'Смысл верный, без знакомой фразы', className: 'text-accent' };
   if (result.usedChunkId === cardChunkId) return { label: 'Использовали фразу', className: 'text-positive' };
   return { label: `Использовали «${result.usedChunkText}»`, className: 'text-positive' };
+}
+
+function RatingButtons({ checkId }: { checkId: string }) {
+  const [rating, setRating] = useState<ProductionRating>();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(false);
+
+  async function vote(value: ProductionRating) {
+    setSaving(true);
+    setError(false);
+    try {
+      await postProductionRating(checkId, value);
+      setRating(value);
+    } catch {
+      setError(true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2" role="group" aria-label="Оценка проверки">
+      {([{ value: 'up', label: 'Полезная проверка', Icon: ThumbsUp },
+        { value: 'down', label: 'Бесполезная проверка', Icon: ThumbsDown }] as const).map(({ value, label, Icon }) => (
+        <button key={value} type="button" aria-label={label} aria-pressed={rating === value}
+          disabled={saving || rating === value} onClick={() => void vote(value)}
+          className={`rounded-md border border-border p-2 ${rating === value ? 'bg-accent-subtle text-accent' : 'text-text-secondary'}`}>
+          <Icon size={16} />
+        </button>
+      ))}
+      {error && <span role="alert" className="text-negative text-meta">Не удалось сохранить оценку.</span>}
+    </div>
+  );
 }
 
 function ProductionResultRow({ chunkText, chunkId, result }: { chunkText: string; chunkId: string; result: ProductionResult }) {
@@ -30,6 +66,7 @@ function ProductionResultRow({ chunkText, chunkId, result }: { chunkText: string
           <span className="text-accent">«{result.modelAnswer}»</span>
         </div>
       )}
+      {result.kind === 'ok' && result.checkId && <RatingButtons key={result.checkId} checkId={result.checkId} />}
     </div>
   );
 }

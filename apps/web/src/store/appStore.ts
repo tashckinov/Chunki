@@ -164,7 +164,7 @@ interface AppState {
   /** This deck session's production-check verdicts, revealed together on DeckDoneScreen rather than inline per card. Judging runs in the background — see submitProductionCheck. */
   sessionProductionResults: Record<
     string,
-    { kind: 'ok'; isAppropriate: boolean; usedChunkId: string | null; usedChunkText: string | null; feedback: string; modelAnswer?: string } | { kind: 'error'; message: string }
+    { kind: 'ok'; isAppropriate: boolean; usedChunkId: string | null; usedChunkText: string | null; feedback: string; modelAnswer?: string; checkId?: string } | { kind: 'error'; message: string }
   >;
   /** Chunks whose production-check answer was submitted but hasn't resolved yet — drives DeckDoneScreen's "still checking" indicator. */
   sessionProductionPending: Record<string, true>;
@@ -845,12 +845,12 @@ export const useAppStore = create<AppState>()(
         get().advanceDeck();
 
         postProductionCheck(chunkId, answer)
-          .then(({ isAppropriate, usedChunkId, usedChunkText, feedback, progress, modelAnswer }) => {
+          .then(({ isAppropriate, usedChunkId, usedChunkText, feedback, progress, modelAnswer, checkId }) => {
             set((st) => {
               const { [chunkId]: _drop, ...pending } = st.sessionProductionPending;
               return {
                 sessionProductionPending: pending,
-                sessionProductionResults: { ...st.sessionProductionResults, [chunkId]: { kind: 'ok', isAppropriate, usedChunkId, usedChunkText, feedback, modelAnswer } },
+                sessionProductionResults: { ...st.sessionProductionResults, [chunkId]: { kind: 'ok', isAppropriate, usedChunkId, usedChunkText, feedback, modelAnswer, checkId } },
                 // progress.chunkId may differ from chunkId — a fitting answer
                 // can get credited to a different chunk in the same semantic
                 // group (see progress/service.ts's submitProductionAnswer).

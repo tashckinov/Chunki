@@ -224,3 +224,16 @@ export async function fetchAdminProgramTopics(limit = 100): Promise<AdminProgram
   const data = await getJson<{ topics: AdminProgramTopic[] }>(`/api/admin/program-topics?limit=${limit}`);
   return data.topics;
 }
+
+export interface ProductionModelStats {
+  model: string;
+  calls: number;
+  errors: number;
+  up: number;
+  down: number;
+}
+
+export async function fetchProductionModelStats(): Promise<ProductionModelStats[]> {
+  const { models } = await getJson<{ models: ProductionModelStats[] }>('/api/admin/production-model-stats');
+  return models;
+}
