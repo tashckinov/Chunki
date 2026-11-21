@@ -21,8 +21,3 @@ export function publishGrammarTest(title: string, definition: PlacementTestDefin
 export function archiveGrammarTest(id: string) {
   return deleteJson<{ ok: true }>(`${PATH}/${id}`);
 }
-
-export async function generateGrammarTest(focus: string) {
-  const response = await postJson<{ definition: PlacementTestDefinition }>(`${PATH}/generate`, { focus });
-  return response.definition;
-}

@@ -5,3 +5,4 @@ export * from './grading/mock.js';
 export * from './grading/productionMock.js';
 
 export * from './studyGoal.js';
+export * from './grammarTestSchema.js';

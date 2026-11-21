@@ -10,7 +10,6 @@ import type {
   GradingProvider,
   PlacementGradeResult,
   PlacementTestSubmission,
-  PlacementTestDefinition,
   TopicStudyContent,
   TopicSuggestion,
 } from '@app/shared';
@@ -122,46 +121,6 @@ export class OpenRouterGradingProvider implements GradingProvider {
       throw new Error(`OpenRouter grammar response failed validation (model=${this.model}, tool=${request.toolName}, field=${issue?.instancePath || '/'}, rule=${issue?.keyword ?? 'unknown'})`);
     }
     return output as T;
-  }
-
-  async generatePlacementTest(focus: string, existingQuestions: string[]): Promise<PlacementTestDefinition> {
-    const text = { type: 'string', minLength: 1, maxLength: 700 };
-    const schema = {
-      type: 'object',
-      properties: {
-        mcq: { type: 'array', minItems: 8, maxItems: 8, items: {
-          type: 'object',
-          properties: {
-            q: text,
-            options: { type: 'array', minItems: 4, maxItems: 4, uniqueItems: true, items: text },
-            correct: { type: 'string', enum: ['A', 'B', 'C', 'D'] },
-          },
-          required: ['q', 'options', 'correct'],
-        } },
-        readingPassage: { type: 'string', minLength: 1, maxLength: 4000 },
-        readingQuestions: { type: 'array', minItems: 2, maxItems: 2, items: text },
-        essayPrompt: text,
-      },
-      required: ['mcq', 'readingPassage', 'readingQuestions', 'essayPrompt'],
-    };
-    const draft = await this.#callTool<Omit<PlacementTestDefinition, 'readingQuestions'> & { readingQuestions: string[] }>({
-      system: 'You design English CEFR placement tests. Write all test content in English and return only the requested tool call.',
-      user: [
-        'Create eight multiple-choice questions with progressively increasing difficulty from A1 to C1. Cover varied grammar and some vocabulary; each question must have exactly one unambiguous correct option. The A–D key corresponds to the four options in order.',
-        'Write a short original reading passage and two questions answered from that passage. Write one original essay prompt suitable for a response of 5–8 sentences.',
-        `Optional topic emphasis: ${focus || 'general English'}. Keep the full difficulty range.`,
-        `Avoid repeating these existing questions: ${JSON.stringify(existingQuestions)}`,
-      ].join('\n'),
-      toolName: 'submit_placement_variant',
-      toolDescription: 'Return a new placement test for an administrator to review.',
-      maxTokens: 4096,
-      schema,
-    });
-    return {
-      ...draft,
-      mcq: draft.mcq.map((item, index) => ({ ...item, n: index + 1 })),
-      readingQuestions: draft.readingQuestions.map((q, index) => ({ n: index + 9, q })),
-    };
   }
 
   async gradePlacementTest(input: PlacementTestSubmission, definition = BUILTIN_PLACEMENT_TEST): Promise<PlacementGradeResult> {
