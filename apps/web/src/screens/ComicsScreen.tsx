@@ -3,12 +3,10 @@ import { useAppStore } from '../store/appStore';
 import { NavigationBar } from '../components/ui/NavigationBar';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { AccountDialog } from '../components/ui/AccountRow';
 
 export function ComicsScreen() {
   const s = useAppStore();
   const [openingChunkId, setOpeningChunkId] = useState<string | null>(null);
-  const [accountOpen, setAccountOpen] = useState(false);
 
   const details = useMemo(() => Object.values(s.collectionDetails), [s.collectionDetails]);
   const groups = useMemo(
@@ -33,10 +31,9 @@ export function ComicsScreen() {
           <Card variant="surface" className="border border-border p-6 flex flex-col gap-3">
             <div className="text-[16px] font-semibold">Войдите, чтобы увидеть комиксы</div>
             <div className="text-body-secondary">Диалоги загружаются с сервера — нужен аккаунт.</div>
-            <Button onClick={() => setAccountOpen(true)} className="self-start">
+            <Button onClick={() => s.go('profile')} className="self-start">
               Войти
             </Button>
-            <AccountDialog open={accountOpen} onOpenChange={setAccountOpen} />
           </Card>
         )}
 

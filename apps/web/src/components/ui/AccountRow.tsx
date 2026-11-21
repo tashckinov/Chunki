@@ -1,16 +1,7 @@
-import { useState } from 'react';
-import { KeyRound } from 'lucide-react';
 import { useAppStore } from '../../store/appStore';
-import { APP_VERSION } from '../../lib/version';
-import { Dialog } from './Dialog';
-import { Button } from './Button';
-import { TimecodeSetting } from './TimecodeSetting';
-import { StudyReminderSetting } from './StudyReminderSetting';
-import { StudyGoalForm } from './StudyGoalForm';
-import { SegmentedControl } from './SegmentedControl';
 import { Icon } from './Icon';
 
-function displayNameOf(user: { displayName: string | null; email: string | null }): string {
+export function displayNameOf(user: { displayName: string | null; email: string | null }): string {
   return user.displayName || user.email || 'Профиль';
 }
 
@@ -21,7 +12,7 @@ function initials(user: { displayName: string | null; email: string | null }): s
   return (parts[0][0] + (parts[1]?.[0] ?? '')).toUpperCase();
 }
 
-function Avatar({ user, size = 36 }: { user: { displayName: string | null; email: string | null; imageUrl: string | null }; size?: number }) {
+export function AccountAvatar({ user, size = 36 }: { user: { displayName: string | null; email: string | null; imageUrl: string | null }; size?: number }) {
   if (user.imageUrl) {
     return (
       <img
@@ -35,6 +26,7 @@ function Avatar({ user, size = 36 }: { user: { displayName: string | null; email
   }
   return (
     <div
+      aria-hidden="true"
       className="flex-none rounded-full bg-accent-subtle text-accent flex items-center justify-center font-semibold"
       style={{ width: size, height: size, fontSize: size * 0.4 }}
     >
@@ -43,7 +35,7 @@ function Avatar({ user, size = 36 }: { user: { displayName: string | null; email
   );
 }
 
-function PremiumBadge() {
+export function PremiumBadge() {
   return (
     <span className="inline-flex shrink-0 rounded-full border border-accent bg-accent-subtle px-2 py-0.5 text-[11px] font-medium text-accent">
       Premium
@@ -51,224 +43,41 @@ function PremiumBadge() {
   );
 }
 
-function StudyGoalSetting() {
-  const goal = useAppStore((s) => s.studyGoal?.dailyCardGoal);
-  const [editing, setEditing] = useState(false);
-  if (!goal) return null;
-
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <div className="text-[14px] font-medium">Цель по карточкам</div>
-          <div className="text-meta">{goal} в день · до {goal} за сессию</div>
-        </div>
-        {!editing && <Button size="sm" variant="secondary" onClick={() => setEditing(true)}>Изменить</Button>}
-      </div>
-      {editing && <StudyGoalForm currentGoal={goal} onClose={() => setEditing(false)} />}
-    </div>
-  );
-}
-
-function InterfaceModeSetting() {
-  const { interfaceMode, setInterfaceMode } = useAppStore();
-  return (
-    <div>
-      <div className="text-[14px] font-medium mb-2">Язык карточек</div>
-      <SegmentedControl
-        options={[
-          { value: 'ru-en' as const, label: 'Ru → En' },
-          { value: 'en-en' as const, label: 'En → En' },
-        ]}
-        value={interfaceMode}
-        onChange={setInterfaceMode}
-      />
-      <div className="text-meta mt-2">
-        {interfaceMode === 'ru-en'
-          ? 'На обороте карточки — перевод и пример.'
-          : 'Только английский: перевод скрыт, остаётся пример.'}
-      </div>
-    </div>
-  );
-}
-
-/** Premium status + upsell, shown in the account dialog for a logged-in user — "Подписка до <дата>" once active, otherwise a link into the checkout stepper (same entry point as Paywall/DeckDoneScreen). */
-function SubscriptionStatus({ onNavigate }: { onNavigate: () => void }) {
-  const { isPremium, premiumUntil } = useAppStore();
-
-  if (isPremium && premiumUntil) {
-    return (
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-md)] bg-surface-subtle px-4 py-3 text-[14px] font-medium">
-        <span>Подписка до {new Date(premiumUntil).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
-        <PremiumBadge />
-      </div>
-    );
-  }
-
-  return (
-    <Button size="sm" onClick={onNavigate} className="w-full">
-      Оформить подписку
-    </Button>
-  );
-}
-
-function GoogleGlyph() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-      <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.71v2.26h2.9c1.7-1.57 2.7-3.87 2.7-6.61z" />
-      <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.9-2.26c-.81.54-1.84.86-3.06.86-2.35 0-4.34-1.59-5.05-3.72H.98v2.34A9 9 0 0 0 9 18z" />
-      <path fill="#FBBC05" d="M3.95 10.7A5.4 5.4 0 0 1 3.67 9c0-.59.1-1.17.28-1.7V4.96H.98A9 9 0 0 0 0 9c0 1.45.35 2.83.98 4.04z" />
-      <path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .98 4.96l2.97 2.34C4.66 5.17 6.65 3.58 9 3.58z" />
-    </svg>
-  );
-}
-
-/**
- * Sign-in is Google OAuth or a Passkey — no password/email-signup path.
- * A passkey account is separate from a Google account, even on the same
- * device: there's no account linking yet. The client never submits or
- * overrides a profile picture: `imageUrl` always comes back from the
- * backend's /api/auth/me, sourced from the provider's verified profile (or
- * left null for passkey accounts, which have no provider profile at all).
- */
-export function AccountDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  const { user, signIn, signOut, authError, dismissAuthError, signInWithPasskey, passkeyBusy, passkeyError, dismissPasskeyError, go } = useAppStore();
-
-  if (!user) {
-    return (
-      <Dialog open={open} onOpenChange={onOpenChange} headline="Профиль">
-        <div className="flex flex-col gap-5">
-          <div className="flex flex-col gap-2.5">
-            <button
-              type="button"
-              onClick={() => {
-                dismissAuthError();
-                signIn();
-              }}
-              className="pressable w-full flex items-center justify-center gap-2.5 rounded-[var(--radius-md)] border border-border px-4 py-3 text-[14.5px] font-medium"
-            >
-              <GoogleGlyph />
-              Войти через Google
-            </button>
-            <button
-              type="button"
-              disabled={passkeyBusy}
-              onClick={() => {
-                dismissPasskeyError();
-                void signInWithPasskey();
-              }}
-              className="pressable w-full flex items-center justify-center gap-2.5 rounded-[var(--radius-md)] border border-border px-4 py-3 text-[14.5px] font-medium disabled:opacity-60"
-            >
-              <KeyRound size={18} />
-              {passkeyBusy ? 'Подключаем Passkey…' : 'Войти через Passkey'}
-            </button>
-          </div>
-          {authError && <div className="text-[13px] text-negative -mt-2">Не получилось войти. Попробуйте ещё раз.</div>}
-          {passkeyError && <div className="text-[13px] text-negative -mt-2">{passkeyError}</div>}
-          <div className="border-t border-border pt-4">
-            <InterfaceModeSetting />
-          </div>
-          <div className="text-meta text-center">Chunki · сборка {APP_VERSION}</div>
-        </div>
-      </Dialog>
-    );
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange} headline={displayNameOf(user)}>
-      <div className="flex flex-col gap-5">
-        {user.email && <div className="text-body-secondary -mt-2">{user.email}</div>}
-        <SubscriptionStatus
-          onNavigate={() => {
-            go('checkout');
-            onOpenChange(false);
-          }}
-        />
-        {open && <TimecodeSetting key={user.id} />}
-        <InterfaceModeSetting />
-        {open && <>
-          <StudyGoalSetting />
-          <StudyReminderSetting />
-        </>}
-        {user.isAdmin && (
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => {
-              go('admin');
-              onOpenChange(false);
-            }}
-            className="w-full"
-          >
-            Админка
-          </Button>
-        )}
-        <div className="flex justify-end gap-2 border-t border-border pt-4">
-          <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
-            Закрыть
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              void signOut();
-              onOpenChange(false);
-            }}
-          >
-            Выйти
-          </Button>
-        </div>
-        <div className="text-meta text-center">Chunki · сборка {APP_VERSION}</div>
-      </div>
-    </Dialog>
-  );
-}
-
-export function AccountRow() {
+export function AccountRow({ active, compact, onClick }: { active: boolean; compact: boolean; onClick: () => void }) {
   const user = useAppStore((s) => s.user);
   const isPremium = useAppStore((s) => s.isPremium);
-  const [open, setOpen] = useState(false);
+  if (!user) return null;
 
   return (
-    <>
-      <button type="button" onClick={() => setOpen(true)} className="pressable w-full flex items-center gap-3 text-left rounded-[var(--radius-md)] px-3 py-2.5">
-        {user ? (
-          <>
-            <Avatar user={user} />
-            <span className="flex-1 min-w-0">
-              <span className="block text-[14.5px] font-medium truncate">{displayNameOf(user)}</span>
-              {user.email && <span className="block text-meta truncate">{user.email}</span>}
-              {isPremium && <span className="block mt-1"><PremiumBadge /></span>}
-            </span>
-          </>
-        ) : (
-          <>
-            <div className="w-9 h-9 flex-none rounded-full bg-surface-subtle" />
-            <span className="text-[14.5px] font-medium text-accent">Войти</span>
-          </>
-        )}
-      </button>
-      <AccountDialog open={open} onOpenChange={setOpen} />
-    </>
+    <button
+      type="button"
+      aria-label="Личный кабинет"
+      aria-current={active ? 'page' : undefined}
+      title={compact ? 'Личный кабинет' : undefined}
+      onClick={onClick}
+      className={`pressable flex w-full items-center gap-3 rounded-[var(--radius-md)] py-2.5 text-left ${compact ? 'justify-center' : 'px-3'} ${active ? 'bg-accent-subtle' : ''}`}
+    >
+      <AccountAvatar user={user} />
+      {!compact && (
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[14.5px] font-medium">{displayNameOf(user)}</span>
+          {user.email && <span className="block truncate text-meta">{user.email}</span>}
+          {isPremium && <span className="mt-1 block"><PremiumBadge /></span>}
+        </span>
+      )}
+    </button>
   );
 }
 
-/** Bottom-nav tab trigger for mobile — same dialog, styled like the other tab buttons. */
-export function AccountNavButton({ active }: { active: boolean }) {
+export function AccountNavButton({ active, onClick }: { active: boolean; onClick: () => void }) {
   const user = useAppStore((s) => s.user);
-  const [open, setOpen] = useState(false);
-
   return (
-    <>
-      <button type="button" onClick={() => setOpen(true)} className="pressable flex-1 min-w-0 basis-0 flex flex-col items-center justify-center gap-1 py-2.5 px-1">
-        {user ? (
-          <Avatar user={user} size={23} />
-        ) : (
-          <Icon name="Account" size={23} className={active ? 'text-accent' : 'text-text-tertiary'} />
-        )}
-        <span className={`w-full text-center truncate text-[11px] font-medium ${active ? 'text-accent' : 'text-text-tertiary'}`}>Профиль</span>
-      </button>
-      <AccountDialog open={open} onOpenChange={setOpen} />
-    </>
+    <button type="button" aria-current={active ? 'page' : undefined} onClick={onClick}
+      className="pressable flex min-w-0 flex-1 basis-0 flex-col items-center justify-center gap-1 px-1 py-2.5">
+      {user ? <AccountAvatar user={user} size={23} /> : (
+        <Icon name="Account" size={23} className={active ? 'text-accent' : 'text-text-tertiary'} />
+      )}
+      <span className={`w-full truncate text-center text-[11px] font-medium ${active ? 'text-accent' : 'text-text-tertiary'}`}>Профиль</span>
+    </button>
   );
 }

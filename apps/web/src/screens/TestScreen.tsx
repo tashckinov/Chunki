@@ -12,7 +12,7 @@ export function TestScreen() {
   const { readingPassage, readingQuestions, essayPrompt } = v.definition;
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col">
+    <div className="flex min-h-0 w-full flex-1 flex-col self-center min-[1200px]:max-w-[680px]">
       <NavigationBar size="center" title={v.testTitle} onBack={s.back} />
       <div className="px-5 pb-4">
         <LinearProgress value={v.testValue} />
@@ -43,13 +43,11 @@ export function TestScreen() {
               Не знаю
             </button>
           </div>
-          <div className="flex-1" />
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={s.prevQ} disabled={v.atFirstQ}>
+          <div className="mt-auto flex shrink-0 items-center justify-between gap-2 min-[1200px]:mt-0">
+            <Button variant="ghost" onClick={s.prevQ} disabled={v.atFirstQ}>
               Назад
             </Button>
-            <div className="flex-1" />
-            <Button size="sm" onClick={s.nextQ} disabled={v.mqUnanswered}>
+            <Button onClick={s.nextQ} disabled={v.mqUnanswered}>
               {v.nextQLabel}
             </Button>
           </div>

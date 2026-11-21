@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import { Dialog } from '@base-ui/react/dialog';
-import { useAppStore } from './store/appStore';
+import { useAppStore, type Screen } from './store/appStore';
 import { consumeAuthErrorFlag, consumeAuthToken } from './lib/auth';
 import { BottomNavigation, type NavItem } from './components/ui/BottomNavigation';
 import { Icon, type IconName } from './components/ui/Icon';
@@ -17,6 +17,7 @@ import { ResultScreen } from './screens/ResultScreen';
 import { ScheduleScreen } from './screens/ScheduleScreen';
 import { PaywallScreen } from './screens/PaywallScreen';
 import { CheckoutScreen } from './screens/CheckoutScreen';
+import { ProfileScreen } from './screens/ProfileScreen';
 import { ProgramScreen } from './screens/ProgramScreen';
 import { ComicsScreen } from './screens/ComicsScreen';
 import { TopicScreen } from './screens/TopicScreen';
@@ -56,18 +57,16 @@ function CheckingScreenForContext() {
 
 function CurrentScreen({ onOpenAdminMenu }: { onOpenAdminMenu: () => void }) {
   const screen = useAppStore((s) => s.screen);
-  const authChecked = useAppStore((s) => s.authChecked);
   const user = useAppStore((s) => s.user);
   const hasTestDraft = useAppStore((s) => !!s.testVariant && s.testDraftOwner === s.user?.id);
-  // A confirmed-logged-out visitor (not just "haven't checked yet" — see the
-  // authChecked guard) sees only the guest gallery, regardless of whatever
-  // `screen` happens to be set to (e.g. left over from before signing out).
-  if (authChecked && !user) return <GuestGalleryScreen />;
+  if (!user && screen !== 'profile') return <GuestGalleryScreen />;
   switch (screen) {
+    case 'profile':
+      return <ProfileScreen />;
     case 'goals':
       return <GoalsScreen />;
     case 'test':
-      return !authChecked ? null : hasTestDraft ? <TestScreen /> : <GoalsScreen />;
+      return hasTestDraft ? <TestScreen /> : <GoalsScreen />;
     case 'checking':
       return <CheckingScreenForContext />;
     case 'result':
@@ -107,11 +106,11 @@ function CurrentScreen({ onOpenAdminMenu }: { onOpenAdminMenu: () => void }) {
   }
 }
 
-function SidebarNav({ value, onChange, onClose, overlay = false }: {
+function SidebarNav({ value, onChange, onClose, onExpand }: {
   value: number;
   onChange: (v: number) => void;
   onClose?: () => void;
-  overlay?: boolean;
+  onExpand?: () => void;
 }) {
   const goHome = useAppStore((s) => s.goHome);
   const screen = useAppStore((s) => s.screen);
@@ -119,58 +118,55 @@ function SidebarNav({ value, onChange, onClose, overlay = false }: {
   const setAdminSection = useAppStore((s) => s.setAdminSection);
   const back = useAppStore((s) => s.back);
   const inAdmin = screen === 'admin';
+  const compact = !!onExpand;
+  const items = inAdmin
+    ? ADMIN_SECTIONS.map((item) => ({ ...item, active: item.section === adminSection, select: () => setAdminSection(item.section) }))
+    : SIDEBAR_ITEMS.map((item, index) => ({ ...item, active: index === value, select: () => onChange(index) }));
+  const row = `pressable flex min-h-11 shrink-0 items-center gap-3 rounded-[var(--radius-md)] py-2.5 text-left text-[14.5px] font-medium ${compact ? 'justify-center' : 'px-3'}`;
 
   return (
-    <nav aria-label="Боковое меню" className={`flex h-full w-full flex-col gap-1 overflow-y-auto bg-surface px-3 py-4 ${overlay ? 'touch-pan-y' : 'border-r border-border'}`}>
-      <div className="mb-4 flex items-center gap-2">
-        {overlay && <IconButton icon="Close" label="Свернуть меню" onClick={onClose} />}
-        <button type="button" onClick={() => { goHome(); onClose?.(); }} className="pressable flex min-w-0 items-center gap-2 text-left">
-          <Logo size={26} />
-          <span className="text-[17px] font-semibold">Chunki</span>
-        </button>
+    <nav
+      aria-label="Боковое меню"
+      className={`flex h-full flex-col gap-1 overflow-y-auto bg-surface py-4
+        ${onClose ? 'touch-pan-y' : 'border-r border-border'}
+        ${compact ? 'ml-auto w-16 px-2' : 'w-full px-3'}`}
+    >
+      <div className={`mb-4 flex shrink-0 items-center gap-2 ${compact ? 'justify-center' : ''}`}>
+        {compact ? (
+          <IconButton icon="Menu" label="Развернуть боковое меню" onClick={onExpand} />
+        ) : (
+          <>
+            {onClose && <IconButton icon="Close" label="Свернуть меню" onClick={onClose} />}
+            <button type="button" onClick={() => { goHome(); onClose?.(); }} className="pressable flex min-w-0 items-center gap-2 text-left">
+              <Logo size={26} />
+              <span className="text-[17px] font-semibold">Chunki</span>
+            </button>
+          </>
+        )}
       </div>
-      {inAdmin
-        ? ADMIN_SECTIONS.map((item) => {
-            const active = item.section === adminSection;
-            return (
-              <button
-                key={item.section}
-                type="button"
-                onClick={() => { setAdminSection(item.section); onClose?.(); }}
-                className={`pressable flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5 text-[14.5px] font-medium text-left ${
-                  active ? 'bg-accent-subtle text-accent' : 'text-text-secondary'
-                }`}
-              >
-                <Icon name={item.icon} size={19} />
-                {item.label}
-              </button>
-            );
-          })
-        : SIDEBAR_ITEMS.map((item, i) => {
-            const active = i === value;
-            return (
-              <button
-                key={item.label}
-                type="button"
-                onClick={() => { onChange(i); onClose?.(); }}
-                className={`pressable flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5 text-[14.5px] font-medium text-left ${
-                  active ? 'bg-accent-subtle text-accent' : 'text-text-secondary'
-                }`}
-              >
-                <Icon name={item.icon} size={19} />
-                {item.label}
-              </button>
-            );
-          })}
+      {items.map((item) => (
+        <button
+          key={item.label}
+          type="button"
+          aria-current={item.active ? 'page' : undefined}
+          title={compact ? item.label : undefined}
+          onClick={() => { item.select(); onClose?.(); }}
+          className={`${row} ${item.active ? 'bg-accent-subtle text-accent' : 'text-text-secondary'}`}
+        >
+          <Icon name={item.icon} size={19} />
+          <span className={compact ? 'sr-only' : undefined}>{item.label}</span>
+        </button>
+      ))}
       <div className="flex-1" />
       {inAdmin && (
-        <button type="button" onClick={() => { back(); onClose?.(); }} className="pressable flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5 text-[14.5px] font-medium text-left text-text-secondary">
+        <button type="button" title={compact ? 'Назад к приложению' : undefined}
+          onClick={() => { back(); onClose?.(); }} className={`${row} text-text-secondary`}>
           <Icon name="ArrowBack" size={19} />
-          Назад к приложению
+          <span className={compact ? 'sr-only' : undefined}>Назад к приложению</span>
         </button>
       )}
-      <div className="border-t border-border pt-3">
-        <AccountRow />
+      <div className="shrink-0 border-t border-border pt-3">
+        <AccountRow active={value === 3} compact={compact} onClick={() => { onChange(3); onClose?.(); }} />
       </div>
     </nav>
   );
@@ -200,17 +196,20 @@ function SidebarGesture({ onSwipe }: { onSwipe: () => void }) {
   />;
 }
 
-function navTabForScreen(screen: string): number {
+function navTabForScreen(screen: Screen, checkoutFromProfile: boolean): number {
   switch (screen) {
     case 'comics':
       return 1;
+    case 'profile':
+      return 3;
+    case 'checkout':
+      return checkoutFromProfile ? 3 : 2;
     case 'goals':
     case 'test':
     case 'checking':
     case 'result':
     case 'schedule':
     case 'paywall':
-    case 'checkout':
     case 'program':
     case 'topic':
     case 'exercises':
@@ -232,20 +231,21 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const drawerGesture = useRef<{ id: number; x: number; y: number } | null>(null);
   const screen = useAppStore((s) => s.screen);
-  const navTab = useAppStore((s) => navTabForScreen(s.screen));
+  const navTab = useAppStore((s) => navTabForScreen(s.screen, s.checkoutFromProfile));
   const setNavTab = useAppStore((s) => s.setNavTab);
   const authChecked = useAppStore((s) => s.authChecked);
   const user = useAppStore((s) => s.user);
-  // Same guard as CurrentScreen() — no nav chrome for a confirmed-logged-out
-  // visitor (nowhere real for it to lead), but never during the brief
-  // window before the initial checkAuth() resolves.
-  const loggedOut = authChecked && !user;
+  const loggedOut = !user;
   const inAdmin = screen === 'admin' && user?.isAdmin;
   const dialogueContinuation = useAppStore((state) => state.dialogueContinuation);
   const studying = screen === 'deck' || screen === 'deckdone' || screen === 'recognitioncheck'
     || screen === 'productioncheck' || (screen === 'dialogue' && dialogueContinuation !== 'browse');
   const studyGoal = useAppStore((s) => s.studyGoal);
   const completedIntroOwner = useAppStore((s) => s.completedIntroOwner);
+  const studyGoalChecked = useAppStore((s) => s.studyGoalChecked);
+  // A device can remember the intro after a goal was set on another device.
+  // Resolve that case before choosing between the survey and the navigation shell.
+  const waitingForStartup = !authChecked || (!!user && completedIntroOwner === user.id && !studyGoalChecked);
   const showStudyGoal = user && screen !== 'deckdone' && !studyGoal?.dailyCardGoal
     && (studyGoal?.introCompleted || completedIntroOwner === user.id);
 
@@ -271,11 +271,13 @@ export default function App() {
 
   return (
     <>
-      {showStudyGoal ? <StudyGoalScreen key={user.id} /> : (
+      {waitingForStartup ? (
+        <div className="grid h-dvh place-items-center bg-bg text-body-secondary" role="status">Загрузка Chunki…</div>
+      ) : showStudyGoal ? <StudyGoalScreen key={user.id} /> : (
         <div className={`h-dvh w-full flex justify-center bg-bg overflow-hidden ${studying ? 'study-session text-text' : ''}`}>
-          {!loggedOut && !sidebarCollapsed && (
+          {!loggedOut && (
             <div className="hidden w-[248px] flex-none min-[1200px]:block">
-              <SidebarNav value={navTab} onChange={setNavTab} />
+              <SidebarNav value={navTab} onChange={setNavTab} onExpand={sidebarCollapsed ? () => setSidebarCollapsed(false) : undefined} />
             </div>
           )}
           <div className={`w-full min-[768px]:max-w-[720px] ${loggedOut ? 'min-[1200px]:max-w-[1040px]' : 'min-[1200px]:max-w-[860px]'} h-dvh overflow-hidden flex flex-col`}>
@@ -309,7 +311,7 @@ export default function App() {
                   }}
                 >
                   <Dialog.Title className="sr-only">Меню админки</Dialog.Title>
-                  <SidebarNav value={navTab} onChange={setNavTab} onClose={() => setSidebarOpen(false)} overlay />
+                  <SidebarNav value={navTab} onChange={setNavTab} onClose={() => setSidebarOpen(false)} />
                 </Dialog.Popup>
               </Dialog.Portal>
             </Dialog.Root>

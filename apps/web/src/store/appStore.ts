@@ -62,6 +62,7 @@ export type Screen =
   | 'recognitioncheck'
   | 'productioncheck'
   | 'dialogue'
+  | 'profile'
   | 'admin';
 
 export type DeckVerdict = 'know' | 'dont' | 'bury';
@@ -87,9 +88,7 @@ const BACK_MAP: Partial<Record<Screen, Screen>> = {
   result: 'goals',
   schedule: 'result',
   paywall: 'schedule',
-  // Fallback only, same caveat as `dialogue` below — reachable from Paywall,
-  // DeckDone's upsell, and the account dialog's subscribe button, so there's
-  // no single real "back" destination to encode here.
+  // Checkout opened from the profile has its own back destination.
   checkout: 'cardslib',
   program: 'cardslib',
   topic: 'program',
@@ -110,6 +109,8 @@ export type AdminSection = 'users' | 'content' | 'characters' | 'program' | 'gra
 
 interface AppState {
   screen: Screen;
+  profileReturnScreen: Screen;
+  checkoutFromProfile: boolean;
   /** Which admin sidebar/menu item is active — only meaningful while screen === 'admin'. */
   adminSection: AdminSection;
   /** Null until the initial /api/auth/me check resolves, or when signed out. */
@@ -167,6 +168,7 @@ interface AppState {
 
   deckIndex: number;
   studyGoal: StudyGoalStatus | null;
+  studyGoalChecked: boolean;
   introDeckOwner: string | null;
   deckCursorKey: string | null;
   lastDeckChunkByScope: Record<string, string>;
@@ -318,6 +320,8 @@ export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
       screen: 'cardslib',
+      profileReturnScreen: 'cardslib',
+      checkoutFromProfile: false,
       adminSection: 'users',
       user: null,
       authChecked: false,
@@ -370,6 +374,7 @@ export const useAppStore = create<AppState>()(
 
       deckIndex: 0,
       studyGoal: null,
+      studyGoalChecked: false,
       introDeckOwner: null,
       deckCursorKey: null,
       lastDeckChunkByScope: {},
@@ -413,15 +418,24 @@ export const useAppStore = create<AppState>()(
       dragging: false,
       flying: null,
 
-      go: (screen) => set({ screen }),
-      back: () => set((s) => ({
-        screen: (s.screen === 'test' && s.testFromProgram) || (s.screen === 'result' && s.placementResultSkipSchedule)
-          ? 'program'
-          : BACK_MAP[s.screen] ?? 'cardslib',
-      })),
+      go: (screen) => set((s) => {
+        if (screen === 'profile' && s.screen !== 'profile' && !(s.screen === 'checkout' && s.checkoutFromProfile)) {
+          return { screen, profileReturnScreen: s.screen };
+        }
+        if (screen === 'checkout' && s.screen !== 'checkout') return { screen, checkoutFromProfile: s.screen === 'profile' };
+        return { screen };
+      }),
+      back: () => set((s) => {
+        if (s.screen === 'profile') return { screen: s.profileReturnScreen };
+        if (s.screen === 'checkout' && s.checkoutFromProfile) return { screen: 'profile' };
+        if ((s.screen === 'test' && s.testFromProgram) || (s.screen === 'result' && s.placementResultSkipSchedule)) {
+          return { screen: 'program' };
+        }
+        return { screen: BACK_MAP[s.screen] ?? 'cardslib' };
+      }),
       signIn: () => startGoogleLogin(),
       signOut: async () => {
-        set({ user: null, grading: false, checkingContext: null, screen: 'cardslib', studyGoal: null, isPremium: false, premiumUntil: null, placementResult: null, placementResultOwner: null, placementOverview: null, programTopics: [], collections: [], collectionDetails: {}, collectionsStatus: 'idle', collectionsError: null });
+        set({ user: null, grading: false, checkingContext: null, screen: 'cardslib', profileReturnScreen: 'cardslib', checkoutFromProfile: false, studyGoal: null, studyGoalChecked: false, isPremium: false, premiumUntil: null, placementResult: null, placementResultOwner: null, placementOverview: null, programTopics: [], collections: [], collectionDetails: {}, collectionsStatus: 'idle', collectionsError: null });
         await logout().catch(() => {});
         void get().loadCollections();
       },
@@ -575,9 +589,13 @@ export const useAppStore = create<AppState>()(
         try {
           const status = await fetchStudyGoal();
           if (get().user?.id !== user.id) return;
-          if (!get().studyGoal?.dailyCardGoal) set({ studyGoal: status });
+          set((s) => ({
+            studyGoalChecked: true,
+            studyGoal: s.studyGoal?.dailyCardGoal ? s.studyGoal : status,
+            completedIntroOwner: status.dailyCardGoal && s.completedIntroOwner === user.id ? null : s.completedIntroOwner,
+          }));
         } catch {
-          // A failed fetch leaves the intro available; try again next time.
+          if (get().user?.id === user.id) set({ studyGoalChecked: true });
         }
       },
       saveStudyGoal: async (goal) => {
@@ -683,8 +701,8 @@ export const useAppStore = create<AppState>()(
         }
       },
       setNavTab: (v) => {
-        const destinations: Screen[] = ['cardslib', 'comics', 'program'];
-        set({ screen: destinations[v] ?? 'cardslib' });
+        const destinations: Screen[] = ['cardslib', 'comics', 'program', 'profile'];
+        get().go(destinations[v] ?? 'cardslib');
       },
       setAdminSection: (s) => set({ adminSection: s }),
 
@@ -1089,6 +1107,7 @@ export const useAppStore = create<AppState>()(
           testStarting,
           testStartError,
           studyGoal,
+          studyGoalChecked,
           topicStudyError,
           user,
           authChecked,
@@ -1116,6 +1135,7 @@ export const useAppStore = create<AppState>()(
         void testStartError;
         void checkingContext;
         void studyGoal;
+        void studyGoalChecked;
         void topicStudyError;
         void user;
         void authChecked;

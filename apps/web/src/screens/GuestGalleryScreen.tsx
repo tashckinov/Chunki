@@ -7,7 +7,6 @@ import { Logo } from '../components/brand/Logo';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Textarea } from '../components/ui/Textarea';
-import { AccountDialog } from '../components/ui/AccountRow';
 import { GUEST_DIALOGUE_MESSAGES, GUEST_TARGET_TEXT, GUEST_SITUATION_TEXT, GUEST_SAMPLE_ANSWER } from '../lib/guestPreview';
 
 /**
@@ -17,11 +16,11 @@ import { GUEST_DIALOGUE_MESSAGES, GUEST_TARGET_TEXT, GUEST_SITUATION_TEXT, GUEST
  * InteractiveWords). Replaces the whole screen tree for a
  * confirmed-logged-out visitor (see App.tsx's CurrentScreen), so there's
  * no nav chrome around it and nothing here can navigate anywhere except
- * the login dialog.
+ * the sign-in page.
  */
 export function GuestGalleryScreen() {
   const interfaceMode = useAppStore((s) => s.interfaceMode);
-  const [accountOpen, setAccountOpen] = useState(false);
+  const go = useAppStore((s) => s.go);
   // Starts on the hardcoded sample (guestPreview.ts) so the comic never
   // flashes empty, then swaps to a real random dialogue from the library
   // once it loads — silently keeps the sample if that fetch fails or the
@@ -85,11 +84,10 @@ export function GuestGalleryScreen() {
       <Card variant="accent" className="p-6 flex flex-col gap-3 items-center text-center">
         <div className="text-[16px] font-semibold">Войдите, чтобы начать</div>
         <div className="text-body-secondary">Бесплатный вход через Google или Passkey — без пароля.</div>
-        <Button size="lg" onClick={() => setAccountOpen(true)} className="w-full">
+        <Button size="lg" onClick={() => go('profile')} className="w-full">
           Войти
         </Button>
       </Card>
-      <AccountDialog open={accountOpen} onOpenChange={setAccountOpen} />
     </div>
   );
 }
