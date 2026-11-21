@@ -5,6 +5,7 @@ import { BottomNavigation, type NavItem } from './components/ui/BottomNavigation
 import { Icon, type IconName } from './components/ui/Icon';
 import { Logo } from './components/brand/Logo';
 import { AccountRow } from './components/ui/AccountRow';
+import { StudyGoalDialog } from './components/ui/StudyGoalDialog';
 import { UpdatePrompt } from './components/ui/UpdatePrompt';
 import { GoalsScreen } from './screens/GoalsScreen';
 import { TestScreen } from './screens/TestScreen';
@@ -222,6 +223,7 @@ export default function App() {
           </div>
         )}
       </div>
+      <StudyGoalDialog />
       <UpdatePrompt />
     </div>
   );

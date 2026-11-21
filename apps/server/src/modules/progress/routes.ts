@@ -1,7 +1,8 @@
 import type { FastifyPluginAsync } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
 import { z } from 'zod';
-import { PRODUCTION_ANSWER_MAX_LENGTH } from '@app/shared';
+import { DAILY_CARD_GOALS, PRODUCTION_ANSWER_MAX_LENGTH } from '@app/shared';
+import { completeStudyIntro, getStudyGoal, saveStudyGoal } from './studyGoal.js';
 import { rateProductionCheck } from '../aiLogs/repository.js';
 import { requireAuthenticatedSession } from '../auth/requireAuth.js';
 import {
@@ -25,6 +26,24 @@ const productionSubmitSchema = z.object({ answer: z.string().min(1).max(PRODUCTI
 const listQuerySchema = z.object({ chunkIds: z.string().min(1).max(18500) });
 
 export const progressRoutes: FastifyPluginAsync = async (app) => {
+  app.get('/study-goal', { preHandler: requireAuthenticatedSession }, async (request) =>
+    getStudyGoal(request.session!.userId),
+  );
+
+  app.post('/study-intro', { preHandler: requireAuthenticatedSession }, async (request) => {
+    await completeStudyIntro(request.session!.userId);
+    return { ok: true };
+  });
+
+  app.post('/study-goal', { preHandler: requireAuthenticatedSession }, async (request, reply) => {
+    const { goal } = (request.body ?? {}) as { goal?: number };
+    const validGoal = DAILY_CARD_GOALS.find((option) => option === goal);
+    if (!validGoal) return reply.code(400).send({ error: 'invalid_goal' });
+    const status = await saveStudyGoal(request.session!.userId, validGoal);
+    if (!status.introCompleted) return reply.code(409).send({ error: 'intro_required' });
+    return status;
+  });
+
   app.post('/sort', { preHandler: requireAuthenticatedSession }, async (request, reply) => {
     const parsed = sortBodySchema.safeParse(request.body);
     if (!parsed.success) {
