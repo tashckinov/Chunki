@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import { useContext, type ReactNode } from 'react';
+import { SidebarMenuContext } from './sidebarMenu';
 import { IconButton } from './IconButton';
 
 /**
@@ -12,6 +13,7 @@ export function NavigationBar({
   size = 'small',
   onBack,
   hideBackOnDesktop = false,
+  sidebarMenu = false,
   leading,
   trailing,
 }: {
@@ -21,6 +23,7 @@ export function NavigationBar({
   /** Hide the back button at the >=1200px breakpoint, where the persistent
    * sidebar already offers the same destination (e.g. back-to-home). */
   hideBackOnDesktop?: boolean;
+  sidebarMenu?: boolean;
   /** Mobile-only control shown in the back-button slot when onBack isn't
    * given (e.g. a burger button that opens a section menu). Hidden at the
    * >=1200px breakpoint, where a persistent sidebar covers that job. */
@@ -28,8 +31,11 @@ export function NavigationBar({
   /** Right-aligned action (e.g. a bold "Сохранить" button), small/center only. */
   trailing?: ReactNode;
 }) {
+  const openSidebar = useContext(SidebarMenuContext);
   const backSlotClass = hideBackOnDesktop ? 'min-[1200px]:hidden' : '';
-  const back = onBack ? (
+  const back = sidebarMenu && openSidebar ? (
+    <IconButton icon="Menu" label="Открыть меню" onClick={openSidebar} />
+  ) : onBack ? (
     <IconButton icon="ArrowBack" label="Назад" onClick={onBack} />
   ) : leading ? (
     <span className="min-[1200px]:hidden">{leading}</span>

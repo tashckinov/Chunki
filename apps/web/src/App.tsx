@@ -1,8 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState, type PointerEvent } from 'react';
+import { Dialog } from '@base-ui/react/dialog';
 import { useAppStore } from './store/appStore';
 import { consumeAuthErrorFlag, consumeAuthToken } from './lib/auth';
 import { BottomNavigation, type NavItem } from './components/ui/BottomNavigation';
 import { Icon, type IconName } from './components/ui/Icon';
+import { IconButton } from './components/ui/IconButton';
+import { SidebarMenuContext } from './components/ui/sidebarMenu';
 import { Logo } from './components/brand/Logo';
 import { AccountRow } from './components/ui/AccountRow';
 import { StudyGoalScreen } from './screens/StudyGoalScreen';
@@ -103,10 +106,12 @@ function CurrentScreen() {
   }
 }
 
-/** Persistent left rail — desktop only (>=1200px), replaces the bottom tab bar.
- * While screen === 'admin', it swaps to the admin section list (with a
- * "Назад" item back to the normal app) instead of the regular nav items. */
-function SidebarNav({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+function SidebarNav({ value, onChange, onClose, overlay = false }: {
+  value: number;
+  onChange: (v: number) => void;
+  onClose: () => void;
+  overlay?: boolean;
+}) {
   const goHome = useAppStore((s) => s.goHome);
   const screen = useAppStore((s) => s.screen);
   const adminSection = useAppStore((s) => s.adminSection);
@@ -115,11 +120,14 @@ function SidebarNav({ value, onChange }: { value: number; onChange: (v: number) 
   const inAdmin = screen === 'admin';
 
   return (
-    <nav className="hidden min-[1200px]:flex flex-col w-[248px] flex-none overflow-y-auto border-r border-border bg-surface px-3 py-8 gap-1">
-      <button type="button" onClick={goHome} className="pressable flex items-center gap-2 px-3 pb-6 text-left">
-        <Logo size={26} />
-        <span className="text-[17px] font-semibold">Chunki</span>
-      </button>
+    <nav aria-label="Боковое меню" className={`flex h-full w-full flex-col gap-1 overflow-y-auto bg-surface px-3 py-4 ${overlay ? 'touch-pan-y' : 'border-r border-border'}`}>
+      <div className="mb-4 flex items-center gap-2">
+        <IconButton icon={overlay ? 'Close' : 'Menu'} label="Свернуть меню" onClick={onClose} />
+        <button type="button" onClick={() => { goHome(); if (overlay) onClose(); }} className="pressable flex min-w-0 items-center gap-2 text-left">
+          <Logo size={26} />
+          <span className="text-[17px] font-semibold">Chunki</span>
+        </button>
+      </div>
       {inAdmin
         ? ADMIN_SECTIONS.map((item) => {
             const active = item.section === adminSection;
@@ -127,7 +135,7 @@ function SidebarNav({ value, onChange }: { value: number; onChange: (v: number) 
               <button
                 key={item.section}
                 type="button"
-                onClick={() => setAdminSection(item.section)}
+                onClick={() => { setAdminSection(item.section); if (overlay) onClose(); }}
                 className={`pressable flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5 text-[14.5px] font-medium text-left ${
                   active ? 'bg-accent-subtle text-accent' : 'text-text-secondary'
                 }`}
@@ -143,7 +151,7 @@ function SidebarNav({ value, onChange }: { value: number; onChange: (v: number) 
               <button
                 key={item.label}
                 type="button"
-                onClick={() => onChange(i)}
+                onClick={() => { onChange(i); if (overlay) onClose(); }}
                 className={`pressable flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5 text-[14.5px] font-medium text-left ${
                   active ? 'bg-accent-subtle text-accent' : 'text-text-secondary'
                 }`}
@@ -155,7 +163,7 @@ function SidebarNav({ value, onChange }: { value: number; onChange: (v: number) 
           })}
       <div className="flex-1" />
       {inAdmin && (
-        <button type="button" onClick={back} className="pressable flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5 text-[14.5px] font-medium text-left text-text-secondary">
+        <button type="button" onClick={() => { back(); if (overlay) onClose(); }} className="pressable flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5 text-[14.5px] font-medium text-left text-text-secondary">
           <Icon name="ArrowBack" size={19} />
           Назад
         </button>
@@ -165,6 +173,30 @@ function SidebarNav({ value, onChange }: { value: number; onChange: (v: number) 
       </div>
     </nav>
   );
+}
+
+function SidebarGesture({ onSwipe }: { onSwipe: () => void }) {
+  const start = useRef<{ pointerId: number; x: number; y: number } | null>(null);
+
+  function finish(event: PointerEvent<HTMLDivElement>) {
+    const gesture = start.current;
+    start.current = null;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    const horizontal = event.clientX - gesture.x;
+    const vertical = Math.abs(event.clientY - gesture.y);
+    if (horizontal >= 48 && horizontal > vertical * 1.5) onSwipe();
+  }
+
+  return <div aria-hidden="true" className="fixed inset-y-0 left-0 z-10 w-3 touch-pan-y min-[1200px]:hidden"
+    onPointerDown={(event) => {
+      if (event.pointerType !== 'touch' || !event.isPrimary) return;
+      start.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }}
+    onPointerUp={finish}
+    onPointerCancel={() => { start.current = null; }}
+    onLostPointerCapture={() => { start.current = null; }}
+  />;
 }
 
 function navTabForScreen(screen: string): number {
@@ -195,6 +227,9 @@ function navTabForScreen(screen: string): number {
 }
 
 export default function App() {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const drawerGesture = useRef<{ id: number; x: number; y: number } | null>(null);
   const screen = useAppStore((s) => s.screen);
   const navTab = useAppStore((s) => navTabForScreen(s.screen));
   const setNavTab = useAppStore((s) => s.setNavTab);
@@ -216,19 +251,66 @@ export default function App() {
     useAppStore.getState().loadCollections();
   }, []);
 
+  useEffect(() => {
+    const desktop = window.matchMedia('(min-width: 1200px)');
+    const closeMobileMenu = () => { if (desktop.matches) setSidebarOpen(false); };
+    desktop.addEventListener('change', closeMobileMenu);
+    return () => desktop.removeEventListener('change', closeMobileMenu);
+  }, []);
+
+  useEffect(() => {
+    if (!user || showStudyGoal) setSidebarOpen(false);
+  }, [user, showStudyGoal]);
+
+  const openSidebar = () => setSidebarOpen(true);
+
   return (
     <>
       {showStudyGoal ? <StudyGoalScreen key={user.id} /> : (
         <div className="h-dvh w-full flex justify-center bg-bg overflow-hidden">
-          {!loggedOut && <SidebarNav value={navTab} onChange={setNavTab} />}
+          {!loggedOut && (
+            <div className={`hidden flex-none min-[1200px]:block ${sidebarCollapsed ? 'w-16 border-r border-border bg-surface p-2' : 'w-[248px]'}`}>
+              {sidebarCollapsed
+                ? <IconButton icon="Menu" label="Открыть меню" onClick={() => setSidebarCollapsed(false)} />
+                : <SidebarNav value={navTab} onChange={setNavTab} onClose={() => setSidebarCollapsed(true)} />}
+            </div>
+          )}
           <div className={`w-full min-[768px]:max-w-[720px] ${loggedOut ? 'min-[1200px]:max-w-[1040px]' : 'min-[1200px]:max-w-[860px]'} h-dvh overflow-hidden flex flex-col`}>
-            <CurrentScreen />
+            <SidebarMenuContext.Provider value={user ? openSidebar : null}>
+              <CurrentScreen />
+            </SidebarMenuContext.Provider>
             {screen !== 'admin' && !loggedOut && (
               <div className="flex-none min-[1200px]:hidden">
                 <BottomNavigation items={MOBILE_NAV_ITEMS} value={navTab} onChange={setNavTab} />
               </div>
             )}
           </div>
+          {user && !sidebarOpen && <SidebarGesture onSwipe={openSidebar} />}
+          {user && (
+            <Dialog.Root open={sidebarOpen} onOpenChange={setSidebarOpen}>
+              <Dialog.Portal>
+                <Dialog.Backdrop className="fixed inset-0 z-20 bg-[color:var(--tok-scrim)]" />
+                <Dialog.Popup
+                  className="fixed inset-y-0 left-0 z-20 w-[min(280px,85vw)] touch-pan-y bg-surface shadow-[var(--shadow-md)] motion-safe:transition-transform data-[starting-style]:-translate-x-full data-[ending-style]:-translate-x-full"
+                  onPointerDown={(event) => {
+                    if (event.pointerType !== 'touch' || !event.isPrimary || !event.currentTarget.contains(event.target as Node)) return;
+                    drawerGesture.current = { id: event.pointerId, x: event.clientX, y: event.clientY };
+                  }}
+                  onPointerCancel={() => { drawerGesture.current = null; }}
+                  onPointerUp={(event) => {
+                    const start = drawerGesture.current;
+                    drawerGesture.current = null;
+                    if (!start || start.id !== event.pointerId) return;
+                    const distance = start.x - event.clientX;
+                    if (distance >= 48 && distance > Math.abs(start.y - event.clientY) * 1.5) setSidebarOpen(false);
+                  }}
+                >
+                  <Dialog.Title className="sr-only">Меню Chunki</Dialog.Title>
+                  <SidebarNav value={navTab} onChange={setNavTab} onClose={() => setSidebarOpen(false)} overlay />
+                </Dialog.Popup>
+              </Dialog.Portal>
+            </Dialog.Root>
+          )}
         </div>
       )}
       <UpdatePrompt />

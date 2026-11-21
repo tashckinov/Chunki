@@ -110,7 +110,7 @@ export function CardsScreen() {
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      <NavigationBar size="large" title="Карточки" onBack={s.back} hideBackOnDesktop />
+      <NavigationBar size="large" title="Карточки" sidebarMenu hideBackOnDesktop />
       <div className="scroll-clean flex-1 min-h-0 px-5 pb-8 flex flex-col gap-7">
         {s.collectionsStatus === 'error' && s.collectionsError === 'unauthorized' && (
           <Card variant="surface" className="border border-border p-6 flex flex-col gap-3">
