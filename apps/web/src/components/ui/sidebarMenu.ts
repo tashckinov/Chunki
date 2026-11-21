@@ -1,3 +1,3 @@
 import { createContext } from 'react';
 
-export const SidebarMenuContext = createContext<(() => void) | null>(null);
+export const SidebarMenuContext = createContext<{ collapsed: boolean; toggle: () => void } | null>(null);

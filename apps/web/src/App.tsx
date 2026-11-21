@@ -109,7 +109,7 @@ function CurrentScreen() {
 function SidebarNav({ value, onChange, onClose, overlay = false }: {
   value: number;
   onChange: (v: number) => void;
-  onClose: () => void;
+  onClose?: () => void;
   overlay?: boolean;
 }) {
   const goHome = useAppStore((s) => s.goHome);
@@ -122,8 +122,8 @@ function SidebarNav({ value, onChange, onClose, overlay = false }: {
   return (
     <nav aria-label="Боковое меню" className={`flex h-full w-full flex-col gap-1 overflow-y-auto bg-surface px-3 py-4 ${overlay ? 'touch-pan-y' : 'border-r border-border'}`}>
       <div className="mb-4 flex items-center gap-2">
-        <IconButton icon={overlay ? 'Close' : 'Menu'} label="Свернуть меню" onClick={onClose} />
-        <button type="button" onClick={() => { goHome(); if (overlay) onClose(); }} className="pressable flex min-w-0 items-center gap-2 text-left">
+        {overlay && <IconButton icon="Close" label="Свернуть меню" onClick={onClose} />}
+        <button type="button" onClick={() => { goHome(); onClose?.(); }} className="pressable flex min-w-0 items-center gap-2 text-left">
           <Logo size={26} />
           <span className="text-[17px] font-semibold">Chunki</span>
         </button>
@@ -135,7 +135,7 @@ function SidebarNav({ value, onChange, onClose, overlay = false }: {
               <button
                 key={item.section}
                 type="button"
-                onClick={() => { setAdminSection(item.section); if (overlay) onClose(); }}
+                onClick={() => { setAdminSection(item.section); onClose?.(); }}
                 className={`pressable flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5 text-[14.5px] font-medium text-left ${
                   active ? 'bg-accent-subtle text-accent' : 'text-text-secondary'
                 }`}
@@ -151,7 +151,7 @@ function SidebarNav({ value, onChange, onClose, overlay = false }: {
               <button
                 key={item.label}
                 type="button"
-                onClick={() => { onChange(i); if (overlay) onClose(); }}
+                onClick={() => { onChange(i); onClose?.(); }}
                 className={`pressable flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5 text-[14.5px] font-medium text-left ${
                   active ? 'bg-accent-subtle text-accent' : 'text-text-secondary'
                 }`}
@@ -163,7 +163,7 @@ function SidebarNav({ value, onChange, onClose, overlay = false }: {
           })}
       <div className="flex-1" />
       {inAdmin && (
-        <button type="button" onClick={() => { back(); if (overlay) onClose(); }} className="pressable flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5 text-[14.5px] font-medium text-left text-text-secondary">
+        <button type="button" onClick={() => { back(); onClose?.(); }} className="pressable flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5 text-[14.5px] font-medium text-left text-text-secondary">
           <Icon name="ArrowBack" size={19} />
           Назад
         </button>
@@ -268,15 +268,13 @@ export default function App() {
     <>
       {showStudyGoal ? <StudyGoalScreen key={user.id} /> : (
         <div className="h-dvh w-full flex justify-center bg-bg overflow-hidden">
-          {!loggedOut && (
-            <div className={`hidden flex-none min-[1200px]:block ${sidebarCollapsed ? 'w-16 border-r border-border bg-surface p-2' : 'w-[248px]'}`}>
-              {sidebarCollapsed
-                ? <IconButton icon="Menu" label="Открыть меню" onClick={() => setSidebarCollapsed(false)} />
-                : <SidebarNav value={navTab} onChange={setNavTab} onClose={() => setSidebarCollapsed(true)} />}
+          {!loggedOut && !sidebarCollapsed && (
+            <div className="hidden w-[248px] flex-none min-[1200px]:block">
+              <SidebarNav value={navTab} onChange={setNavTab} />
             </div>
           )}
           <div className={`w-full min-[768px]:max-w-[720px] ${loggedOut ? 'min-[1200px]:max-w-[1040px]' : 'min-[1200px]:max-w-[860px]'} h-dvh overflow-hidden flex flex-col`}>
-            <SidebarMenuContext.Provider value={user ? openSidebar : null}>
+            <SidebarMenuContext.Provider value={user ? { collapsed: sidebarCollapsed, toggle: () => setSidebarCollapsed((value) => !value) } : null}>
               <CurrentScreen />
             </SidebarMenuContext.Provider>
             {screen !== 'admin' && !loggedOut && (
