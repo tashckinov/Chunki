@@ -1,4 +1,4 @@
-import type { ExerciseItem, ExercisesGradeResult, PlacementGradeResult, PlacementOverview, PlacementQuota, PlacementResultSummary, PlacementTestSubmission, TopicStudyContent, TopicSuggestion } from '@app/shared';
+import type { CEFRLevel, ExerciseItem, ExercisesGradeResult, PlacementGradeResult, PlacementOverview, PlacementQuota, PlacementResultSummary, PlacementTestSubmission, TopicStudyContent, TopicIdentity, TopicPlanContext } from '@app/shared';
 import { findGrammarTest } from '../grammarTests/repository.js';
 import { getGradingProvider } from '../../grading/index.js';
 import { withAiCallLogging } from '../aiLogs/service.js';
@@ -14,23 +14,24 @@ import {
   findAttempt,
   findUserTopic,
   findUserTopics,
-  insertNewUserTopics,
+  listAssignedTopicKeys,
   listRecentActivityForAdmin as repoListRecentActivityForAdmin,
-  updateAttemptResult,
-  updateTopicStatus,
-  updateTopicStudyContent,
+  saveTopicGrade,
+  type TopicStatusPatch,
   type TopicAttemptKind,
   type UserTopicRow,
   type UserTopicSource,
   type UserTopicStatus,
 } from './repository.js';
 import { buildPlacementReview } from './placementReview.js';
+import { listTopicCatalog, saveCatalogStudy, topicLevels } from './topicCatalog.js';
 
 export interface UserTopicSummary {
   id: string;
   key: string;
   title: string;
   category: string;
+  level: CEFRLevel | null;
   rationale: string;
   source: UserTopicSource;
   status: UserTopicStatus;
@@ -41,9 +42,7 @@ export interface UserTopicSummary {
 function toSummary(row: UserTopicRow): UserTopicSummary {
   return {
     id: row.id,
-    key: row.key,
-    title: row.title,
-    category: row.category,
+    ...toTopicIdentity(row),
     rationale: row.rationale,
     source: row.source,
     status: row.status,
@@ -52,8 +51,20 @@ function toSummary(row: UserTopicRow): UserTopicSummary {
   };
 }
 
-function toTopicSuggestion(row: UserTopicRow): TopicSuggestion {
-  return { key: row.key, title: row.title, category: row.category, rationale: row.rationale };
+function toTopicIdentity(row: UserTopicRow): TopicIdentity {
+  return { key: row.catalog_key, title: row.catalog_title, category: row.catalog_category, level: row.level };
+}
+
+function visibleTopics(topics: UserTopicRow[], current: CEFRLevel | null, target: CEFRLevel | null): UserTopicSummary[] {
+  if (!current || !target) return topics.map(toSummary);
+  const levels = topicLevels(current, target);
+  const upToTarget = topicLevels('A1', target);
+  return topics.filter((topic) => !topic.level || (topic.status === 'mastered' ? upToTarget : levels).includes(topic.level)).map(toSummary);
+}
+
+async function topicPlan(userId: string, currentLevel: CEFRLevel | null, targetLevel: CEFRLevel): Promise<TopicPlanContext> {
+  const [catalog, assignedKeys] = await Promise.all([listTopicCatalog(targetLevel), listAssignedTopicKeys(userId)]);
+  return { catalog, assignedKeys, currentLevel, targetLevel };
 }
 
 export type ProgramForUser = ({ status: 'none' } | { status: 'active'; topics: UserTopicSummary[] }) & { placement: PlacementOverview };
@@ -87,7 +98,7 @@ export async function getProgramForUser(userId: string): Promise<ProgramForUser>
   const [topics, history, quota] = await Promise.all([findUserTopics(userId), listPlacementTests(userId), getPlacementQuota(userId)]);
   const placement = { history: history.map(toPlacementSummary), quota };
   if (topics.length === 0 && history.length === 0) return { status: 'none', placement };
-  return { status: 'active', topics: topics.map(toSummary), placement };
+  return { status: 'active', topics: visibleTopics(topics, history[0]?.overall_level ?? null, history[0]?.to_level ?? null), placement };
 }
 
 export async function getPlacementResult(userId: string, id: string): Promise<{ summary: PlacementResultSummary; result: PlacementGradeResult } | null> {
@@ -131,7 +142,8 @@ export async function submitPlacementTest(userId: string, input: PlacementTestSu
     if (input.submissionId) {
       const saved = await getPlacementResult(userId, input.submissionId);
       if (saved) {
-        const topics = (await findUserTopics(userId)).map(toSummary);
+        const [rows, history] = await Promise.all([findUserTopics(userId), listPlacementTests(userId)]);
+        const topics = visibleTopics(rows, history[0]?.overall_level ?? saved.summary.level, history[0]?.to_level ?? saved.summary.goal);
         return { kind: 'ok', result: saved.result, topics };
       }
     }
@@ -143,11 +155,12 @@ export async function submitPlacementTest(userId: string, input: PlacementTestSu
 
     const definition = await findGrammarTest(input.variantId);
     if (!definition) return { kind: 'variant_not_found' };
+    const plan = await topicPlan(userId, input.fromLevel, input.toLevel);
     const provider = getGradingProvider();
-    const grade = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: provider.model ?? null, request: input }, () => provider.gradePlacementTest(input, definition));
+    const grade = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: provider.model ?? null, request: input }, () => provider.gradePlacementTest(input, definition, plan));
     const result = { ...grade, review: buildPlacementReview(definition, input, grade) };
 
-    await savePlacementTest({
+    result.topics = await savePlacementTest({
       ...input,
       userId,
       variantId: input.variantId === 'builtin' ? undefined : input.variantId,
@@ -158,9 +171,9 @@ export async function submitPlacementTest(userId: string, input: PlacementTestSu
       mcqScore: result.mcqScore,
       openGrades: result.openGrades,
       essayGrade: result.essayGrade,
-    }, result.topics, token);
+    }, grade.topics, topicLevels(grade.overallLevel, input.toLevel), token);
 
-    const topics = (await findUserTopics(userId)).map(toSummary);
+    const topics = visibleTopics(await findUserTopics(userId), grade.overallLevel, input.toLevel);
     return { kind: 'ok', result, topics };
   } finally {
     // A stale lock expires even if the database is unavailable during cleanup.
@@ -174,16 +187,16 @@ export async function getTopicStudy(userId: string, userTopicId: string): Promis
   const row = await findUserTopic(userId, userTopicId);
   if (!row) return { kind: 'not_found' };
   if (row.study_content) return { kind: 'ok', study: row.study_content as TopicStudyContent };
+  if (row.catalog_study) return { kind: 'ok', study: row.catalog_study };
 
   const upsellTariffs = await checkProgramAllowed(userId);
   if (upsellTariffs) return { kind: 'not_allowed', upsellTariffs };
 
   const provider = getGradingProvider();
-  const topic = toTopicSuggestion(row);
+  const topic = toTopicIdentity(row);
   const study = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: provider.model ?? null, request: topic }, () => provider.generateTopicStudy(topic));
 
-  await updateTopicStudyContent(row.id, study);
-  return { kind: 'ok', study };
+  return { kind: 'ok', study: await saveCatalogStudy(topic, study) };
 }
 
 export type RedactedExerciseItem = { type: 'choice'; q: string; options: string[] } | { type: 'write'; q: string; rows: number; placeholder: string };
@@ -213,7 +226,7 @@ export async function startTopicAttempt(userId: string, userTopicId: string): Pr
   if (upsellTariffs) return { kind: 'not_allowed', upsellTariffs };
 
   const provider = getGradingProvider();
-  const topic = toTopicSuggestion(row);
+  const topic = { ...toTopicIdentity(row), rationale: row.rationale };
   const items = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: provider.model ?? null, request: topic }, () => provider.generateTopicExercises(topic));
 
   const attempt = await createAttempt(row.id, attemptKind, items);
@@ -239,27 +252,31 @@ export async function submitTopicAttempt(userId: string, userTopicId: string, at
   if (upsellTariffs) return { kind: 'not_allowed', upsellTariffs };
 
   const items = attempt.items as ExerciseItem[];
-  const topic = toTopicSuggestion(row);
+  const topic = { ...toTopicIdentity(row), rationale: row.rationale };
   const gradeInput = { topic, items, answers };
+  const [latest] = await listPlacementTests(userId);
+  const plan = latest ? await topicPlan(userId, latest.overall_level, latest.to_level) : undefined;
 
   const provider = getGradingProvider();
-  const result = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: provider.model ?? null, request: gradeInput }, () => provider.gradeExercises(gradeInput));
+  const result = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: provider.model ?? null, request: gradeInput }, () => provider.gradeExercises(gradeInput, plan));
 
-  await updateAttemptResult(attempt.id, { answers, scoreOutOf10: result.scoreOutOf10, passed: result.passed, notes: result.notes, discoveredTopics: result.discoveredTopics });
-
-  const nextReviewAt = new Date(Date.now() + result.nextReviewInDays * 86400000);
+  // Re-read the learning goal after the provider call in case a placement
+  // test completed while these exercises were being graded.
+  const [current] = await listPlacementTests(userId);
+  const levels = current ? topicLevels(current.overall_level, current.to_level) : [];
+  const now = new Date();
+  const nextReviewAt = new Date(now.getTime() + result.nextReviewInDays * 86400000);
+  let progress: TopicStatusPatch = { status: 'assigned' };
   if (result.passed) {
-    if (attempt.kind === 'initial') {
-      await updateTopicStatus(row.id, { status: 'passed_once', passedOnceAt: new Date(), nextReviewAt, masteredAt: null });
-    } else {
-      await updateTopicStatus(row.id, { status: 'mastered', passedOnceAt: row.passed_once_at, nextReviewAt: null, masteredAt: new Date() });
-    }
-  } else {
-    await updateTopicStatus(row.id, { status: 'assigned', passedOnceAt: null, nextReviewAt: null, masteredAt: null });
+    progress = attempt.kind === 'initial'
+      ? { status: 'passed_once', passedOnceAt: now, nextReviewAt }
+      : { status: 'mastered', passedOnceAt: row.passed_once_at, masteredAt: now };
   }
-
-  const inserted = await insertNewUserTopics(userId, result.discoveredTopics, 'discovered');
-  return { kind: 'ok', result, newTopicsAdded: inserted.length };
+  const inserted = await saveTopicGrade(userId, attempt,
+    { answers, scoreOutOf10: result.scoreOutOf10, passed: result.passed, notes: result.notes, discoveredTopics: result.discoveredTopics },
+    progress, levels);
+  if (!inserted) return { kind: 'already_graded' };
+  return { kind: 'ok', result: { ...result, discoveredTopics: inserted }, newTopicsAdded: inserted.length };
 }
 
 export interface AdminTopicActivitySummary {

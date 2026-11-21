@@ -20,7 +20,7 @@ const complete = {
   essayGrade: grade, overallLevel: 'A1',
   skills: [{ label: 'Грамматика', tag: 'A1', score: 0 }],
   aboveLevel: 'Уровень пока не превышен.', belowLevel: 'Не хватает письменной практики.',
-  topics: Array.from({ length: 8 }, (_, i) => ({ key: `topic-${i}`, title: 'Артикли', category: 'Грамматика', rationale: 'Нужно повторить основы.' })),
+  topics: [{ key: 'articles', title: 'Артикли: a, an, the', category: 'Грамматика', level: 'A2', rationale: 'Нужно повторить основы.' }],
 };
 
 function completion(output: unknown, reason = 'tool_calls', name = 'submit_placement_grade') {
@@ -38,7 +38,7 @@ describe('OpenRouter grammar grading', () => {
     const result = await grader.gradePlacementTest(submission);
 
     expect(result.overallLevel).toBe('A1');
-    expect(result.topics).toHaveLength(8);
+    expect(result.topics).toHaveLength(1);
     expect(create).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
       model: 'openai/gpt-4.1', max_tokens: 4096,
       tool_choice: { type: 'function', function: { name: 'submit_placement_grade' } },
@@ -73,12 +73,13 @@ describe('OpenRouter grammar grading', () => {
     const study = { explanation, keyPoints: [], contrastExamples: [], exampleChunks: [] };
     create.mockResolvedValue(completion(study, 'tool_calls', 'submit_topic_study'));
 
-    const result = await grader.generateTopicStudy({ key: 'articles', title: 'Артикли', category: 'Грамматика', rationale: 'Первое упоминание.' });
+    const result = await grader.generateTopicStudy({ key: 'articles', title: 'Артикли', category: 'Грамматика', level: 'A2' });
 
     expect(result).toEqual(study);
     const instruction = create.mock.calls[0][0].messages[1].content;
     expect(instruction).toContain(':::question');
     expect(instruction).toContain('+ a |');
     expect(instruction).toContain('1–2 questions near the relevant rule');
+    expect(instruction).toContain('CEFR: A2');
   });
 });

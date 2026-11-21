@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import { Ajv } from 'ajv';
-import { scoreMcq } from '@app/shared';
+import { CEFR_LEVELS, TOPIC_CATEGORIES, scoreMcq } from '@app/shared';
 import type { Env } from '../config/env.js';
 import type {
   ExerciseItem,
@@ -12,21 +12,34 @@ import type {
   PlacementTestSubmission,
   TopicStudyContent,
   TopicSuggestion,
+  TopicIdentity,
+  TopicPlanContext,
 } from '@app/shared';
 import { BUILTIN_PLACEMENT_TEST } from '@app/shared';
-
-const TOPIC_CATEGORY_ENUM = ['Грамматика', 'Лексика', 'Использование языка', 'Понимание', 'Письмо'];
 
 const TOPIC_SCHEMA = {
   type: 'object',
   properties: {
-    key: { type: 'string', description: 'Short kebab-case slug in English, e.g. "articles" or "reported-speech-questions".' },
-    title: { type: 'string', description: 'Short Russian title shown to the learner.' },
-    category: { type: 'string', enum: TOPIC_CATEGORY_ENUM },
+    key: { type: 'string', pattern: '^[a-z0-9]+(-[a-z0-9]+)*$', maxLength: 100, description: 'Copy the catalog key for an existing concept. Otherwise use a short English kebab-case key.' },
+    title: { type: 'string', minLength: 1, maxLength: 160, description: 'Copy the catalog title or write a concise standard Russian title for a new concept.' },
+    level: { type: 'string', enum: CEFR_LEVELS },
+    category: { type: 'string', enum: TOPIC_CATEGORIES },
     rationale: { type: 'string', description: 'One short Russian sentence — concrete evidence from this answer for why this topic is weak.' },
   },
-  required: ['key', 'title', 'category', 'rationale'],
+  required: ['key', 'title', 'category', 'level', 'rationale'],
 } as const;
+
+function topicPlanInstructions(plan: TopicPlanContext | undefined, currentLevel: string): string {
+  if (!plan) return 'Recommend only supported weak topics at the learner’s level.';
+  const catalog = plan.catalog.map(({ key, title, level }) => [key, level ?? '?', title]);
+  return [
+    `Recommend only evidenced weak topics from ${currentLevel} through target ${plan.targetLevel} inclusive. If the current level exceeds the target, use only the target level. Do not fill a quota.`,
+    'Look in the catalog first, matching concepts by meaning even if wording differs. Copy an existing key, title and level exactly. For an entry with unknown level, supply a CEFR level. Use a new key only for a genuinely absent concept, never a rename or narrower restatement.',
+    'Keep titles and keys reusable. Put learner-specific evidence only in the rationale.',
+    `Catalog [key, level, title]: ${JSON.stringify(catalog)}`,
+    `Already assigned keys (including completed topics): ${JSON.stringify(plan.assignedKeys)}. Do not recommend these again, even under another name.`,
+  ].join('\n');
+}
 
 const GRADE_DETAIL_SCHEMA = {
   type: 'object',
@@ -123,8 +136,15 @@ export class OpenRouterGradingProvider implements GradingProvider {
     return output as T;
   }
 
-  async gradePlacementTest(input: PlacementTestSubmission, definition = BUILTIN_PLACEMENT_TEST): Promise<PlacementGradeResult> {
+  async gradePlacementTest(input: PlacementTestSubmission, definition = BUILTIN_PLACEMENT_TEST, plan?: TopicPlanContext): Promise<PlacementGradeResult> {
     const mcqScore = scoreMcq(input.mcqAnswers, definition.mcq);
+    const letters = ['A', 'B', 'C', 'D'];
+    const missedQuestions = definition.mcq.flatMap(({ n, q, correct, options }) => {
+      const chosen = letters.indexOf(input.mcqAnswers[n]);
+      return chosen >= 0 && letters[chosen] !== correct
+        ? [{ question: q, chosen: options[chosen], correct: options[letters.indexOf(correct)] }]
+        : [];
+    });
 
     type ToolOutput = {
       openGrades: (GradeDetail & { n: number })[];
@@ -165,7 +185,7 @@ export class OpenRouterGradingProvider implements GradingProvider {
         },
         aboveLevel: { type: 'string', description: 'One short sentence in Russian.' },
         belowLevel: { type: 'string', description: 'One short sentence in Russian.' },
-        topics: { type: 'array', items: TOPIC_SCHEMA, minItems: 8, maxItems: 12, description: 'Exactly around 10 concrete weak topics to study next, ordered by priority.' },
+        topics: { type: 'array', items: TOPIC_SCHEMA, maxItems: 12, description: 'Concrete weak topics in priority order, or an empty array.' },
       },
       required: ['openGrades', 'essayGrade', 'overallLevel', 'skills', 'aboveLevel', 'belowLevel', 'topics'],
     };
@@ -173,6 +193,7 @@ export class OpenRouterGradingProvider implements GradingProvider {
     const user = [
       `Grade a CEFR English placement test for a Russian-speaking learner ${input.fromLevel ? `who estimates their current level at ${input.fromLevel}` : 'who does not know their current level'}, aiming for ${input.toLevel}, learning English for: ${input.purpose.join(', ') || '(not specified)'}.`,
       `The learner answered ${mcqScore.correct}/${mcqScore.total} multiple-choice grammar/vocabulary questions correctly (already scored, do not re-grade those).`,
+      `Multiple-choice mistakes with an answer selected: ${JSON.stringify(missedQuestions)}`,
       '',
       `Reading passage:\n"""${definition.readingPassage}"""`,
       '',
@@ -182,7 +203,8 @@ export class OpenRouterGradingProvider implements GradingProvider {
       `Free writing prompt: "${definition.essayPrompt}"`,
       `Essay: """${input.essay || '(no answer)'}"""`,
       '',
-      'Grade each open reading answer for comprehension correctness (not grammar — they answered in English but the point is whether they understood the passage). Grade the essay for grammar, natural phrasing, and range of constructions used at CEFR level. Use the multiple-choice score as strong signal for the "Грамматика" skill bar. Produce an overall CEFR level, four skill bars (Грамматика, Чтение и понимание, Лексика и чанки, Письмо), one sentence on what is above the overall level, one sentence on what pulls it down, and a personalized study plan of around 10 concrete topics (grammar points, lexical chunks, skills) worth studying next given this learner\'s level, goal, and purpose — each with a short kebab-case key, a Russian title, a category, and a one-sentence rationale grounded in something specific from this test. For every incomplete or incorrect reading answer, explain what was missed and give a correct example. In the writing feedback and grammar fields, quote the learner’s concrete mistakes and explain the corrections. In suggestedAnswer, preserve their meaning and correct the wording, or repeat the original if it needs no correction. All prose fields must be in Russian except suggestedAnswer/chunkUsage which are English.',
+      'Grade each open reading answer for comprehension correctness (not grammar — they answered in English but the point is whether they understood the passage). Grade the essay for grammar, natural phrasing, and range of constructions used at CEFR level. Use the multiple-choice score as strong signal for the "Грамматика" skill bar. Produce an overall CEFR level, four skill bars (Грамматика, Чтение и понимание, Лексика и чанки, Письмо), one sentence on what is above the overall level, one sentence on what pulls it down, and only concrete weak topics grounded in the answers, with one short Russian rationale each. For every incomplete or incorrect reading answer, explain what was missed and give a correct example. In the writing feedback and grammar fields, quote the learner’s concrete mistakes and explain the corrections. In suggestedAnswer, preserve their meaning and correct the wording, or repeat the original if it needs no correction. All prose fields must be in Russian except suggestedAnswer/chunkUsage which are English.',
+      topicPlanInstructions(plan, 'the overallLevel you assess in this test'),
     ].join('\n');
 
     const out = await this.#callTool<ToolOutput>({
@@ -216,7 +238,7 @@ export class OpenRouterGradingProvider implements GradingProvider {
     };
   }
 
-  async gradeExercises(input: ExercisesSubmission): Promise<ExercisesGradeResult> {
+  async gradeExercises(input: ExercisesSubmission, plan?: TopicPlanContext): Promise<ExercisesGradeResult> {
     const choiceScore = scoreChoiceItems(input.items, input.answers);
     const writeItems = input.items
       .map((item, i) => ({ item, i }))
@@ -253,12 +275,13 @@ export class OpenRouterGradingProvider implements GradingProvider {
     };
 
     const user = [
-      `Topic being tested: "${input.topic.title}" (${input.topic.category}). ${input.topic.rationale}`,
+      `Topic being tested: "${input.topic.title}" (${input.topic.category}, CEFR ${input.topic.level ?? 'unknown'}). ${input.topic.rationale}`,
       'Grade each free-text answer below for correctness, grammar, and natural phrasing at the appropriate CEFR level.',
       '',
       ...writeItems.map(({ item, i }) => `[#${i}] Q: ${item.q}\nA: """${input.answers[i] || '(no answer)'}"""`),
       '',
       'Also list 2-3 short notes in Russian on patterns you noticed (grammar mistakes, articles, word order, etc.), and separately flag any NEW weak topics visible in these answers that are clearly different from the topic being tested.',
+      topicPlanInstructions(plan, plan?.currentLevel ?? input.topic.level ?? 'the learner’s current level'),
     ].join('\n\n');
 
     const out = writeItems.length
@@ -290,7 +313,7 @@ export class OpenRouterGradingProvider implements GradingProvider {
     };
   }
 
-  async generateTopicStudy(topic: TopicSuggestion): Promise<TopicStudyContent> {
+  async generateTopicStudy(topic: TopicIdentity): Promise<TopicStudyContent> {
     const schema = {
       type: 'object',
       properties: {
@@ -314,7 +337,7 @@ export class OpenRouterGradingProvider implements GradingProvider {
     return this.#callTool<TopicStudyContent>({
       system: 'You are an expert English teacher writing concise study material in Russian for a Russian-speaking learner. Always respond only via the provided tool.',
       user: [
-        `Topic: "${topic.title}" (${topic.category}). Learner context: ${topic.rationale}`,
+        `Topic: "${topic.title}" (${topic.category}). CEFR: ${topic.level ?? 'unspecified'}. Use neutral examples suitable for this level.`,
         'Use Markdown in explanation, without HTML. Optional ChatMD blocks use :::tip (rule), :::note (clarification), :::example (example with translation or explanation), :::compare (two lines: wrong: … and right: …), or :::question. Put each marker on its own line and close with :::. Do not nest blocks.',
         'Use blocks only when useful. Usually 1–2 questions near the relevant rule suffice. Each needs a prompt, exactly one + option, at least one - option, and specific Russian feedback for every option:',
         ':::question\nI bought ___ book yesterday. Ты впервые упоминаешь книгу.\n+ a | Книга упоминается впервые.\n- the | Так говорят, если собеседник уже знает, о какой книге речь.\n:::',
@@ -326,7 +349,7 @@ export class OpenRouterGradingProvider implements GradingProvider {
     });
   }
 
-  async generateTopicExercises(topic: TopicSuggestion): Promise<ExerciseItem[]> {
+  async generateTopicExercises(topic: ExercisesSubmission['topic']): Promise<ExerciseItem[]> {
 
     type ToolOutput = {
       items: { type: 'choice' | 'write'; q: string; options?: string[]; answer?: string; rows?: number; placeholder?: string }[];

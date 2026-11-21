@@ -1,4 +1,5 @@
-export type CEFRLevel = 'A1' | 'A2' | 'A2+' | 'B1' | 'B1+' | 'B2' | 'B2+' | 'C1';
+export const CEFR_LEVELS = ['A1', 'A2', 'A2+', 'B1', 'B1+', 'B2', 'B2+', 'C1'] as const;
+export type CEFRLevel = typeof CEFR_LEVELS[number];
 
 export interface McqQuestion {
   n: number;
@@ -16,17 +17,26 @@ export type ExerciseItem =
   | { type: 'choice'; q: string; options: string[]; answer: string }
   | { type: 'write'; q: string; rows: number; placeholder: string };
 
-export type TopicCategory = 'Грамматика' | 'Лексика' | 'Использование языка' | 'Понимание' | 'Письмо';
+export const TOPIC_CATEGORIES = ['Грамматика', 'Лексика', 'Использование языка', 'Понимание', 'Письмо'] as const;
+export type TopicCategory = typeof TOPIC_CATEGORIES[number];
 
-/** An open-ended weak spot the AI identified — either one of the ~10 handed
- * out right after the placement test, or one discovered mid-way through a
- * later topic test (e.g. wrong article usage). Not a fixed catalog: `key` is
- * an AI-generated slug, not an enum member. */
-export interface TopicSuggestion {
+export interface TopicIdentity {
   key: string;
   title: string;
   category: TopicCategory;
+  level: CEFRLevel | null;
+}
+
+export interface TopicSuggestion extends TopicIdentity {
+  level: CEFRLevel;
   rationale: string;
+}
+
+export interface TopicPlanContext {
+  catalog: TopicIdentity[];
+  assignedKeys: string[];
+  currentLevel: CEFRLevel | null;
+  targetLevel: CEFRLevel;
 }
 
 export interface TopicStudyContent {
@@ -63,7 +73,7 @@ export interface PlacementTestSubmission {
 }
 
 export interface ExercisesSubmission {
-  topic: TopicSuggestion;
+  topic: TopicIdentity & { rationale: string };
   items: ExerciseItem[];
   answers: Record<number, string>; // item index -> chosen option / free text
 }
@@ -126,7 +136,7 @@ export interface PlacementGradeResult {
   openGrades: Record<number, GradeDetail>; // by reading question n
   essayGrade: GradeDetail;
   review?: PlacementReviewItem[];
-  /** ~10 open-ended topics to work on next, chosen by the grader — not a fixed catalog. */
+  /** Weak spots chosen from the catalog when available. */
   topics: TopicSuggestion[];
 }
 
@@ -143,10 +153,10 @@ export interface ExercisesGradeResult {
 export interface GradingProvider {
   name: string;
   model?: string;
-  gradePlacementTest(input: PlacementTestSubmission, definition?: PlacementTestDefinition): Promise<PlacementGradeResult>;
-  gradeExercises(input: ExercisesSubmission): Promise<ExercisesGradeResult>;
-  generateTopicStudy(topic: TopicSuggestion): Promise<TopicStudyContent>;
-  generateTopicExercises(topic: TopicSuggestion): Promise<ExerciseItem[]>;
+  gradePlacementTest(input: PlacementTestSubmission, definition?: PlacementTestDefinition, plan?: TopicPlanContext): Promise<PlacementGradeResult>;
+  gradeExercises(input: ExercisesSubmission, plan?: TopicPlanContext): Promise<ExercisesGradeResult>;
+  generateTopicStudy(topic: TopicIdentity): Promise<TopicStudyContent>;
+  generateTopicExercises(topic: ExercisesSubmission['topic']): Promise<ExerciseItem[]>;
 }
 
 // ---- production check: does a free-text answer show active use of a chunk? ----

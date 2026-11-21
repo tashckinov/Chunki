@@ -4,6 +4,8 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyPluginAsync } from 'fastify';
 import multipart from '@fastify/multipart';
 import { z } from 'zod';
+import { CEFR_LEVELS, TOPIC_CATEGORIES } from '@app/shared';
+import { getTopicForReview, listTopicsForReview, updateTopicForReview } from '../program/topicCatalog.js';
 import { listProductionModelStats } from '../aiLogs/repository.js';
 import { createTimecode, listTimecodes } from '../timecodes/service.js';
 import { requireAdmin } from '../auth/requireAuth.js';
@@ -372,6 +374,37 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       return { error: 'invalid_request' };
     }
     return { payments: await listPaymentsForAdmin(parsed.data.limit) };
+  });
+
+  app.get('/topic-catalog', async (request, reply) => {
+    const query = z.object({
+      q: z.string().trim().max(160).default(''),
+      offset: z.coerce.number().int().min(0).default(0),
+    }).safeParse(request.query);
+    if (!query.success) return reply.code(400).send({ error: 'invalid_request' });
+    return listTopicsForReview(query.data.q, query.data.offset);
+  });
+
+  const catalogTopicParams = z.object({ key: z.string().min(1).max(100).regex(SLUG_REGEX) });
+  app.get('/topic-catalog/:key', async (request, reply) => {
+    const params = catalogTopicParams.safeParse(request.params);
+    if (!params.success) return reply.code(400).send({ error: 'invalid_request' });
+    const topic = await getTopicForReview(params.data.key);
+    return topic ? { topic } : reply.code(404).send({ error: 'not_found' });
+  });
+
+  app.patch('/topic-catalog/:key', async (request, reply) => {
+    const params = catalogTopicParams.safeParse(request.params);
+    const body = z.object({
+      title: z.string().trim().min(1).max(160),
+      category: z.enum(TOPIC_CATEGORIES),
+      level: z.enum(CEFR_LEVELS).nullable(),
+    }).safeParse(request.body);
+    if (!params.success || !body.success) return reply.code(400).send({ error: 'invalid_request' });
+    const result = await updateTopicForReview({ key: params.data.key, ...body.data });
+    if (result.kind === 'not_found') return reply.code(404).send({ error: 'not_found' });
+    if (result.kind === 'duplicate') return reply.code(409).send({ error: 'duplicate_topic' });
+    return { topic: result.topic };
   });
 
   app.get('/program-topics', async (request, reply) => {

@@ -8,6 +8,7 @@ import type {
   PlacementGradeResult,
   PlacementTestSubmission,
   TopicStudyContent,
+  TopicIdentity,
   TopicSuggestion,
 } from '../types.js';
 import { scoreMcq } from './scoring.js';
@@ -53,14 +54,14 @@ function gradeFreeText(answer: string, minWords: number): GradeDetail {
  * a real provider would invent these freely, this is just enough variety to
  * exercise the whole flow (program list, study, exercises) without a key. */
 const MOCK_TOPIC_POOL: TopicSuggestion[] = [
-  { key: 'articles', title: 'Артикли: a / the / нулевой', category: 'Грамматика', rationale: 'В открытых ответах артикли часто пропущены или лишние.' },
-  { key: 'present-perfect', title: 'Present Perfect vs Past Simple', category: 'Грамматика', rationale: 'Past Simple используется там, где нужен Present Perfect.' },
-  { key: 'word-order', title: 'Порядок слов и наречия частоты', category: 'Использование языка', rationale: 'Наречия частоты стоят не на своём месте в предложении.' },
-  { key: 'conditionals-2', title: 'Второй тип условных', category: 'Грамматика', rationale: 'Условные конструкции второго типа вызывают ошибки.' },
-  { key: 'modals', title: 'Модальные глаголы вероятности', category: 'Грамматика', rationale: 'Модальные глаголы для вероятности путаются между собой.' },
-  { key: 'chunks-opinion', title: 'Chunks: мнение и согласие', category: 'Лексика', rationale: 'Не хватает устойчивых фраз для выражения мнения.' },
-  { key: 'writing-informal', title: 'Письмо: неформальное сообщение', category: 'Письмо', rationale: 'Письменная речь звучит слишком формально для неформального контекста.' },
-  { key: 'reading-long', title: 'Reading: длинный текст на время', category: 'Понимание', rationale: 'Понимание текста замедляется на длинных пассажах.' },
+  { key: 'articles', level: 'A2', title: 'Артикли: a / the / нулевой', category: 'Грамматика', rationale: 'В открытых ответах артикли часто пропущены или лишние.' },
+  { key: 'present-perfect', level: 'B1', title: 'Present Perfect vs Past Simple', category: 'Грамматика', rationale: 'Past Simple используется там, где нужен Present Perfect.' },
+  { key: 'word-order', level: 'A2', title: 'Порядок слов и наречия частоты', category: 'Использование языка', rationale: 'Наречия частоты стоят не на своём месте в предложении.' },
+  { key: 'conditionals-2', level: 'B1', title: 'Второй тип условных', category: 'Грамматика', rationale: 'Условные конструкции второго типа вызывают ошибки.' },
+  { key: 'modals', level: 'B1', title: 'Модальные глаголы вероятности', category: 'Грамматика', rationale: 'Модальные глаголы для вероятности путаются между собой.' },
+  { key: 'chunks-opinion', level: 'A2', title: 'Chunks: мнение и согласие', category: 'Лексика', rationale: 'Не хватает устойчивых фраз для выражения мнения.' },
+  { key: 'writing-informal', level: 'A2', title: 'Письмо: неформальное сообщение', category: 'Письмо', rationale: 'Письменная речь звучит слишком формально для неформального контекста.' },
+  { key: 'reading-long', level: 'B1', title: 'Reading: длинный текст на время', category: 'Понимание', rationale: 'Понимание текста замедляется на длинных пассажах.' },
 ];
 
 function pickTopics(count: number, seed: number): TopicSuggestion[] {
@@ -134,16 +135,16 @@ export class MockGradingProvider implements GradingProvider {
     };
   }
 
-  async generateTopicStudy(topic: TopicSuggestion): Promise<TopicStudyContent> {
+  async generateTopicStudy(topic: TopicIdentity): Promise<TopicStudyContent> {
     return {
-      explanation: `${topic.title} — мок-материал. ${topic.rationale} Для реального объяснения подключите провайдера LLM.`,
+      explanation: `${topic.title} — мок-материал. Для реального объяснения подключите провайдера LLM.`,
       keyPoints: ['Ключевой момент 1 (мок)', 'Ключевой момент 2 (мок)', 'Ключевой момент 3 (мок)'],
       contrastExamples: [{ wrong: 'Пример с ошибкой (мок).', right: 'Правильный вариант (мок).' }],
       exampleChunks: ['example chunk one', 'example chunk two'],
     };
   }
 
-  async generateTopicExercises(topic: TopicSuggestion): Promise<ExerciseItem[]> {
+  async generateTopicExercises(topic: ExercisesSubmission['topic']): Promise<ExerciseItem[]> {
     return [
       { type: 'choice', q: `[Мок] Вопрос по теме «${topic.title}» — вариант 1`, options: ['A', 'B', 'C'], answer: 'A' },
       { type: 'choice', q: `[Мок] Вопрос по теме «${topic.title}» — вариант 2`, options: ['A', 'B', 'C'], answer: 'B' },
