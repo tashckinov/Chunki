@@ -14,6 +14,7 @@ export interface TariffRow {
   allow_cards: boolean;
   allow_program: boolean;
   daily_check_limit: number | null;
+  monthly_placement_limit: number | null;
   is_default: boolean;
   position: number;
   created_at: Date;
@@ -21,7 +22,7 @@ export interface TariffRow {
 }
 
 const TARIFF_COLUMNS =
-  'id, name, periodicity, offer_url, price_usd, price_eur, price_rub, allow_cards, allow_program, daily_check_limit, is_default, position, created_at, updated_at';
+  'id, name, periodicity, offer_url, price_usd, price_eur, price_rub, allow_cards, allow_program, daily_check_limit, monthly_placement_limit, is_default, position, created_at, updated_at';
 
 export async function listTariffs(): Promise<TariffRow[]> {
   const { rows } = await pool.query<TariffRow>(`SELECT ${TARIFF_COLUMNS} FROM subscription_tariffs ORDER BY position, created_at`);
@@ -48,6 +49,7 @@ export interface TariffInput {
   allowCards: boolean;
   allowProgram: boolean;
   dailyCheckLimit: number | null;
+  monthlyPlacementLimit?: number | null;
   isDefault: boolean;
   position: number;
 }
@@ -62,8 +64,8 @@ export async function createTariff(input: TariffInput): Promise<TariffRow> {
   try {
     await client.query('BEGIN');
     const { rows } = await client.query<TariffRow>(
-      `INSERT INTO subscription_tariffs (name, periodicity, offer_url, price_usd, price_eur, price_rub, allow_cards, allow_program, daily_check_limit, is_default, position)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+      `INSERT INTO subscription_tariffs (name, periodicity, offer_url, price_usd, price_eur, price_rub, allow_cards, allow_program, daily_check_limit, monthly_placement_limit, is_default, position)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        RETURNING ${TARIFF_COLUMNS}`,
       [
         input.name,
@@ -75,6 +77,7 @@ export async function createTariff(input: TariffInput): Promise<TariffRow> {
         input.allowCards,
         input.allowProgram,
         input.dailyCheckLimit,
+        input.monthlyPlacementLimit === undefined ? (input.isDefault ? 1 : 4) : input.monthlyPlacementLimit,
         input.isDefault,
         input.position,
       ],
@@ -98,7 +101,8 @@ export async function updateTariff(id: string, input: TariffInput): Promise<Tari
     const { rows } = await client.query<TariffRow>(
       `UPDATE subscription_tariffs
        SET name=$2, periodicity=$3, offer_url=$4, price_usd=$5, price_eur=$6, price_rub=$7,
-           allow_cards=$8, allow_program=$9, daily_check_limit=$10, is_default=$11, position=$12, updated_at=now()
+           allow_cards=$8, allow_program=$9, daily_check_limit=$10, is_default=$11, position=$12,
+           monthly_placement_limit=CASE WHEN $14 THEN $13::integer ELSE monthly_placement_limit END, updated_at=now()
        WHERE id = $1
        RETURNING ${TARIFF_COLUMNS}`,
       [
@@ -114,6 +118,8 @@ export async function updateTariff(id: string, input: TariffInput): Promise<Tari
         input.dailyCheckLimit,
         input.isDefault,
         input.position,
+        input.monthlyPlacementLimit ?? null,
+        input.monthlyPlacementLimit !== undefined,
       ],
     );
     if (!rows[0]) {

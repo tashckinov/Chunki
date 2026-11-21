@@ -1,4 +1,4 @@
-import type { ExercisesGradeResult, PlacementGradeResult, PlacementTestSubmission, PlacementTestVariant, TopicCategory } from '@app/shared';
+import type { ExercisesGradeResult, PlacementGradeResult, PlacementOverview, PlacementResultSummary, PlacementTestSubmission, PlacementTestVariant, TopicCategory } from '@app/shared';
 import { getJson, postJson } from './collections';
 
 export interface UserTopicSummary {
@@ -13,10 +13,14 @@ export interface UserTopicSummary {
   masteredAt: string | null;
 }
 
-export type ProgramState = { status: 'none' } | { status: 'active'; topics: UserTopicSummary[] };
+export type ProgramState = ({ status: 'none' } | { status: 'active'; topics: UserTopicSummary[] }) & { placement?: PlacementOverview };
 
 export async function fetchProgram(): Promise<ProgramState> {
   return getJson('/api/program');
+}
+
+export function fetchPlacementResult(id: string): Promise<{ summary: PlacementResultSummary; result: PlacementGradeResult }> {
+  return getJson(`/api/program/placement-results/${encodeURIComponent(id)}`);
 }
 
 export function fetchPlacementVariant(previous?: string): Promise<PlacementTestVariant> {

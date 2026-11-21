@@ -90,7 +90,7 @@ export function TestScreen() {
             <span>{v.essayWords} слов</span>
             <span>нужно 5–8 предложений</span>
           </div>
-          {s.gradingError && <p role="alert" className="text-negative">Не удалось проверить тест. Ответы сохранены, попробуйте отправить ещё раз.</p>}
+          {s.gradingError && <p role="alert" className="text-negative">{s.gradingError} Ответы сохранены.</p>}
           <Button size="lg" onClick={s.submitTest} disabled={s.grading} className="w-full">
             Отправить на проверку
           </Button>

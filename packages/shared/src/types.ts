@@ -52,6 +52,7 @@ export interface PlacementTestVariant {
 
 export interface PlacementTestSubmission {
   variantId?: string;
+  submissionId?: string;
   fromLevel: CEFRLevel | null;
   toLevel: CEFRLevel;
   purpose: string[];
@@ -85,6 +86,37 @@ export interface SkillBar {
   score: number; // 0..1
 }
 
+export interface PlacementReviewItem {
+  key: string;
+  prompt: string;
+  answer: string;
+  correction: string;
+  feedback?: string;
+  grammar?: string;
+  naturalness?: string;
+}
+
+export interface PlacementQuota {
+  allowed: boolean;
+  limit: number | null;
+  used: number;
+  resetsAt: string;
+}
+
+export interface PlacementResultSummary {
+  id: string;
+  variantId: string;
+  level: CEFRLevel;
+  goal: CEFRLevel;
+  purpose: string[];
+  completedAt: string;
+}
+
+export interface PlacementOverview {
+  history: PlacementResultSummary[];
+  quota: PlacementQuota;
+}
+
 export interface PlacementGradeResult {
   overallLevel: CEFRLevel;
   skills: SkillBar[];
@@ -93,6 +125,7 @@ export interface PlacementGradeResult {
   mcqScore: { correct: number; total: number };
   openGrades: Record<number, GradeDetail>; // by reading question n
   essayGrade: GradeDetail;
+  review?: PlacementReviewItem[];
   /** ~10 open-ended topics to work on next, chosen by the grader — not a fixed catalog. */
   topics: TopicSuggestion[];
 }

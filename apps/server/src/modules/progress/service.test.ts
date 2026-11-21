@@ -154,7 +154,7 @@ describe('buildProductionCheck — tariff gating', () => {
 
   it('is not_allowed with upsell tariffs when the tariff disallows cards', async () => {
     vi.mocked(tariffs.resolveEffectiveTariff).mockResolvedValue(fakeTariff({ allowCards: false }));
-    vi.mocked(tariffs.listUpsellTariffs).mockResolvedValue([{ id: 'up-1', name: 'Год', periodicity: 'yearly', priceUsd: null, priceEur: null, priceRub: null, allowCards: true, allowProgram: true, dailyCheckLimit: null }]);
+    vi.mocked(tariffs.listUpsellTariffs).mockResolvedValue([{ id: 'up-1', name: 'Год', periodicity: 'yearly', priceUsd: null, priceEur: null, priceRub: null, allowCards: true, allowProgram: true, dailyCheckLimit: null, monthlyPlacementLimit: 4 }]);
 
     const result = await buildProductionCheck(userId, chunkId);
 

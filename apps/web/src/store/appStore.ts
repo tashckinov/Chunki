@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { INTRO_CHUNK_COUNT } from '@app/shared';
-import type { DailyCardGoal, StudyGoalStatus, CEFRLevel, ExercisesGradeResult, PlacementGradeResult, PlacementTestVariant } from '@app/shared';
+import type { DailyCardGoal, StudyGoalStatus, CEFRLevel, ExercisesGradeResult, PlacementGradeResult, PlacementOverview, PlacementTestVariant } from '@app/shared';
 import {
   fetchProgram,
+  fetchPlacementResult,
   fetchPlacementVariant,
   fetchTopicStudy,
   startTopicAttempt as apiStartTopicAttempt,
@@ -129,6 +130,8 @@ interface AppState {
   testVariant: PlacementTestVariant | null;
   testDraftOwner: string | null;
   lastTestVariantId: string | undefined;
+  testSubmissionId: string | null;
+  testFromProgram: boolean;
   testStarting: boolean;
   testStartError: string | null;
   testPart: 1 | 2 | 3;
@@ -142,13 +145,15 @@ interface AppState {
   gradingError: string | null;
   checkingContext: 'placement' | 'exercise' | null;
   placementResult: PlacementGradeResult | null;
+  placementResultOwner: string | null;
+  placementResultGoal: CEFRLevel | null;
+  placementResultSkipSchedule: boolean;
+  placementOverview: PlacementOverview | null;
 
   days: number[]; // 0=Пн .. 6=Вс
   minutes: number;
   time: string;
 
-  /** Null while the initial GET /api/program hasn't resolved yet. */
-  programStatus: 'none' | 'active' | null;
   programTopics: UserTopicSummary[];
   activeTopicId: string | null;
   /** Study material cache, keyed by user_topic id — generated once server-side and cached there too, so caching here just avoids a redundant fetch. */
@@ -272,6 +277,7 @@ interface AppState {
   loadCollections: () => Promise<void>;
   /** Refetches the program (topic list + statuses) — called by checkAuth() and after grading a topic test. */
   loadProgram: () => Promise<void>;
+  openPlacementResult: (id: string) => Promise<void>;
   openTopic: (userTopicId: string) => Promise<void>;
   setNavTab: (v: number) => void;
   setAdminSection: (s: AdminSection) => void;
@@ -329,6 +335,8 @@ export const useAppStore = create<AppState>()(
       testVariant: null,
       testDraftOwner: null,
       lastTestVariantId: undefined,
+      testSubmissionId: null,
+      testFromProgram: false,
       testStarting: false,
       testStartError: null,
       testPart: 1,
@@ -342,12 +350,15 @@ export const useAppStore = create<AppState>()(
       gradingError: null,
       checkingContext: null,
       placementResult: null,
+      placementResultOwner: null,
+      placementResultGoal: null,
+      placementResultSkipSchedule: false,
+      placementOverview: null,
 
       days: [1, 3, 5],
       minutes: 25,
       time: '19:00',
 
-      programStatus: null,
       programTopics: [],
       activeTopicId: null,
       topicStudyByTopic: {},
@@ -403,17 +414,25 @@ export const useAppStore = create<AppState>()(
       flying: null,
 
       go: (screen) => set({ screen }),
-      back: () => set((s) => ({ screen: BACK_MAP[s.screen] ?? 'cardslib' })),
+      back: () => set((s) => ({
+        screen: (s.screen === 'test' && s.testFromProgram) || (s.screen === 'result' && s.placementResultSkipSchedule)
+          ? 'program'
+          : BACK_MAP[s.screen] ?? 'cardslib',
+      })),
       signIn: () => startGoogleLogin(),
       signOut: async () => {
-        set({ user: null, grading: false, checkingContext: null, screen: 'cardslib', studyGoal: null, isPremium: false, premiumUntil: null, collections: [], collectionDetails: {}, collectionsStatus: 'idle', collectionsError: null });
+        set({ user: null, grading: false, checkingContext: null, screen: 'cardslib', studyGoal: null, isPremium: false, premiumUntil: null, placementResult: null, placementResultOwner: null, placementOverview: null, programTopics: [], collections: [], collectionDetails: {}, collectionsStatus: 'idle', collectionsError: null });
         await logout().catch(() => {});
         void get().loadCollections();
       },
       checkAuth: async () => {
         try {
           const user = await fetchCurrentUser();
-          set({ user, authChecked: true });
+          const resultOwner = get().placementResultOwner;
+          set({
+            user, authChecked: true,
+            ...(resultOwner && resultOwner !== user?.id ? { placementResult: null, placementResultOwner: null } : {}),
+          });
           if (user && get().collectionsError === 'unauthorized') void get().loadCollections();
           void get().refreshStudyGoal();
           void get().refreshPaymentStatus();
@@ -443,6 +462,7 @@ export const useAppStore = create<AppState>()(
           set({ user, passkeyBusy: false });
           void get().refreshStudyGoal();
           void get().refreshPaymentStatus();
+          void get().loadProgram();
           if (get().collectionsError === 'unauthorized') void get().loadCollections();
         } catch {
           set({ passkeyBusy: false, passkeyError: 'Не получилось войти через Passkey. Попробуйте ещё раз.' });
@@ -465,15 +485,27 @@ export const useAppStore = create<AppState>()(
         }
         set({ testStarting: true, testStartError: null });
         try {
-          const variant = await fetchPlacementVariant(state.lastTestVariantId);
-          if (get().user?.id !== userId || !['goals', 'test'].includes(get().screen)) return;
+          const last = state.placementOverview?.history[0];
+          const fromProgram = state.screen === 'program';
+          const variant = await fetchPlacementVariant(state.lastTestVariantId ?? last?.variantId);
+          if (get().user?.id !== userId || get().screen !== state.screen) return;
           set({
             screen: 'test', testVariant: variant, testDraftOwner: userId, lastTestVariantId: variant.id,
+            testSubmissionId: null, testFromProgram: fromProgram || (state.screen === 'test' && state.testFromProgram),
+            ...(fromProgram && last ? { from: last.level, to: last.goal, purpose: last.purpose } : {}),
             testPart: 1, qi: 0, mcqAnswers: {}, open9: '', open10: '', essay: '',
             gradingError: null, placementResult: null,
           });
-        } catch {
-          if (get().user?.id === userId) set({ testStartError: 'Не удалось загрузить тест. Попробуйте ещё раз.' });
+        } catch (err) {
+          if (get().user?.id === userId) {
+            const message = err instanceof ApiError && err.status === 429
+              ? 'Месячный лимит тестов исчерпан.'
+              : err instanceof ApiError && err.status === 403
+                ? 'Тест уровня недоступен на вашем тарифе.'
+                : 'Не удалось загрузить тест. Попробуйте ещё раз.';
+            set({ testStartError: message });
+            void get().loadProgram();
+          }
         } finally {
           set({ testStarting: false });
         }
@@ -490,21 +522,32 @@ export const useAppStore = create<AppState>()(
       setEssay: (v) => set({ essay: v }),
 
       submitTest: async () => {
-        const { user, testVariant, testDraftOwner, grading, from, to, purpose, mcqAnswers, open9, open10, essay } = get();
+        const { user, testVariant, testDraftOwner, testFromProgram, testSubmissionId, grading, from, to, purpose, mcqAnswers, open9, open10, essay } = get();
         if (!user || !testVariant || testDraftOwner !== user.id || grading) return;
-        set({ screen: 'checking', grading: true, gradingError: null, checkingContext: 'placement' });
+        const submissionId = testSubmissionId ?? globalThis.crypto?.randomUUID?.();
+        set({ screen: 'checking', grading: true, gradingError: null, checkingContext: 'placement', testSubmissionId: submissionId ?? null });
         try {
           const { result, topics } = await apiSubmitPlacementTest({
-            variantId: testVariant.id, fromLevel: from, toLevel: to, purpose, mcqAnswers, open9, open10, essay,
+            variantId: testVariant.id, submissionId, fromLevel: from, toLevel: to, purpose, mcqAnswers, open9, open10, essay,
           });
           if (get().user?.id !== user.id) return;
           set({
-            placementResult: result, grading: false, checkingContext: null, screen: 'result', programStatus: 'active', programTopics: topics,
-            testVariant: null, testDraftOwner: null, testPart: 1, qi: 0, mcqAnswers: {}, open9: '', open10: '', essay: '',
+            placementResult: result, placementResultOwner: user.id, placementResultGoal: to, placementResultSkipSchedule: testFromProgram,
+            grading: false, checkingContext: null, screen: 'result', programTopics: topics,
+            testVariant: null, testDraftOwner: null, testSubmissionId: null, testPart: 1, qi: 0, mcqAnswers: {}, open9: '', open10: '', essay: '',
           });
         } catch (err) {
           if (get().user?.id === user.id) {
-            set({ grading: false, checkingContext: null, gradingError: programErrorMessage(err), screen: 'test' });
+            const status = err instanceof ApiError ? err.status : null;
+            const message = status === 409
+              ? 'Этот тест уже проверяется. Попробуйте чуть позже.'
+              : status === 429
+                ? 'Проверка пока недоступна. Посмотрите остаток на вкладке «Грамматика» или попробуйте позже.'
+                : status === 403
+                  ? 'Тест уровня недоступен на вашем тарифе.'
+                  : 'Не удалось проверить тест. Попробуйте отправить ещё раз.';
+            set({ grading: false, checkingContext: null, gradingError: message, screen: 'test' });
+            if (status === 429) void get().loadProgram();
           }
         }
       },
@@ -610,12 +653,22 @@ export const useAppStore = create<AppState>()(
         }
       },
       loadProgram: async () => {
+        const userId = get().user?.id;
+        if (!userId) return;
         try {
           const program: ProgramState = await fetchProgram();
-          set({ programStatus: program.status, programTopics: program.status === 'active' ? program.topics : [] });
+          if (get().user?.id !== userId) return;
+          set({ programTopics: program.status === 'active' ? program.topics : [], placementOverview: program.placement ?? null });
         } catch {
           // Best-effort — a failed refresh just leaves the last-known program in place.
         }
+      },
+      openPlacementResult: async (id) => {
+        const userId = get().user?.id;
+        if (!userId) return;
+        const { summary, result } = await fetchPlacementResult(id);
+        if (get().user?.id !== userId || get().screen !== 'program') return;
+        set({ placementResult: result, placementResultOwner: userId, placementResultGoal: summary.goal, placementResultSkipSchedule: true, screen: 'result' });
       },
       openTopic: async (userTopicId) => {
         set({ activeTopicId: userTopicId, screen: 'topic', topicStudyError: null });
@@ -630,7 +683,7 @@ export const useAppStore = create<AppState>()(
         }
       },
       setNavTab: (v) => {
-        const destinations: Screen[] = ['cardslib', 'comics', get().programStatus === 'active' ? 'program' : 'goals'];
+        const destinations: Screen[] = ['cardslib', 'comics', 'program'];
         set({ screen: destinations[v] ?? 'cardslib' });
       },
       setAdminSection: (s) => set({ adminSection: s }),
@@ -1023,8 +1076,8 @@ export const useAppStore = create<AppState>()(
         // refetched by goDeck(); persisting it risks showing stale rings.
         // premiumUntil/isPremium too — refreshed by checkAuth() via
         // refreshPaymentStatus(); persisting them risks showing a stale
-        // premium badge before that refresh resolves. programStatus/
-        // programTopics are the same story — refreshed by loadProgram().
+        // premium badge before that refresh resolves. Program topics and
+        // the placement overview also come from the server via loadProgram().
         const {
           dx,
           dy,
@@ -1049,8 +1102,8 @@ export const useAppStore = create<AppState>()(
           chunkProgress,
           premiumUntil,
           isPremium,
-          programStatus,
           programTopics,
+          placementOverview,
           ...rest
         } = s;
         void dx;
@@ -1076,8 +1129,8 @@ export const useAppStore = create<AppState>()(
         void chunkProgress;
         void premiumUntil;
         void isPremium;
-        void programStatus;
         void programTopics;
+        void placementOverview;
         return { ...rest, screen: s.screen === 'checking' && checkingContext === 'placement' ? 'test' : s.screen };
       },
     },

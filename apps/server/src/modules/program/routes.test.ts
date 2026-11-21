@@ -8,6 +8,7 @@ vi.mock('../auth/session.js', async () => {
 });
 vi.mock('./service.js', () => ({
   getProgramForUser: vi.fn(),
+  getPlacementResult: vi.fn(),
   getTopicStudy: vi.fn(),
   startTopicAttempt: vi.fn(),
   submitPlacementTest: vi.fn(),
@@ -27,6 +28,7 @@ let app: FastifyInstance;
 beforeEach(async () => {
   vi.mocked(session.getSession).mockReset();
   vi.mocked(service.getProgramForUser).mockReset();
+  vi.mocked(service.getPlacementResult).mockReset();
   vi.mocked(service.getTopicStudy).mockReset();
   vi.mocked(service.startTopicAttempt).mockReset();
   vi.mocked(service.submitPlacementTest).mockReset();
@@ -42,6 +44,7 @@ afterEach(async () => {
   await app.close();
 });
 
+const quota = { allowed: true, limit: 1, used: 1, resetsAt: '2027-01-01T00:00:00.000Z' };
 const authCookie = { [session.SESSION_COOKIE_NAME]: 'a-valid-token' };
 const placementBody = {
   fromLevel: 'B1',
@@ -61,13 +64,23 @@ describe('GET /api/program', () => {
 
   it('returns the program for the authenticated user', async () => {
     vi.mocked(session.getSession).mockResolvedValue(authenticatedSession);
-    vi.mocked(service.getProgramForUser).mockResolvedValue({ status: 'none' });
+    vi.mocked(service.getProgramForUser).mockResolvedValue({ status: 'none', placement: { history: [], quota } });
 
     const res = await app.inject({ method: 'GET', url: '/api/program', cookies: authCookie });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ status: 'none' });
+    expect(res.json()).toEqual({ status: 'none', placement: { history: [], quota } });
     expect(service.getProgramForUser).toHaveBeenCalledWith('user-1');
+  });
+});
+
+describe('GET /api/program/placement-results/:id', () => {
+  it('looks up result details in the authenticated learner account', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(authenticatedSession);
+    vi.mocked(service.getPlacementResult).mockResolvedValue(null);
+    const res = await app.inject({ method: 'GET', url: `/api/program/placement-results/${attemptId}`, cookies: authCookie });
+    expect(res.statusCode).toBe(404);
+    expect(service.getPlacementResult).toHaveBeenCalledWith('user-1', attemptId);
   });
 });
 
@@ -134,6 +147,14 @@ describe('POST /api/program/placement-test', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ result, topics });
     expect(service.submitPlacementTest).toHaveBeenCalledWith('user-1', payload);
+  });
+
+  it('returns the quota when no checks remain this month', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(authenticatedSession);
+    vi.mocked(service.submitPlacementTest).mockResolvedValue({ kind: 'limit_reached', quota });
+    const res = await app.inject({ method: 'POST', url: '/api/program/placement-test', cookies: authCookie, payload: placementBody });
+    expect(res.statusCode).toBe(429);
+    expect(res.json()).toEqual({ error: 'placement_limit_reached', quota });
   });
 
   it('returns 502 when grading throws', async () => {
