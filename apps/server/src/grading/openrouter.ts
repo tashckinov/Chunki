@@ -332,31 +332,35 @@ export class OpenRouterGradingProvider implements GradingProvider {
   }
 
   async generateTopicStudy(topic: TopicSuggestion): Promise<TopicStudyContent> {
-
     const schema = {
       type: 'object',
       properties: {
-        explanation: { type: 'string', description: '2-4 sentences in Russian explaining the topic clearly, at an appropriate level.' },
-        keyPoints: { type: 'array', items: { type: 'string' }, minItems: 2, maxItems: 5, description: 'Short Russian bullet points, the essential rules.' },
+        explanation: { type: 'string', description: 'A concise Russian lesson in ChatMD.' },
+        keyPoints: { type: 'array', items: { type: 'string' }, maxItems: 5, description: 'Additional short Russian rules, or an empty array.' },
         contrastExamples: {
           type: 'array',
-          minItems: 1,
           maxItems: 4,
           items: {
             type: 'object',
             properties: { wrong: { type: 'string' }, right: { type: 'string' } },
             required: ['wrong', 'right'],
           },
-          description: 'English sentence pairs: a common mistake vs the correct version, illustrating this exact topic.',
+          description: 'Additional English mistake/correction pairs, or an empty array.',
         },
-        exampleChunks: { type: 'array', items: { type: 'string' }, minItems: 2, maxItems: 5, description: 'Useful English chunks/collocations tied to this topic.' },
+        exampleChunks: { type: 'array', items: { type: 'string' }, maxItems: 5, description: 'Additional English chunks, or an empty array.' },
       },
       required: ['explanation', 'keyPoints', 'contrastExamples', 'exampleChunks'],
     };
 
     return this.#callTool<TopicStudyContent>({
       system: 'You are an expert English teacher writing concise study material in Russian for a Russian-speaking learner. Always respond only via the provided tool.',
-      user: `Write study material for this topic: "${topic.title}" (category: ${topic.category}). Context for why the learner needs it: ${topic.rationale}`,
+      user: [
+        `Topic: "${topic.title}" (${topic.category}). Learner context: ${topic.rationale}`,
+        'Use Markdown in explanation, without HTML. Optional ChatMD blocks use :::tip (rule), :::note (clarification), :::example (example with translation or explanation), :::compare (two lines: wrong: … and right: …), or :::question. Put each marker on its own line and close with :::. Do not nest blocks.',
+        'Use blocks only when useful. Usually 1–2 questions near the relevant rule suffice. Each needs a prompt, exactly one + option, at least one - option, and specific Russian feedback for every option:',
+        ':::question\nI bought ___ book yesterday. Ты впервые упоминаешь книгу.\n+ a | Книга упоминается впервые.\n- the | Так говорят, если собеседник уже знает, о какой книге речь.\n:::',
+        'Use the other fields only for material that adds to the lesson.',
+      ].join('\n'),
       toolName: 'submit_topic_study',
       toolDescription: 'Submit structured study material for one topic.',
       schema,
