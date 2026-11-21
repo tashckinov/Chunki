@@ -13,6 +13,7 @@ const VARIANT: Record<'primary' | 'secondary' | 'ghost', string> = {
 };
 
 export function Button({
+  type = 'button',
   variant = 'primary',
   size = 'md',
   onClick,
@@ -20,6 +21,7 @@ export function Button({
   children,
   className = '',
 }: {
+  type?: 'button' | 'submit';
   variant?: 'primary' | 'secondary' | 'ghost';
   size?: 'sm' | 'md' | 'lg';
   onClick?: () => void;
@@ -29,7 +31,7 @@ export function Button({
 }) {
   return (
     <button
-      type="button"
+      type={type}
       disabled={disabled}
       onClick={onClick}
       className={`inline-flex items-center justify-center rounded-[var(--radius-md)] font-medium transition-colors duration-150 disabled:cursor-default ${SIZE[size]} ${VARIANT[variant]} ${className}`}

@@ -15,6 +15,13 @@ vi.mock('./service.js', () => ({
   submitProductionAnswer: vi.fn(),
 }));
 
+vi.mock('./studyGoal.js', () => ({
+  completeStudyIntro: vi.fn(),
+  getStudyGoal: vi.fn(),
+  saveStudyGoal: vi.fn(),
+}));
+
+const studyGoal = await import('./studyGoal.js');
 const session = await import('../auth/session.js');
 const service = await import('./service.js');
 const { progressRoutes } = await import('./routes.js');
@@ -301,5 +308,20 @@ describe('GET /api/progress', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ progress });
     expect(service.getProgressForChunks).toHaveBeenCalledWith('user-1', [validChunkId]);
+  });
+});
+
+describe('POST /api/progress/study-goal', () => {
+  it('accepts only a supported goal and saves it for the session user', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(authenticatedSession);
+    vi.mocked(studyGoal.saveStudyGoal).mockResolvedValue({ introCompleted: true, dailyCardGoal: 10 });
+    const submit = (goal: number) => app.inject({
+      method: 'POST', url: '/api/progress/study-goal', cookies: authCookie, payload: { goal },
+    });
+
+    expect((await submit(7)).statusCode).toBe(400);
+    expect(studyGoal.saveStudyGoal).not.toHaveBeenCalled();
+    expect((await submit(10)).json()).toEqual({ introCompleted: true, dailyCardGoal: 10 });
+    expect(studyGoal.saveStudyGoal).toHaveBeenCalledWith('user-1', 10);
   });
 });

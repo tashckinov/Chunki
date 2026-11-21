@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { MCQ } from '@app/shared';
-import type { CEFRLevel, ExercisesGradeResult, PlacementGradeResult } from '@app/shared';
+import { INTRO_CHUNK_COUNT, MCQ } from '@app/shared';
+import type { DailyCardGoal, StudyGoalStatus, CEFRLevel, ExercisesGradeResult, PlacementGradeResult } from '@app/shared';
 import {
   fetchProgram,
   fetchTopicStudy,
@@ -37,6 +37,7 @@ import {
   type SituationPromptPart,
   type ProductionDialoguePayload,
 } from '../lib/progress';
+import { fetchStudyGoal, postStudyGoal, postStudyIntro } from '../lib/studyGoal';
 import type { Tariff } from '../lib/payments';
 import { fetchPaymentStatus } from '../lib/payments';
 
@@ -154,6 +155,11 @@ interface AppState {
   newTopicsAddedLastResult: number;
 
   deckIndex: number;
+  studyGoal: StudyGoalStatus | null;
+  introDeckOwner: string | null;
+  completedIntroOwner: string | null;
+  refreshStudyGoal: () => Promise<void>;
+  saveStudyGoal: (goal: DailyCardGoal) => Promise<void>;
   activeDeckChunks: ChunkSummary[];
   /** Chunks the learner chose "Больше не показывать карточку" for — filtered out of every future goDeck() call. Persisted; purely a client-side display preference, not server-tracked mastery. */
   blockedChunkIds: Record<string, true>;
@@ -339,6 +345,9 @@ export const useAppStore = create<AppState>()(
       newTopicsAddedLastResult: 0,
 
       deckIndex: 0,
+      studyGoal: null,
+      introDeckOwner: null,
+      completedIntroOwner: null,
       activeDeckChunks: [],
       blockedChunkIds: {},
       chunkProgress: {},
@@ -382,7 +391,7 @@ export const useAppStore = create<AppState>()(
       back: () => set((s) => ({ screen: BACK_MAP[s.screen] ?? 'cardslib' })),
       signIn: () => startGoogleLogin(),
       signOut: async () => {
-        set({ user: null, isPremium: false, premiumUntil: null, collections: [], collectionDetails: {}, collectionsStatus: 'idle', collectionsError: null });
+        set({ user: null, studyGoal: null, isPremium: false, premiumUntil: null, collections: [], collectionDetails: {}, collectionsStatus: 'idle', collectionsError: null });
         await logout().catch(() => {});
         void get().loadCollections();
       },
@@ -391,6 +400,7 @@ export const useAppStore = create<AppState>()(
           const user = await fetchCurrentUser();
           set({ user, authChecked: true });
           if (user && get().collectionsError === 'unauthorized') void get().loadCollections();
+          void get().refreshStudyGoal();
           void get().refreshPaymentStatus();
           void get().loadProgram();
         } catch {
@@ -413,6 +423,7 @@ export const useAppStore = create<AppState>()(
         try {
           const user = await signInWithPasskeyCeremony();
           set({ user, passkeyBusy: false });
+          void get().refreshStudyGoal();
           void get().refreshPaymentStatus();
           if (get().collectionsError === 'unauthorized') void get().loadCollections();
         } catch {
@@ -460,11 +471,41 @@ export const useAppStore = create<AppState>()(
       goHome: () => set({ screen: 'cardslib' }),
       goProgram: () => set({ screen: 'program' }),
       goCardsLib: () => set({ screen: 'cardslib' }),
-      goDeck: (chunks) => {
-        const blocked = get().blockedChunkIds;
-        const resolved = (chunks ?? flattenChunks(Object.values(get().collectionDetails))).filter((c) => !blocked[c.id]);
+      refreshStudyGoal: async () => {
+        const user = get().user;
+        if (!user) return;
+        try {
+          const status = await fetchStudyGoal();
+          if (get().user?.id !== user.id) return;
+          if (!get().studyGoal?.dailyCardGoal) set({ studyGoal: status });
+        } catch {
+          // A failed fetch leaves the intro available; try again next time.
+        }
+      },
+      saveStudyGoal: async (goal) => {
+        const user = get().user;
+        if (!user) return;
+        if (get().completedIntroOwner === user.id) await postStudyIntro();
+        if (get().user?.id !== user.id) return;
+        const status = await postStudyGoal(goal);
+        if (get().user?.id === user.id) set({ studyGoal: status, completedIntroOwner: null });
+      },
+      goDeck: async (chunks) => {
+        const user = get().user;
+        if (!user) return;
+        if (!get().studyGoal) await get().refreshStudyGoal();
+        const s = get();
+        if (s.user?.id !== user.id) return;
+        const introCompleted = s.studyGoal?.introCompleted || s.completedIntroOwner === s.user.id;
+        if (introCompleted && !s.studyGoal?.dailyCardGoal) {
+          set({ screen: 'cardslib' });
+          return;
+        }
+        const eligible = (chunks ?? flattenChunks(Object.values(s.collectionDetails))).filter((c) => !s.blockedChunkIds[c.id]);
+        const resolved = introCompleted ? eligible : eligible.slice(0, INTRO_CHUNK_COUNT);
         set({
           screen: 'deck',
+          introDeckOwner: introCompleted ? null : s.user.id,
           activeDeckChunks: resolved,
           deckIndex: 0,
           flipped: false,
@@ -666,7 +707,11 @@ export const useAppStore = create<AppState>()(
         set({ pendingProductionChecks: decremented });
 
         const next = s.deckIndex + 1;
+        const finished = next >= s.activeDeckChunks.length;
+        const owner = s.introDeckOwner;
+        const introFinished = finished && owner !== null && owner === s.user?.id && s.activeDeckChunks.length > 0;
         set({
+          ...(introFinished ? { completedIntroOwner: owner, introDeckOwner: null } : {}),
           deckIndex: next,
           flipped: false,
           dx: 0,
@@ -674,8 +719,9 @@ export const useAppStore = create<AppState>()(
           flying: null,
           recognitionChunkId: null,
           productionChunkId: null,
-          screen: next >= s.activeDeckChunks.length ? 'deckdone' : 'deck',
+          screen: finished ? 'deckdone' : 'deck',
         });
+        if (introFinished) void postStudyIntro().catch(() => {}); // Retried when the learner saves their goal.
       },
 
       enqueueDeferredProductionCheck: (chunkId) => {
@@ -792,7 +838,13 @@ export const useAppStore = create<AppState>()(
           const check = await getProductionCheck(chunkId);
           if (!check.available) {
             if (check.reason === 'limit_reached' || check.reason === 'not_allowed') {
-              set({ screen: 'deckdone', productionBlock: { reason: check.reason, upsellTariffs: check.upsellTariffs ?? [] } });
+              const productionBlock = { reason: check.reason, upsellTariffs: check.upsellTariffs ?? [] };
+              if (get().introDeckOwner) {
+                set({ productionBlock });
+                get().advanceDeck();
+              } else {
+                set({ screen: 'deckdone', productionBlock });
+              }
             } else {
               get().advanceDeck();
             }
@@ -880,7 +932,7 @@ export const useAppStore = create<AppState>()(
       // `grading` resets to false but the persisted screen doesn't, leaving
       // a permanent spinner. Bounce back to a safe screen on rehydrate.
       onRehydrateStorage: () => (state) => {
-        if (state?.screen === 'checking') state.screen = 'cardslib';
+        if (state?.screen === 'checking' || (state?.screen === 'deckdone' && state.completedIntroOwner)) state.screen = 'cardslib';
       },
       partialize: (s) => {
         // user/authChecked/authError are derived fresh from the session
@@ -903,6 +955,7 @@ export const useAppStore = create<AppState>()(
           grading,
           gradingError,
           checkingContext,
+          studyGoal,
           topicStudyError,
           user,
           authChecked,
@@ -927,6 +980,7 @@ export const useAppStore = create<AppState>()(
         void grading;
         void gradingError;
         void checkingContext;
+        void studyGoal;
         void topicStudyError;
         void user;
         void authChecked;
