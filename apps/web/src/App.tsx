@@ -5,7 +5,7 @@ import { BottomNavigation, type NavItem } from './components/ui/BottomNavigation
 import { Icon, type IconName } from './components/ui/Icon';
 import { Logo } from './components/brand/Logo';
 import { AccountRow } from './components/ui/AccountRow';
-import { StudyGoalDialog } from './components/ui/StudyGoalDialog';
+import { StudyGoalScreen } from './screens/StudyGoalScreen';
 import { UpdatePrompt } from './components/ui/UpdatePrompt';
 import { GoalsScreen } from './screens/GoalsScreen';
 import { TestScreen } from './screens/TestScreen';
@@ -204,6 +204,10 @@ export default function App() {
   // visitor (nowhere real for it to lead), but never during the brief
   // window before the initial checkAuth() resolves.
   const loggedOut = authChecked && !user;
+  const studyGoal = useAppStore((s) => s.studyGoal);
+  const completedIntroOwner = useAppStore((s) => s.completedIntroOwner);
+  const showStudyGoal = user && screen !== 'deckdone' && !studyGoal?.dailyCardGoal
+    && (studyGoal?.introCompleted || completedIntroOwner === user.id);
 
   useEffect(() => {
     consumeAuthToken();
@@ -211,6 +215,8 @@ export default function App() {
     useAppStore.getState().checkAuth();
     useAppStore.getState().loadCollections();
   }, []);
+
+  if (showStudyGoal) return <StudyGoalScreen key={user.id} />;
 
   return (
     <div className="h-dvh w-full flex justify-center bg-bg overflow-hidden">
@@ -223,7 +229,6 @@ export default function App() {
           </div>
         )}
       </div>
-      <StudyGoalDialog />
       <UpdatePrompt />
     </div>
   );
