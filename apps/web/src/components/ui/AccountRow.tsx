@@ -40,6 +40,14 @@ function Avatar({ user, size = 36 }: { user: { displayName: string | null; email
   );
 }
 
+function PremiumBadge() {
+  return (
+    <span className="inline-flex shrink-0 rounded-full border border-accent bg-accent-subtle px-2 py-0.5 text-[11px] font-medium text-accent">
+      Premium
+    </span>
+  );
+}
+
 function InterfaceModeSetting() {
   const { interfaceMode, setInterfaceMode } = useAppStore();
   return (
@@ -68,8 +76,9 @@ function SubscriptionStatus({ onNavigate }: { onNavigate: () => void }) {
 
   if (isPremium && premiumUntil) {
     return (
-      <div className="rounded-[var(--radius-md)] bg-surface-subtle px-4 py-3 text-[14px] font-medium">
-        Подписка до {new Date(premiumUntil).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-[var(--radius-md)] bg-surface-subtle px-4 py-3 text-[14px] font-medium">
+        <span>Подписка до {new Date(premiumUntil).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+        <PremiumBadge />
       </div>
     );
   }
@@ -137,7 +146,7 @@ export function AccountDialog({ open, onOpenChange }: { open: boolean; onOpenCha
           <div className="border-t border-border pt-4">
             <InterfaceModeSetting />
           </div>
-          <div className="text-meta text-center">Chunki {APP_VERSION}</div>
+          <div className="text-meta text-center">Chunki · сборка {APP_VERSION}</div>
         </div>
       </Dialog>
     );
@@ -182,7 +191,7 @@ export function AccountDialog({ open, onOpenChange }: { open: boolean; onOpenCha
             Выйти
           </Button>
         </div>
-        <div className="text-meta text-center">Chunki {APP_VERSION}</div>
+        <div className="text-meta text-center">Chunki · сборка {APP_VERSION}</div>
       </div>
     </Dialog>
   );
@@ -190,6 +199,7 @@ export function AccountDialog({ open, onOpenChange }: { open: boolean; onOpenCha
 
 export function AccountRow() {
   const user = useAppStore((s) => s.user);
+  const isPremium = useAppStore((s) => s.isPremium);
   const [open, setOpen] = useState(false);
 
   return (
@@ -201,6 +211,7 @@ export function AccountRow() {
             <span className="flex-1 min-w-0">
               <span className="block text-[14.5px] font-medium truncate">{displayNameOf(user)}</span>
               {user.email && <span className="block text-meta truncate">{user.email}</span>}
+              {isPremium && <span className="block mt-1"><PremiumBadge /></span>}
             </span>
           </>
         ) : (
