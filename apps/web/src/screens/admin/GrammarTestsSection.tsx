@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { BUILTIN_PLACEMENT_TEST, type McqQuestion, type PlacementTestDefinition } from '@app/shared';
+import { BUILTIN_PLACEMENT_TEST, grammarTestDraftSchema, type McqQuestion, type PlacementTestDefinition } from '@app/shared';
 import { Button } from '../../components/ui/Button';
 import { IconButton } from '../../components/ui/IconButton';
 import { NavigationBar } from '../../components/ui/NavigationBar';
 import { Textarea } from '../../components/ui/Textarea';
 import { ApiError } from '../../lib/collections';
-import { archiveGrammarTest, fetchGrammarTests, generateGrammarTest, publishGrammarTest, type AdminGrammarTest } from '../../lib/grammarTests';
+import { buildGrammarTestPrompt, parseGrammarTestDraft } from '../../lib/grammarTestPrompt';
+import { archiveGrammarTest, fetchGrammarTests, publishGrammarTest, type AdminGrammarTest } from '../../lib/grammarTests';
+import { useTimedFlag } from '../../lib/timedFlag';
 
 const LETTERS = ['A', 'B', 'C', 'D'] as const;
 const FIELD = 'min-h-11 w-full rounded-xl border border-border bg-surface px-3';
@@ -21,8 +23,11 @@ export function GrammarTestsSection({ onOpenMenu }: { onOpenMenu: () => void }) 
   const [editingId, setEditingId] = useState<string>();
   const [draft, setDraft] = useState<PlacementTestDefinition>();
   const [title, setTitle] = useState('');
-  const [focus, setFocus] = useState('');
-  const [busy, setBusy] = useState<'publish' | 'generate' | 'archive' | null>(null);
+  const [importText, setImportText] = useState('');
+  const [importError, setImportError] = useState('');
+  const [manualPrompt, setManualPrompt] = useState('');
+  const [copied, flashCopied] = useTimedFlag();
+  const [busy, setBusy] = useState<'publish' | 'archive' | null>(null);
   const [error, setError] = useState('');
   const [formError, setFormError] = useState('');
   const editor = useRef<HTMLFormElement>(null);
@@ -56,38 +61,40 @@ export function GrammarTestsSection({ onOpenMenu }: { onOpenMenu: () => void }) 
     });
   }
 
-  async function generate() {
-    if (busy) return;
-    if (draft && draft !== EMPTY_DEFINITION
-      && !window.confirm('Заменить текст в редакторе новым черновиком? Опубликованный вариант не изменится.')) return;
-    setBusy('generate');
-    setError('');
-    setStatus('');
+  async function copyPrompt() {
+    const definitions = variants?.slice(0, 5).map(({ definition }) => definition) ?? [BUILTIN_PLACEMENT_TEST];
+    const prompt = buildGrammarTestPrompt(definitions.flatMap(({ mcq }) => mcq.map(({ q }) => q)));
     try {
-      const definition = await generateGrammarTest(focus);
-      if (!draft) {
-        setEditingId(undefined);
-        setTitle('Новый вариант');
-      }
-      setDraft(definition);
-      setFormError('');
-      revealEditor();
-      setStatus('Черновик готов. Проверьте вопросы и ключи перед публикацией.');
-    } catch (err) {
-      setError(err instanceof ApiError && err.status === 429
-        ? 'Слишком много запросов. Попробуйте позже.'
-        : 'Не удалось сгенерировать черновик. Попробуйте позже или заполните вариант вручную.');
-    } finally {
-      setBusy(null);
+      await navigator.clipboard.writeText(prompt);
+      setManualPrompt('');
+      flashCopied();
+    } catch {
+      setManualPrompt(prompt);
     }
+  }
+
+  function importDraft() {
+    const parsed = parseGrammarTestDraft(importText);
+    if (!parsed.ok) {
+      setImportError(parsed.message);
+      return;
+    }
+    if (draft && (draft !== EMPTY_DEFINITION || title.trim())
+      && !window.confirm('Заменить задания в редакторе импортированным черновиком?')) return;
+
+    if (!editingId || editingId === 'builtin') setTitle(parsed.draft.title);
+    setDraft(parsed.draft.definition);
+    setImportText('');
+    setImportError('');
+    setFormError('');
+    setStatus('Черновик загружен. Проверьте вопросы и ключи перед публикацией.');
+    revealEditor();
   }
 
   async function publish() {
     if (!draft || busy) return;
-    if (!title.trim() || !draft.readingPassage.trim() || !draft.essayPrompt.trim()
-      || draft.readingQuestions.some(({ q }) => !q.trim())
-      || draft.mcq.some(({ q, options }) => !q.trim() || options.some((value) => !value.trim())
-        || new Set(options.map((value) => value.trim().toLowerCase())).size !== 4)) {
+    const parsed = grammarTestDraftSchema.safeParse({ title, definition: draft });
+    if (!parsed.success) {
       setFormError('Заполните название, все задания и четыре разных ответа к каждому вопросу.');
       return;
     }
@@ -95,7 +102,7 @@ export function GrammarTestsSection({ onOpenMenu }: { onOpenMenu: () => void }) 
     setFormError('');
     setStatus('');
     try {
-      const { variant } = await publishGrammarTest(title, draft, editingId);
+      const { variant } = await publishGrammarTest(parsed.data.title, parsed.data.definition, editingId);
       setVariants((current) => {
         const remaining = (current ?? []).filter((item) => item.id !== editingId || item.id === 'builtin');
         return [variant, ...remaining.map((item) => item.id === 'builtin' ? { ...item, active: false } : item)];
@@ -159,13 +166,24 @@ export function GrammarTestsSection({ onOpenMenu }: { onOpenMenu: () => void }) 
         </section>
 
         <section className="space-y-3 rounded-2xl border border-border p-4">
-          <h2 className="text-section-title">Генерация через ИИ</h2>
-          <label className="flex flex-col gap-1 text-meta">Акцент для нового варианта (необязательно)
-            <input className={FIELD} value={focus} maxLength={500} onChange={(event) => setFocus(event.target.value)}
-              placeholder="Например, путешествия и условные предложения" />
+          <h2 className="text-section-title">Промпт для нового теста</h2>
+          <p className="text-body-secondary">Вставьте инструкцию в ИИ-чат, затем перенесите ответ в редактор.</p>
+          <Button size="sm" variant="secondary" onClick={() => void copyPrompt()}>
+            {copied ? 'Скопировано' : 'Копировать инструкцию'}
+          </Button>
+          {manualPrompt && (
+            <label className="flex flex-col gap-1 text-meta">
+              Буфер обмена недоступен. Скопируйте инструкцию вручную.
+              <textarea readOnly rows={5} value={manualPrompt} onFocus={(event) => event.currentTarget.select()} className={FIELD} />
+            </label>
+          )}
+          <label className="flex flex-col gap-1 text-meta">Ответ ИИ в формате JSON
+            <Textarea value={importText} rows={5} onChange={(text) => { setImportText(text); setImportError(''); }}
+              placeholder='{"title": "...", "definition": {...}}' />
           </label>
-          <Button size="sm" disabled={!!busy} onClick={() => void generate()}>
-            {busy === 'generate' ? 'Генерируем…' : 'Сгенерировать черновик'}
+          {importError && <p role="alert" className="text-negative">{importError}</p>}
+          <Button size="sm" disabled={!!busy || !importText.trim()} onClick={importDraft}>
+            Открыть в редакторе
           </Button>
           {status && <p role="status" className="text-positive">{status}</p>}
           {error && <p role="alert" className="text-negative">{error}</p>}
