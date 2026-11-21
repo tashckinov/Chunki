@@ -6,6 +6,7 @@ import { useDeckView } from '../store/derived';
 import { StudyCardExample } from '../components/StudyCardExample';
 import { Icon } from '../components/ui/Icon';
 import { IconButton } from '../components/ui/IconButton';
+import { Dialog } from '../components/ui/Dialog';
 import { Button } from '../components/ui/Button';
 
 /** Shown after skipping a card — offers to permanently exclude that same card from future decks. Auto-dismisses like any toast, treating a timeout the same as "Отмена". */
@@ -48,12 +49,22 @@ export function DeckScreen() {
   const s = useAppStore();
   const v = useDeckView();
   const detailsId = useId();
+  const [hideChunkId, setHideChunkId] = useState<string | null>(null);
   const [skipToastChunkId, setSkipToastChunkId] = useState<string | null>(null);
 
   function handleSkip() {
     if (!v.cur || s.flying) return;
     setSkipToastChunkId(v.cur.id);
     s.skipCard();
+  }
+
+  function confirmHide() {
+    const state = useAppStore.getState();
+    if (hideChunkId && !state.flying && state.activeDeckChunks[state.deckIndex]?.id === hideChunkId) {
+      state.blockChunk(hideChunkId);
+      state.skipCard();
+    }
+    setHideChunkId(null);
   }
 
   useEffect(() => {
@@ -85,6 +96,7 @@ export function DeckScreen() {
   const hasDetails = showTranslation || !!v.cur.explanation;
   const total = s.activeDeckChunks.length;
   const current = Math.min(s.deckIndex + 1, total);
+  const canUndo = !s.flying && s.activeDeckChunks.some((chunk, index) => index < s.deckIndex && !s.blockedChunkIds[chunk.id]);
   const verdict = v.opBury > Math.max(v.opKnow, v.opDont) ? 'Не уверен' : v.opKnow > v.opDont ? 'Знаю' : 'Не знаю';
   const verdictOpacity = s.dragging || s.flying ? Math.max(v.opBury, v.opKnow, v.opDont) : 0;
 
@@ -101,9 +113,13 @@ export function DeckScreen() {
             <Menu.Portal>
               <Menu.Positioner align="end" sideOffset={6} className="study-session z-40">
                 <Menu.Popup className="min-w-48 rounded-2xl border border-border bg-surface p-1.5 text-text shadow-[var(--shadow-md)]">
-                  <Menu.Item className="study-card-menu-item" onClick={s.undoCard} disabled={!s.deckIndex || !!s.flying}>Отменить</Menu.Item>
+                  <Menu.Item className="study-card-menu-item" onClick={s.undoCard} disabled={!canUndo}>Отменить</Menu.Item>
                   <Menu.Item className="study-card-menu-item" onClick={() => s.swipe('bury')} disabled={!!s.flying}>Не уверен</Menu.Item>
                   <Menu.Item className="study-card-menu-item" onClick={handleSkip} disabled={!!s.flying}>Пропустить карточку</Menu.Item>
+                  <Menu.Item className="study-card-menu-item text-negative" onClick={() => {
+                    setSkipToastChunkId(null);
+                    setHideChunkId(v.cur.id);
+                  }} disabled={!!s.flying}>Больше не показывать</Menu.Item>
                 </Menu.Popup>
               </Menu.Positioner>
             </Menu.Portal>
@@ -168,6 +184,15 @@ export function DeckScreen() {
           </button>
         </div>
       </footer>
+
+      <Dialog open={!!hideChunkId} onOpenChange={(open) => { if (!open) setHideChunkId(null); }}
+        className="study-session text-text" headline="Больше не показывать карточку?"
+        actions={<>
+          <Button variant="ghost" size="sm" onClick={() => setHideChunkId(null)}>Отмена</Button>
+          <Button size="sm" onClick={confirmHide}>Не показывать</Button>
+        </>}>
+        Карточка будет скрыта из следующих занятий на этом устройстве.
+      </Dialog>
 
       {skipToastChunkId && (
         // Keyed on the chunk id so a second skip before the first toast's

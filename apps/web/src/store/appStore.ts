@@ -694,7 +694,12 @@ export const useAppStore = create<AppState>()(
           }
         }, 230);
       },
-      undoCard: () => set((s) => (s.deckIndex > 0 && !s.flying ? { deckIndex: s.deckIndex - 1, flipped: false, dx: 0, dy: 0 } : {})),
+      undoCard: () => set((s) => {
+        if (s.flying) return {};
+        let index = s.deckIndex - 1;
+        while (index >= 0 && s.blockedChunkIds[s.activeDeckChunks[index]?.id]) index -= 1;
+        return index >= 0 ? { deckIndex: index, flipped: false, dx: 0, dy: 0 } : {};
+      }),
 
       skipCard: () => {
         const s = get();
