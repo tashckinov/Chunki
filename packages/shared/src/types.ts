@@ -39,7 +39,7 @@ export interface TopicStudyContent {
 // ---- grading: request payloads ----
 
 export interface PlacementTestSubmission {
-  fromLevel: CEFRLevel;
+  fromLevel: CEFRLevel | null;
   toLevel: CEFRLevel;
   purpose: string[];
   mcqAnswers: Record<number, string>; // question n -> 'A'|'B'|'C'|'D'|'—'

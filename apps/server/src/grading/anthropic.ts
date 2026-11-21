@@ -136,7 +136,7 @@ export class AnthropicGradingProvider implements GradingProvider {
     };
 
     const user = [
-      `Grade a CEFR English placement test for a Russian-speaking learner currently around ${input.fromLevel}, aiming for ${input.toLevel}, learning English for: ${input.purpose.join(', ') || '(not specified)'}.`,
+      `Grade a CEFR English placement test for a Russian-speaking learner ${input.fromLevel ? `who estimates their current level at ${input.fromLevel}` : 'who does not know their current level'}, aiming for ${input.toLevel}, learning English for: ${input.purpose.join(', ') || '(not specified)'}.`,
       `The learner answered ${mcqScore.correct}/${mcqScore.total} multiple-choice grammar/vocabulary questions correctly (already scored, do not re-grade those).`,
       '',
       `Reading passage:\n"""${READING_PASSAGE}"""`,

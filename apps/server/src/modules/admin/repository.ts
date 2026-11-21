@@ -193,8 +193,11 @@ const HAS_DIALOGUE_SUBQUERY = `EXISTS (
 // (no blank picked yet) shouldn't make the admin list say it's usable.
 const HAS_SITUATION_DIALOGUE_SUBQUERY = `EXISTS (
               SELECT 1 FROM chunk_dialogues d
-              JOIN chunk_dialogue_messages m ON m.dialogue_id = d.id AND m.is_blank
               WHERE d.chunk_id = c.id AND d.kind = 'situation'
+                AND (
+                  SELECT m.is_blank FROM chunk_dialogue_messages m
+                  WHERE m.dialogue_id = d.id ORDER BY m.position DESC LIMIT 1
+                )
             ) AS has_situation_dialogue`;
 
 interface RawSentenceRow {

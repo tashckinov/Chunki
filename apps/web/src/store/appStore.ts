@@ -121,7 +121,7 @@ interface AppState {
   premiumUntil: string | null;
   isPremium: boolean;
 
-  from: CEFRLevel;
+  from: CEFRLevel | null;
   to: CEFRLevel;
   purpose: string[];
 
@@ -237,7 +237,7 @@ interface AppState {
   dismissPasskeyError: () => void;
   setInterfaceMode: (mode: 'ru-en' | 'en-en') => void;
 
-  pickFrom: (level: CEFRLevel) => void;
+  pickFrom: (level: CEFRLevel | null) => void;
   pickTo: (level: CEFRLevel) => void;
   togglePurpose: (p: string) => void;
   startTest: () => void;
