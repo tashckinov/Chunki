@@ -17,7 +17,7 @@ export function BottomNavigation({
     <div className="flex-none flex items-stretch border-t border-border bg-surface pb-[env(safe-area-inset-bottom)]">
       {items.map((item, i) => {
         const active = i === value;
-        if ('account' in item) return <AccountNavButton key={item.label} active={active} />;
+        if ('account' in item) return <AccountNavButton key={item.label} active={active} onClick={() => onChange(i)} />;
         return (
           <button
             key={item.label}
