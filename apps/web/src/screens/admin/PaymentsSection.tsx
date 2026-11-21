@@ -54,6 +54,7 @@ interface DraftState {
   allowCards: boolean;
   allowProgram: boolean;
   dailyCheckLimit: string;
+  monthlyPlacementLimit: string;
   isDefault: boolean;
   position: string;
   upsellTariffIds: string[];
@@ -70,6 +71,7 @@ function toDraft(t: AdminTariff): DraftState {
     allowCards: t.allowCards,
     allowProgram: t.allowProgram,
     dailyCheckLimit: t.dailyCheckLimit === null ? '' : String(t.dailyCheckLimit),
+    monthlyPlacementLimit: t.monthlyPlacementLimit == null ? '' : String(t.monthlyPlacementLimit),
     isDefault: t.isDefault,
     position: String(t.position),
     upsellTariffIds: t.upsellTariffIds,
@@ -87,6 +89,7 @@ function draftsEqual(a: DraftState, b: DraftState): boolean {
     a.allowCards === b.allowCards &&
     a.allowProgram === b.allowProgram &&
     a.dailyCheckLimit === b.dailyCheckLimit &&
+    a.monthlyPlacementLimit === b.monthlyPlacementLimit &&
     a.isDefault === b.isDefault &&
     a.position === b.position &&
     a.upsellTariffIds.length === b.upsellTariffIds.length &&
@@ -105,6 +108,7 @@ function toInput(d: DraftState): TariffInput {
     allowCards: d.allowCards,
     allowProgram: d.allowProgram,
     dailyCheckLimit: toIntOrNull(d.dailyCheckLimit),
+    monthlyPlacementLimit: toIntOrNull(d.monthlyPlacementLimit),
     isDefault: d.isDefault,
     position: toIntOrNull(d.position) ?? 0,
     upsellTariffIds: d.upsellTariffIds,
@@ -145,6 +149,11 @@ function TariffEditor({
   }
 
   async function save() {
+    const monthlyLimit = toIntOrNull(draft.monthlyPlacementLimit);
+    if (draft.monthlyPlacementLimit.trim() && (monthlyLimit === null || monthlyLimit < 0 || monthlyLimit > 10000)) {
+      setError('Укажите целое число тестов от 0 до 10 000 или оставьте поле пустым.');
+      return;
+    }
     setSaving(true);
     setError(null);
     setSavedJustNow(false);
@@ -217,6 +226,11 @@ function TariffEditor({
         <Input value={draft.dailyCheckLimit} onChange={(v) => patch({ dailyCheckLimit: v })} placeholder="∞" type="number" />
       </div>
 
+      <label className="block">
+        <div className="text-meta mb-1.5">Тестов уровня в месяц (пусто — без ограничения, 0 — отключено)</div>
+        <Input value={draft.monthlyPlacementLimit} onChange={(v) => patch({ monthlyPlacementLimit: v })} placeholder="∞" type="number" />
+      </label>
+
       <div className="flex items-center justify-between gap-2">
         <span className="text-[13.5px]">Тариф по умолчанию для новых/истёкших пользователей</span>
         <Switch checked={draft.isDefault} onChange={(v) => patch({ isDefault: v })} />
@@ -265,6 +279,7 @@ const NEW_TARIFF_INPUT: TariffInput = {
   allowCards: true,
   allowProgram: true,
   dailyCheckLimit: null,
+  monthlyPlacementLimit: 4,
   isDefault: false,
   position: 0,
   upsellTariffIds: [],

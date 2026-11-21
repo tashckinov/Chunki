@@ -136,8 +136,8 @@ describe('POST /api/payments/checkout', () => {
 describe('GET /api/payments/tariffs', () => {
   it('returns the public tariff list with no auth required', async () => {
     vi.mocked(tariffsService.listPublicTariffs).mockResolvedValue([
-      { id: TARIFF_ID, name: 'Месяц', periodicity: 'monthly', priceUsd: '6.99', priceEur: '5.99', priceRub: '599.00', allowCards: true, allowProgram: true, dailyCheckLimit: null },
-      { id: '22222222-2222-2222-2222-222222222222', name: 'Год', periodicity: 'yearly', priceUsd: null, priceEur: null, priceRub: null, allowCards: true, allowProgram: true, dailyCheckLimit: null },
+      { id: TARIFF_ID, name: 'Месяц', periodicity: 'monthly', priceUsd: '6.99', priceEur: '5.99', priceRub: '599.00', allowCards: true, allowProgram: true, dailyCheckLimit: null, monthlyPlacementLimit: 4 },
+      { id: '22222222-2222-2222-2222-222222222222', name: 'Год', periodicity: 'yearly', priceUsd: null, priceEur: null, priceRub: null, allowCards: true, allowProgram: true, dailyCheckLimit: null, monthlyPlacementLimit: 4 },
     ]);
 
     const res = await app.inject({ method: 'GET', url: '/api/payments/tariffs' });

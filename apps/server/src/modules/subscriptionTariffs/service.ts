@@ -1,5 +1,5 @@
 import { extractOfferId } from '../payments/offerId.js';
-import { findAccountStatus, isPremiumActive } from '../users/repository.js';
+import { findAccountStatus, isPremiumActive, type AccountStatus } from '../users/repository.js';
 import {
   listTariffs as repoListTariffs,
   findTariffById as repoFindTariffById,
@@ -25,6 +25,7 @@ export interface PublicTariff {
   allowCards: boolean;
   allowProgram: boolean;
   dailyCheckLimit: number | null;
+  monthlyPlacementLimit: number | null;
 }
 
 function toPublicTariff(row: TariffRow): PublicTariff {
@@ -38,6 +39,7 @@ function toPublicTariff(row: TariffRow): PublicTariff {
     allowCards: row.allow_cards,
     allowProgram: row.allow_program,
     dailyCheckLimit: row.daily_check_limit,
+    monthlyPlacementLimit: row.monthly_placement_limit,
   };
 }
 
@@ -77,6 +79,7 @@ export interface UpsertTariffInput {
   allowCards: boolean;
   allowProgram: boolean;
   dailyCheckLimit: number | null;
+  monthlyPlacementLimit?: number | null;
   isDefault: boolean;
   position: number;
   upsellTariffIds: string[];
@@ -104,6 +107,7 @@ function toRepoInput(input: UpsertTariffInput): TariffInput {
     allowCards: input.allowCards,
     allowProgram: input.allowProgram,
     dailyCheckLimit: input.dailyCheckLimit,
+    monthlyPlacementLimit: input.monthlyPlacementLimit,
     isDefault: input.isDefault,
     position: input.position,
   };
@@ -162,13 +166,29 @@ export async function resolveEffectiveTariff(userId: string): Promise<EffectiveT
   if (!account) return UNRESTRICTED;
   if (account.isAdmin) return UNRESTRICTED;
 
+  const row = await findAccountTariff(account);
+  return row ? toEffectiveTariff(row) : UNRESTRICTED;
+}
+
+async function findAccountTariff(account: AccountStatus): Promise<TariffRow | null> {
   const tariffId = isPremiumActive(account.premiumUntil) && account.currentTariffId ? account.currentTariffId : null;
   const row = tariffId ? await repoFindTariffById(tariffId) : await repoFindDefaultTariff();
-  if (!row) {
-    const fallback = tariffId ? await repoFindDefaultTariff() : null;
-    return fallback ? toEffectiveTariff(fallback) : UNRESTRICTED;
-  }
-  return toEffectiveTariff(row);
+  return row ?? (tariffId ? await repoFindDefaultTariff() : null);
+}
+
+export async function resolvePlacementAccess(userId: string): Promise<{ tariffId: string | null; allowed: boolean; limit: number | null }> {
+  const account = await findAccountStatus(userId);
+  if (!account) return { tariffId: null, allowed: true, limit: null };
+  const active = isPremiumActive(account.premiumUntil);
+  if (active && !account.currentTariffId) return { tariffId: null, allowed: true, limit: 4 };
+  if (account.isAdmin && !active) return { tariffId: null, allowed: true, limit: null };
+
+  const row = await findAccountTariff(account);
+  return {
+    tariffId: row?.id ?? null,
+    allowed: account.isAdmin || (row?.allow_program ?? true),
+    limit: row ? row.monthly_placement_limit : null,
+  };
 }
 
 /** Today's effective daily-checks-used count, accounting for the UTC-date rollover (the stored count reads as 0 once its date no longer matches today). */

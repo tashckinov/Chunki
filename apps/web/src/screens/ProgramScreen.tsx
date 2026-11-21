@@ -1,16 +1,94 @@
+import { useEffect, useState } from 'react';
+import { ChevronRight } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { daysUntil } from '../lib/schedule';
+import { Button } from '../components/ui/Button';
 import { NavigationBar } from '../components/ui/NavigationBar';
+
+const RESULT_DATE = new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium' });
+const RESET_DATE = new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeZone: 'UTC' });
+
+function GrammarLevelCard() {
+  const { user, placementOverview, startTest, go, testVariant, testDraftOwner, testStarting, testStartError, openPlacementResult } = useAppStore();
+  const { history = [], quota } = placementOverview ?? {};
+  const latest = history[0];
+  const hasDraft = !!user && !!testVariant && testDraftOwner === user.id;
+  const remaining = quota?.limit == null ? null : Math.max(0, quota.limit - quota.used);
+  const unavailable = quota?.allowed === false || quota?.limit === 0;
+  const [openingId, setOpeningId] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function openResult(id: string) {
+    setOpeningId(id);
+    setError(null);
+    try {
+      await openPlacementResult(id);
+    } catch {
+      setError('Не удалось загрузить результат. Попробуйте ещё раз.');
+    } finally {
+      setOpeningId(null);
+    }
+  }
+
+  return (
+    <div className="mb-6 flex flex-col gap-3">
+      <section aria-label="Текущий уровень" className="rounded-[var(--radius-lg)] bg-accent-subtle p-4">
+        <h2 className="text-meta">Текущий уровень</h2>
+        <div className="mt-1 text-2xl font-semibold">{latest?.level ?? 'Ещё не определён'}</div>
+        {quota && (
+          <div className="mt-2 text-body-secondary">
+            {unavailable ? 'Тест уровня недоступен на вашем тарифе.'
+              : remaining === null ? 'Тесты уровня без месячного лимита.'
+              : `Осталось проверок в этом месяце: ${remaining} из ${quota.limit}. Обновится ${RESET_DATE.format(new Date(quota.resetsAt))}.`}
+          </div>
+        )}
+        <Button
+          className="mt-4 w-full"
+          disabled={!user || testStarting || !!openingId || (!hasDraft && (unavailable || remaining === 0))}
+          onClick={() => { if (latest || hasDraft) void startTest(); else go('goals'); }}
+        >
+          {testStarting ? 'Загружаем тест…' : hasDraft ? 'Продолжить тест' : latest ? 'Перепройти тест' : 'Пройти тест'}
+        </Button>
+        {testStartError && <p role="alert" className="mt-2 text-negative">{testStartError}</p>}
+      </section>
+      {history.length > 0 && (
+        <section aria-label="Результаты тестов" className="rounded-[var(--radius-md)] border border-border px-4">
+          <h2 className="text-section-title pt-3 pb-1">Результаты тестов</h2>
+          {(showHistory ? history : history.slice(0, 1)).map(({ id, level, completedAt }) => (
+            <button key={id} type="button" disabled={!!openingId || testStarting} onClick={() => void openResult(id)}
+              className="flex w-full min-h-11 items-center gap-2 border-b border-border py-2 text-left last:border-b-0 disabled:opacity-60">
+              <span className="font-semibold">{level}</span>
+              <span className="flex-1 text-body-secondary">{RESULT_DATE.format(new Date(completedAt))}</span>
+              <span className="text-sm text-accent">{openingId === id ? 'Загружаем…' : 'Смотреть результат'}</span>
+              <ChevronRight size={16} aria-hidden="true" />
+            </button>
+          ))}
+          {history.length > 1 && (
+            <Button variant="ghost" size="sm" onClick={() => setShowHistory((value) => !value)} className="mb-2">
+              {showHistory ? 'Свернуть историю' : 'Предыдущие результаты'}
+            </Button>
+          )}
+          {error && <p role="alert" className="pb-3 text-negative">{error}</p>}
+        </section>
+      )}
+    </div>
+  );
+}
 
 export function ProgramScreen() {
   const s = useAppStore();
   const topics = s.programTopics;
+  const userId = s.user?.id;
+  useEffect(() => { if (userId) void useAppStore.getState().loadProgram(); }, [userId]);
   const masteredCount = topics.filter((t) => t.status === 'mastered').length;
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      <NavigationBar size="large" title={`Программа до ${s.to}`} />
+      <NavigationBar size="large" title="Грамматика" />
       <div className="scroll-clean flex-1 min-h-0 px-5 pb-6 flex flex-col">
+        <GrammarLevelCard />
+        <h2 className="text-section-title mb-1">Программа до {s.placementOverview?.history[0]?.goal ?? s.to}</h2>
         <div className="text-body-secondary mb-2">
           {topics.length} {topics.length === 1 ? 'тема' : 'тем'} · {masteredCount} подтверждено
         </div>

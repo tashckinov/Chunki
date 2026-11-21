@@ -15,6 +15,7 @@ const tariffBodySchema = z.object({
   allowCards: z.boolean(),
   allowProgram: z.boolean(),
   dailyCheckLimit: z.number().int().positive().max(10000).nullable(),
+  monthlyPlacementLimit: z.number().int().min(0).max(10000).nullable().optional(),
   isDefault: z.boolean(),
   position: z.number().int(),
   upsellTariffIds: z.array(z.string().uuid()).max(20),

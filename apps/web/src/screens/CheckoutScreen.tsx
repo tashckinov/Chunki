@@ -50,6 +50,9 @@ function primaryPrice(tariff: Tariff): { symbol: string; amount: string } | null
 
 function TariffCard({ tariff, badge, onClick }: { tariff: Tariff; badge: string | null; onClick: () => void }) {
   const price = primaryPrice(tariff);
+  const grammar = tariff.monthlyPlacementLimit == null
+    ? 'Тесты уровня без месячного лимита'
+    : `Тестов уровня в месяц: ${tariff.monthlyPlacementLimit}`;
   return (
     <Card onClick={onClick} className="p-5 flex flex-col gap-4">
       <div className="flex items-start justify-between gap-2">
@@ -68,7 +71,7 @@ function TariffCard({ tariff, badge, onClick }: { tariff: Tariff; badge: string 
         <div className="text-meta">{PERIODICITY_BLURB[tariff.periodicity]}</div>
       )}
       <ul className="flex flex-col gap-2">
-        {PREMIUM_FEATURES.map((feature) => (
+        {(tariff.allowProgram && tariff.monthlyPlacementLimit !== 0 ? [...PREMIUM_FEATURES, grammar] : PREMIUM_FEATURES).map((feature) => (
           <li key={feature} className="flex items-start gap-2 text-[14px]">
             <Check size={16} className="text-positive flex-none mt-0.5" />
             <span>{feature}</span>

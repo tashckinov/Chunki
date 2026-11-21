@@ -20,6 +20,7 @@ export interface Tariff {
   allowCards: boolean;
   allowProgram: boolean;
   dailyCheckLimit: number | null;
+  monthlyPlacementLimit: number | null;
 }
 
 /** Public — no auth needed, used by the checkout screen to show real tariff names/prices/entitlements instead of a hardcoded guess. */

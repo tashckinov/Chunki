@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { chooseGrammarTest } from '../grammarTests/repository.js';
 import { grammarTestIdSchema } from '../grammarTests/schema.js';
 import { requireAuthenticatedSession } from '../auth/requireAuth.js';
-import { getProgramForUser, getTopicStudy, startTopicAttempt, submitPlacementTest, submitTopicAttempt } from './service.js';
+import { getPlacementQuota, getPlacementResult, getProgramForUser, getTopicStudy, startTopicAttempt, submitPlacementTest, submitTopicAttempt } from './service.js';
 
 const CEFR_LEVELS = ['A1', 'A2', 'A2+', 'B1', 'B1+', 'B2', 'B2+', 'C1'] as const;
 
@@ -19,6 +19,7 @@ const boundedRecord = (maxEntries: number, maxValueLength: number) =>
 
 const placementTestBodySchema = z.object({
   variantId: grammarTestIdSchema.optional(),
+  submissionId: z.string().uuid().optional(),
   fromLevel: z.enum(CEFR_LEVELS).nullable(),
   toLevel: z.enum(CEFR_LEVELS),
   purpose: z.array(z.string().max(100)).max(10),
@@ -33,8 +34,17 @@ const attemptParamSchema = z.object({ id: z.string().uuid(), attemptId: z.string
 const attemptSubmitBodySchema = z.object({ answers: boundedRecord(20, 2000) });
 
 export const programRoutes: FastifyPluginAsync = async (app) => {
-  app.get('/', { preHandler: requireAuthenticatedSession }, async (request) => {
+  app.get('/', { preHandler: requireAuthenticatedSession }, async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
     return getProgramForUser(request.session!.userId);
+  });
+
+  app.get('/placement-results/:id', { preHandler: requireAuthenticatedSession }, async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const params = topicIdParamSchema.safeParse(request.params);
+    if (!params.success) return reply.code(400).send({ error: 'invalid_request' });
+    const result = await getPlacementResult(request.session!.userId, params.data.id);
+    return result ?? reply.code(404).send({ error: 'not_found' });
   });
 
   app.get('/topics/:id/study', { preHandler: requireAuthenticatedSession }, async (request, reply) => {
@@ -71,6 +81,10 @@ export const programRoutes: FastifyPluginAsync = async (app) => {
   app.get('/placement-variant', { preHandler: requireAuthenticatedSession }, async (request, reply) => {
     const query = z.object({ previous: grammarTestIdSchema.optional() }).safeParse(request.query);
     if (!query.success) return reply.code(400).send({ error: 'invalid_request' });
+    reply.header('Cache-Control', 'no-store');
+    const quota = await getPlacementQuota(request.session!.userId);
+    if (!quota.allowed) return reply.code(403).send({ error: 'not_allowed' });
+    if (quota.limit !== null && quota.used >= quota.limit) return reply.code(429).send({ error: 'placement_limit_reached', quota });
     const previous = query.data.previous === 'builtin' ? undefined : query.data.previous;
     return chooseGrammarTest(previous);
   });
@@ -95,6 +109,8 @@ export const programRoutes: FastifyPluginAsync = async (app) => {
         reply.code(502);
         return { error: 'grading_failed' };
       }
+      if (result.kind === 'limit_reached') return reply.code(429).send({ error: 'placement_limit_reached', quota: result.quota });
+      if (result.kind === 'already_checking') return reply.code(409).send({ error: 'placement_already_checking' });
       if (result.kind === 'variant_not_found') return reply.code(404).send({ error: 'variant_not_found' });
       if (result.kind === 'not_allowed') {
         reply.code(403);

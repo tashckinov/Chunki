@@ -169,6 +169,7 @@ export interface AdminTariff {
   allowCards: boolean;
   allowProgram: boolean;
   dailyCheckLimit: number | null;
+  monthlyPlacementLimit: number | null;
   isDefault: boolean;
   position: number;
   upsellTariffIds: string[];
@@ -185,6 +186,7 @@ export interface TariffInput {
   allowCards: boolean;
   allowProgram: boolean;
   dailyCheckLimit: number | null;
+  monthlyPlacementLimit: number | null;
   isDefault: boolean;
   position: number;
   upsellTariffIds: string[];

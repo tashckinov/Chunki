@@ -1,11 +1,16 @@
-import type { ExerciseItem, ExercisesGradeResult, PlacementGradeResult, PlacementTestSubmission, TopicStudyContent, TopicSuggestion } from '@app/shared';
+import type { ExerciseItem, ExercisesGradeResult, PlacementGradeResult, PlacementOverview, PlacementQuota, PlacementResultSummary, PlacementTestSubmission, TopicStudyContent, TopicSuggestion } from '@app/shared';
 import { findGrammarTest } from '../grammarTests/repository.js';
 import { getGradingProvider } from '../../grading/index.js';
 import { withAiCallLogging } from '../aiLogs/service.js';
-import { resolveEffectiveTariff, listUpsellTariffs, type PublicTariff } from '../subscriptionTariffs/service.js';
+import { resolveEffectiveTariff, resolvePlacementAccess, listUpsellTariffs, type PublicTariff } from '../subscriptionTariffs/service.js';
 import {
   createAttempt,
-  createPlacementTest,
+  countPlacementTests,
+  findPlacementResult,
+  listPlacementTests,
+  releasePlacementCheck,
+  reservePlacementCheck,
+  savePlacementTest,
   findAttempt,
   findUserTopic,
   findUserTopics,
@@ -19,6 +24,7 @@ import {
   type UserTopicSource,
   type UserTopicStatus,
 } from './repository.js';
+import { buildPlacementReview } from './placementReview.js';
 
 export interface UserTopicSummary {
   id: string;
@@ -50,12 +56,58 @@ function toTopicSuggestion(row: UserTopicRow): TopicSuggestion {
   return { key: row.key, title: row.title, category: row.category, rationale: row.rationale };
 }
 
-export type ProgramForUser = { status: 'none' } | { status: 'active'; topics: UserTopicSummary[] };
+export type ProgramForUser = ({ status: 'none' } | { status: 'active'; topics: UserTopicSummary[] }) & { placement: PlacementOverview };
+
+async function placementQuota(userId: string, access: Awaited<ReturnType<typeof resolvePlacementAccess>>): Promise<PlacementQuota> {
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth();
+  const startsAt = new Date(Date.UTC(year, month, 1));
+  const resetsAt = new Date(Date.UTC(year, month + 1, 1));
+  const used = await countPlacementTests(userId, startsAt, resetsAt);
+  return { allowed: access.allowed, limit: access.limit, used, resetsAt: resetsAt.toISOString() };
+}
+
+export async function getPlacementQuota(userId: string): Promise<PlacementQuota> {
+  return placementQuota(userId, await resolvePlacementAccess(userId));
+}
+
+function toPlacementSummary(row: Awaited<ReturnType<typeof listPlacementTests>>[number]): PlacementResultSummary {
+  return {
+    id: row.id,
+    variantId: row.variant_id ?? 'builtin',
+    level: row.overall_level,
+    goal: row.to_level,
+    purpose: row.purpose ?? [],
+    completedAt: row.created_at.toISOString(),
+  };
+}
 
 export async function getProgramForUser(userId: string): Promise<ProgramForUser> {
-  const rows = await findUserTopics(userId);
-  if (rows.length === 0) return { status: 'none' };
-  return { status: 'active', topics: rows.map(toSummary) };
+  const [topics, history, quota] = await Promise.all([findUserTopics(userId), listPlacementTests(userId), getPlacementQuota(userId)]);
+  const placement = { history: history.map(toPlacementSummary), quota };
+  if (topics.length === 0 && history.length === 0) return { status: 'none', placement };
+  return { status: 'active', topics: topics.map(toSummary), placement };
+}
+
+export async function getPlacementResult(userId: string, id: string): Promise<{ summary: PlacementResultSummary; result: PlacementGradeResult } | null> {
+  const row = await findPlacementResult(userId, id);
+  if (!row) return null;
+  const definition = await findGrammarTest(row.variant_id ?? undefined);
+  const result: PlacementGradeResult = {
+    overallLevel: row.overall_level,
+    skills: row.skills,
+    aboveLevel: row.above_level,
+    belowLevel: row.below_level,
+    mcqScore: row.mcq_score,
+    openGrades: row.open_grades,
+    essayGrade: row.essay_grade,
+    topics: [],
+  };
+  if (definition) result.review = buildPlacementReview(definition, {
+    mcqAnswers: row.mcq_answers, open9: row.open9, open10: row.open10, essay: row.essay,
+  }, result);
+  return { summary: toPlacementSummary(row), result };
 }
 
 /** Null means allowed — otherwise the upsell tariffs to show for the blocked "not_allowed" result. */
@@ -67,40 +119,53 @@ async function checkProgramAllowed(userId: string): Promise<PublicTariff[] | nul
 
 export type SubmitPlacementTestResult =
   | { kind: 'variant_not_found' }
+  | { kind: 'already_checking' }
+  | { kind: 'limit_reached'; quota: PlacementQuota }
   | { kind: 'not_allowed'; upsellTariffs: PublicTariff[] }
   | { kind: 'ok'; result: PlacementGradeResult; topics: UserTopicSummary[] };
 
 export async function submitPlacementTest(userId: string, input: PlacementTestSubmission): Promise<SubmitPlacementTestResult> {
-  const upsellTariffs = await checkProgramAllowed(userId);
-  if (upsellTariffs) return { kind: 'not_allowed', upsellTariffs };
+  const token = await reservePlacementCheck(userId);
+  if (!token) return { kind: 'already_checking' };
+  try {
+    if (input.submissionId) {
+      const saved = await getPlacementResult(userId, input.submissionId);
+      if (saved) {
+        const topics = (await findUserTopics(userId)).map(toSummary);
+        return { kind: 'ok', result: saved.result, topics };
+      }
+    }
 
-  const definition = await findGrammarTest(input.variantId);
-  if (!definition) return { kind: 'variant_not_found' };
-  const provider = getGradingProvider();
-  const result = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: provider.model ?? null, request: input }, () => provider.gradePlacementTest(input, definition));
+    const access = await resolvePlacementAccess(userId);
+    if (!access.allowed) return { kind: 'not_allowed', upsellTariffs: await listUpsellTariffs(access.tariffId) };
+    const quota = await placementQuota(userId, access);
+    if (quota.limit !== null && quota.used >= quota.limit) return { kind: 'limit_reached', quota };
 
-  await createPlacementTest({
-    userId,
-    variantId: input.variantId === 'builtin' ? undefined : input.variantId,
-    fromLevel: input.fromLevel,
-    toLevel: input.toLevel,
-    purpose: input.purpose,
-    mcqAnswers: input.mcqAnswers,
-    open9: input.open9,
-    open10: input.open10,
-    essay: input.essay,
-    overallLevel: result.overallLevel,
-    skills: result.skills,
-    aboveLevel: result.aboveLevel,
-    belowLevel: result.belowLevel,
-    mcqScore: result.mcqScore,
-    openGrades: result.openGrades,
-    essayGrade: result.essayGrade,
-  });
+    const definition = await findGrammarTest(input.variantId);
+    if (!definition) return { kind: 'variant_not_found' };
+    const provider = getGradingProvider();
+    const grade = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: provider.model ?? null, request: input }, () => provider.gradePlacementTest(input, definition));
+    const result = { ...grade, review: buildPlacementReview(definition, input, grade) };
 
-  await insertNewUserTopics(userId, result.topics, 'placement');
-  const topics = (await findUserTopics(userId)).map(toSummary);
-  return { kind: 'ok', result, topics };
+    await savePlacementTest({
+      ...input,
+      userId,
+      variantId: input.variantId === 'builtin' ? undefined : input.variantId,
+      overallLevel: result.overallLevel,
+      skills: result.skills,
+      aboveLevel: result.aboveLevel,
+      belowLevel: result.belowLevel,
+      mcqScore: result.mcqScore,
+      openGrades: result.openGrades,
+      essayGrade: result.essayGrade,
+    }, result.topics, token);
+
+    const topics = (await findUserTopics(userId)).map(toSummary);
+    return { kind: 'ok', result, topics };
+  } finally {
+    // A stale lock expires even if the database is unavailable during cleanup.
+    await releasePlacementCheck(userId, token).catch(() => {});
+  }
 }
 
 export type TopicStudyResult = { kind: 'not_found' } | { kind: 'not_allowed'; upsellTariffs: PublicTariff[] } | { kind: 'ok'; study: TopicStudyContent };

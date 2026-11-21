@@ -5,7 +5,7 @@ import { Button } from '../components/ui/Button';
 
 const PLAN_COMPARE = [
   { label: 'Карточки с чанками', free: true },
-  { label: 'Проверка уровня раз в месяц', free: true },
+  { label: 'Проверка уровня', free: true },
   { label: 'Все темы и упражнения', free: false },
   { label: 'Проверка открытых ответов и письма', free: false },
   { label: 'Доп. уроки по слабым темам', free: false },
