@@ -237,7 +237,7 @@ interface AppState {
   /** Runs once on app start to see if a session cookie is already valid. */
   checkAuth: () => Promise<void>;
   /** Refreshes premiumUntil/isPremium from the server — called by checkAuth(); safe to call again after a checkout redirect brings the user back. */
-  refreshPaymentStatus: () => Promise<void>;
+  refreshPaymentStatus: () => Promise<boolean | null>;
   dismissAuthError: () => void;
   signInWithPasskey: () => Promise<void>;
   dismissPasskeyError: () => void;
@@ -262,7 +262,7 @@ interface AppState {
   toggleDay: (i: number) => void;
   setMinutes: (v: number) => void;
   setTime: (t: string) => void;
-  goPaywall: () => void;
+  finishSchedule: () => Promise<void>;
   skipPaywall: () => void;
 
   goHome: () => void;
@@ -424,12 +424,15 @@ export const useAppStore = create<AppState>()(
       },
       refreshPaymentStatus: async () => {
         const user = get().user;
-        if (!user) return;
+        if (!user) return null;
         try {
           const { premiumUntil, isPremium } = await fetchPaymentStatus();
-          if (get().user?.id === user.id) set({ premiumUntil, isPremium });
+          if (get().user?.id !== user.id) return null;
+          set({ premiumUntil, isPremium });
+          return isPremium;
         } catch {
           // Best-effort — a failed refresh just leaves the last-known status in place.
+          return null;
         }
       },
       dismissAuthError: () => set({ authError: false }),
@@ -511,7 +514,13 @@ export const useAppStore = create<AppState>()(
         set((s) => ({ days: s.days.includes(i) ? s.days.filter((x) => x !== i) : [...s.days, i].sort() })),
       setMinutes: (v) => set({ minutes: Math.round(v) }),
       setTime: (t) => set({ time: t }),
-      goPaywall: () => set({ screen: 'paywall' }),
+      finishSchedule: async () => {
+        const userId = get().user?.id;
+        if (!userId) return;
+        const isPremium = await get().refreshPaymentStatus();
+        if (get().user?.id !== userId || get().screen !== 'schedule') return;
+        set({ screen: isPremium === false ? 'paywall' : 'program' });
+      },
       skipPaywall: () => set({ screen: 'program' }),
 
       goHome: () => set({ screen: 'cardslib' }),
@@ -1001,6 +1010,7 @@ export const useAppStore = create<AppState>()(
       // a permanent spinner. Bounce back to a safe screen on rehydrate.
       onRehydrateStorage: () => (state) => {
         if (state?.screen === 'checking' || (state?.screen === 'deckdone' && state.completedIntroOwner)) state.screen = 'cardslib';
+        if (state?.screen === 'paywall') state.screen = 'schedule';
       },
       partialize: (s) => {
         // user/authChecked/authError are derived fresh from the session
