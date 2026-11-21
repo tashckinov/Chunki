@@ -20,7 +20,7 @@ export async function fetchProgram(): Promise<ProgramState> {
 }
 
 export interface PlacementTestInput {
-  fromLevel: CEFRLevel;
+  fromLevel: CEFRLevel | null;
   toLevel: CEFRLevel;
   purpose: string[];
   mcqAnswers: Record<number, string>;

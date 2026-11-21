@@ -16,7 +16,7 @@ const boundedRecord = (maxEntries: number, maxValueLength: number) =>
     .refine((obj) => Object.keys(obj).length <= maxEntries, { message: `at most ${maxEntries} entries allowed` });
 
 const placementTestBodySchema = z.object({
-  fromLevel: z.enum(CEFR_LEVELS),
+  fromLevel: z.enum(CEFR_LEVELS).nullable(),
   toLevel: z.enum(CEFR_LEVELS),
   purpose: z.array(z.string().max(100)).max(10),
   mcqAnswers: boundedRecord(20, 20),

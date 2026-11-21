@@ -122,17 +122,18 @@ describe('POST /api/program/placement-test', () => {
     expect(service.submitPlacementTest).not.toHaveBeenCalled();
   });
 
-  it('submits the placement test for the authenticated user', async () => {
+  it.each([placementBody.fromLevel, null])('submits the placement test with starting level %s', async (fromLevel) => {
+    const payload = { ...placementBody, fromLevel };
     vi.mocked(session.getSession).mockResolvedValue(authenticatedSession);
     const result = { overallLevel: 'B1', topics: [] } as never;
     const topics = [{ id: 't1' }] as never;
-    vi.mocked(service.submitPlacementTest).mockResolvedValue({ result, topics });
+    vi.mocked(service.submitPlacementTest).mockResolvedValue({ kind: 'ok', result, topics });
 
-    const res = await app.inject({ method: 'POST', url: '/api/program/placement-test', cookies: authCookie, payload: placementBody });
+    const res = await app.inject({ method: 'POST', url: '/api/program/placement-test', cookies: authCookie, payload });
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ result, topics });
-    expect(service.submitPlacementTest).toHaveBeenCalledWith('user-1', placementBody);
+    expect(service.submitPlacementTest).toHaveBeenCalledWith('user-1', payload);
   });
 
   it('returns 502 when grading throws', async () => {

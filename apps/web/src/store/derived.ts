@@ -16,7 +16,7 @@ const PURPOSES = ['Работа', 'Переезд', 'Учёба', 'IELTS', 'Об
 export function useGoalsView() {
   const { from, to, purpose, pickFrom, pickTo, togglePurpose } = useAppStore();
   return {
-    levelsFrom: LEVELS_FROM.map((l) => ({ label: l, selected: from === l, pick: () => pickFrom(l) })),
+    levelsFrom: [...LEVELS_FROM, null].map((l) => ({ label: l ?? 'Я не знаю', selected: from === l, pick: () => pickFrom(l) })),
     levelsTo: LEVELS_TO.map((l) => ({ label: l, selected: to === l, pick: () => pickTo(l) })),
     purposes: PURPOSES.map((p) => ({ label: p, selected: purpose.includes(p), pick: () => togglePurpose(p) })),
   };

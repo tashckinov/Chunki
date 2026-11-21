@@ -25,7 +25,7 @@ export interface UserTopicRow {
 
 export interface NewPlacementTest {
   userId: string;
-  fromLevel: string;
+  fromLevel: string | null;
   toLevel: string;
   purpose: string[];
   mcqAnswers: Record<string, string>;
