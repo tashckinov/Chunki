@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { Popover } from '@base-ui/react/popover';
 import { Play, Volume2 } from 'lucide-react';
 import type { ChunkSentence } from '../lib/collections';
@@ -44,13 +44,13 @@ export function StudyCardExample({ sentences, interfaceMode }: {
           <Play size={17} fill="currentColor" aria-hidden="true" />
         </button>
       )}
-      <p lang="en" className="min-w-0 wrap-anywhere text-[0.9375em] leading-[1.65]">
+      <div lang="en" className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-2 wrap-anywhere text-[0.9375em] leading-[1.65]">
         {splitExample(sentence).map(({ text, part }, index) =>
           part ? (
             <Popover.Root key={index} open={selected === index}
               onOpenChange={(open) => setSelected((previous) => open ? index : previous === index ? null : previous)}>
               <Popover.Trigger aria-pressed={selected === index}
-                className={`inline min-h-11 max-w-full wrap-anywhere rounded-lg border px-1.5 py-1 text-left align-baseline leading-normal outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent ${selected === index ? 'border-accent bg-accent-subtle text-accent' : 'border-transparent bg-surface-subtle text-text hover:border-border-strong'}`}>
+                className={`min-h-11 max-w-full wrap-anywhere rounded-lg border px-1.5 py-1 text-left leading-normal outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent ${selected === index ? 'border-accent bg-accent-subtle text-accent' : 'border-transparent bg-surface-subtle text-text hover:border-border-strong'}`}>
                 {text}
               </Popover.Trigger>
               <Popover.Portal>
@@ -74,9 +74,11 @@ export function StudyCardExample({ sentences, interfaceMode }: {
                 </Popover.Positioner>
               </Popover.Portal>
             </Popover.Root>
-          ) : <span key={index}>{text}</span>,
+          ) : text.trim()
+            ? <span key={index} className="min-w-0">{text}</span>
+            : <Fragment key={index}>{text}</Fragment>,
         )}
-      </p>
+      </div>
     </section>
   );
 }
