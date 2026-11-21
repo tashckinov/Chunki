@@ -25,6 +25,7 @@ export interface UserTopicRow {
 
 export interface NewPlacementTest {
   userId: string;
+  variantId?: string;
   fromLevel: string | null;
   toLevel: string;
   purpose: string[];
@@ -45,8 +46,8 @@ export async function createPlacementTest(input: NewPlacementTest): Promise<void
   await pool.query(
     `INSERT INTO placement_tests
        (user_id, from_level, to_level, purpose, mcq_answers, open9, open10, essay,
-        overall_level, skills, above_level, below_level, mcq_score, open_grades, essay_grade)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+        overall_level, skills, above_level, below_level, mcq_score, open_grades, essay_grade, variant_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
     [
       input.userId,
       input.fromLevel,
@@ -63,6 +64,7 @@ export async function createPlacementTest(input: NewPlacementTest): Promise<void
       JSON.stringify(input.mcqScore),
       JSON.stringify(input.openGrades),
       JSON.stringify(input.essayGrade),
+      input.variantId ?? null,
     ],
   );
 }

@@ -1,4 +1,4 @@
-import type { McqQuestion, ReadingQuestion } from './types.js';
+import type { McqQuestion, PlacementTestDefinition, ReadingQuestion } from './types.js';
 
 export const MCQ: McqQuestion[] = [
   { n: 1, q: 'I ___ here since 2022.', options: ['work', 'have worked', 'am working', 'worked'], correct: 'B' },
@@ -41,4 +41,9 @@ export const READING_QUESTIONS: ReadingQuestion[] = [
 export const ESSAY_PROMPT =
   'If you could move to another country next year, where would you go and why? What problems do you think you might face?';
 
-
+export const BUILTIN_PLACEMENT_TEST: PlacementTestDefinition = {
+  mcq: MCQ,
+  readingPassage: READING_PASSAGE,
+  readingQuestions: READING_QUESTIONS,
+  essayPrompt: ESSAY_PROMPT,
+};

@@ -13,6 +13,7 @@ import { chunksRoutes } from './modules/chunks/routes.js';
 import { loadReminderVapid } from './modules/reminders/vapid.js';
 import { reminderRoutes } from './modules/reminders/routes.js';
 import { startReminderDispatcher } from './modules/reminders/dispatcher.js';
+import { grammarTestAdminRoutes } from './modules/grammarTests/routes.js';
 import { progressRoutes } from './modules/progress/routes.js';
 import { adminRoutes } from './modules/admin/routes.js';
 import { charactersRoutes } from './modules/characters/routes.js';
@@ -57,6 +58,7 @@ async function main() {
   }
   await app.register(progressRoutes, { prefix: '/api/progress' });
   await app.register(adminRoutes, { prefix: '/api/admin' });
+  await app.register(grammarTestAdminRoutes, { prefix: '/api/admin/grammar-tests' });
   await app.register(charactersRoutes, { prefix: '/api/admin/characters' });
   await app.register(paymentsRoutes, { prefix: '/api/payments' });
   await app.register(programRoutes, { prefix: '/api/program' });

@@ -7,6 +7,7 @@ export const ADMIN_SECTIONS: { section: AdminSection; label: string; icon: IconN
   { section: 'content', label: 'Контент', icon: 'Stars' },
   { section: 'characters', label: 'Персонажи', icon: 'Characters' },
   { section: 'program', label: 'Программа', icon: 'Program' },
+  { section: 'grammarTests', label: 'Тест грамматики', icon: 'CheckBox' },
   { section: 'payments', label: 'Платежи', icon: 'Payments' },
   { section: 'timecodes', label: 'Таймкоды', icon: 'Tags' },
   { section: 'chunkGroups', label: 'Типы', icon: 'Tags' },

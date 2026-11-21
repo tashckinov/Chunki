@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { READING_QUESTIONS } from '@app/shared';
+import { BUILTIN_PLACEMENT_TEST, READING_QUESTIONS } from '@app/shared';
 import { OpenRouterGradingProvider } from './openrouter.js';
 
 const { create } = vi.hoisted(() => ({ create: vi.fn() }));
@@ -43,6 +43,21 @@ describe('OpenRouter grammar grading', () => {
       model: 'openai/gpt-4.1', max_tokens: 4096,
       tool_choice: { type: 'function', function: { name: 'submit_placement_grade' } },
     }));
+  });
+
+  it('scores the saved variant and uses its reading and writing prompts', async () => {
+    create.mockResolvedValue(completion(complete));
+    const definition = structuredClone(BUILTIN_PLACEMENT_TEST);
+    definition.mcq[0].correct = 'D';
+    definition.readingQuestions[0].q = 'What did the neighbour do?';
+    definition.essayPrompt = 'Write about your neighbour.';
+
+    const result = await grader.gradePlacementTest({ ...submission, mcqAnswers: { 1: 'D' } }, definition);
+
+    expect(result.mcqScore.correct).toBe(1);
+    const messages = create.mock.calls[0][0].messages;
+    expect(messages[1].content).toContain(definition.readingQuestions[0].q);
+    expect(messages[1].content).toContain(definition.essayPrompt);
   });
 
   it('rejects cut-off or incomplete verdicts', async () => {

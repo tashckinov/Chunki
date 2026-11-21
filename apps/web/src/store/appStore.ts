@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { INTRO_CHUNK_COUNT, MCQ } from '@app/shared';
-import type { DailyCardGoal, StudyGoalStatus, CEFRLevel, ExercisesGradeResult, PlacementGradeResult } from '@app/shared';
+import { INTRO_CHUNK_COUNT } from '@app/shared';
+import type { DailyCardGoal, StudyGoalStatus, CEFRLevel, ExercisesGradeResult, PlacementGradeResult, PlacementTestVariant } from '@app/shared';
 import {
   fetchProgram,
+  fetchPlacementVariant,
   fetchTopicStudy,
   startTopicAttempt as apiStartTopicAttempt,
   submitPlacementTest as apiSubmitPlacementTest,
@@ -104,7 +105,7 @@ const BACK_MAP: Partial<Record<Screen, Screen>> = {
   admin: 'cardslib',
 };
 
-export type AdminSection = 'users' | 'content' | 'characters' | 'program' | 'payments' | 'timecodes' | 'chunkGroups' | 'aiLogs';
+export type AdminSection = 'users' | 'content' | 'characters' | 'program' | 'grammarTests' | 'payments' | 'timecodes' | 'chunkGroups' | 'aiLogs';
 
 interface AppState {
   screen: Screen;
@@ -125,6 +126,11 @@ interface AppState {
   to: CEFRLevel;
   purpose: string[];
 
+  testVariant: PlacementTestVariant | null;
+  testDraftOwner: string | null;
+  lastTestVariantId: string | undefined;
+  testStarting: boolean;
+  testStartError: string | null;
   testPart: 1 | 2 | 3;
   qi: number;
   mcqAnswers: Record<number, string>;
@@ -240,7 +246,7 @@ interface AppState {
   pickFrom: (level: CEFRLevel | null) => void;
   pickTo: (level: CEFRLevel) => void;
   togglePurpose: (p: string) => void;
-  startTest: () => void;
+  startTest: (restart?: boolean) => Promise<void>;
 
   pickMcq: (letter: string) => void;
   pickUnknown: () => void;
@@ -320,6 +326,11 @@ export const useAppStore = create<AppState>()(
       to: 'B2',
       purpose: ['Работа', 'Переезд'],
 
+      testVariant: null,
+      testDraftOwner: null,
+      lastTestVariantId: undefined,
+      testStarting: false,
+      testStartError: null,
       testPart: 1,
       qi: 0,
       mcqAnswers: {},
@@ -395,7 +406,7 @@ export const useAppStore = create<AppState>()(
       back: () => set((s) => ({ screen: BACK_MAP[s.screen] ?? 'cardslib' })),
       signIn: () => startGoogleLogin(),
       signOut: async () => {
-        set({ user: null, studyGoal: null, isPremium: false, premiumUntil: null, collections: [], collectionDetails: {}, collectionsStatus: 'idle', collectionsError: null });
+        set({ user: null, grading: false, checkingContext: null, screen: 'cardslib', studyGoal: null, isPremium: false, premiumUntil: null, collections: [], collectionDetails: {}, collectionsStatus: 'idle', collectionsError: null });
         await logout().catch(() => {});
         void get().loadCollections();
       },
@@ -441,12 +452,34 @@ export const useAppStore = create<AppState>()(
       pickTo: (level) => set({ to: level }),
       togglePurpose: (p) =>
         set((s) => ({ purpose: s.purpose.includes(p) ? s.purpose.filter((x) => x !== p) : [...s.purpose, p] })),
-      startTest: () => set({ screen: 'test', testPart: 1, qi: 0, mcqAnswers: {} }),
+      startTest: async (restart = false) => {
+        const state = get();
+        const userId = state.user?.id;
+        if (!userId || state.testStarting) return;
+        if (!restart && state.testDraftOwner === userId && state.testVariant) {
+          set({ screen: 'test', gradingError: null, testStartError: null });
+          return;
+        }
+        set({ testStarting: true, testStartError: null });
+        try {
+          const variant = await fetchPlacementVariant(state.lastTestVariantId);
+          if (get().user?.id !== userId || !['goals', 'test'].includes(get().screen)) return;
+          set({
+            screen: 'test', testVariant: variant, testDraftOwner: userId, lastTestVariantId: variant.id,
+            testPart: 1, qi: 0, mcqAnswers: {}, open9: '', open10: '', essay: '',
+            gradingError: null, placementResult: null,
+          });
+        } catch {
+          if (get().user?.id === userId) set({ testStartError: 'Не удалось загрузить тест. Попробуйте ещё раз.' });
+        } finally {
+          set({ testStarting: false });
+        }
+      },
 
       pickMcq: (letter) => set((s) => ({ mcqAnswers: { ...s.mcqAnswers, [s.qi + 1]: letter } })),
       pickUnknown: () => set((s) => ({ mcqAnswers: { ...s.mcqAnswers, [s.qi + 1]: '—' } })),
       nextQ: () =>
-        set((s) => (s.qi >= MCQ.length - 1 ? { testPart: 2, qi: s.qi } : { qi: s.qi + 1 })),
+        set((s) => (s.qi >= (s.testVariant?.definition.mcq.length ?? 1) - 1 ? { testPart: 2, qi: s.qi } : { qi: s.qi + 1 })),
       prevQ: () => set((s) => ({ qi: Math.max(0, s.qi - 1) })),
       setOpen9: (v) => set({ open9: v }),
       setOpen10: (v) => set({ open10: v }),
@@ -454,13 +487,22 @@ export const useAppStore = create<AppState>()(
       setEssay: (v) => set({ essay: v }),
 
       submitTest: async () => {
+        const { user, testVariant, testDraftOwner, grading, from, to, purpose, mcqAnswers, open9, open10, essay } = get();
+        if (!user || !testVariant || testDraftOwner !== user.id || grading) return;
         set({ screen: 'checking', grading: true, gradingError: null, checkingContext: 'placement' });
-        const { from, to, purpose, mcqAnswers, open9, open10, essay } = get();
         try {
-          const { result, topics } = await apiSubmitPlacementTest({ fromLevel: from, toLevel: to, purpose, mcqAnswers, open9, open10, essay });
-          set({ placementResult: result, grading: false, screen: 'result', programStatus: 'active', programTopics: topics });
+          const { result, topics } = await apiSubmitPlacementTest({
+            variantId: testVariant.id, fromLevel: from, toLevel: to, purpose, mcqAnswers, open9, open10, essay,
+          });
+          if (get().user?.id !== user.id) return;
+          set({
+            placementResult: result, grading: false, checkingContext: null, screen: 'result', programStatus: 'active', programTopics: topics,
+            testVariant: null, testDraftOwner: null, testPart: 1, qi: 0, mcqAnswers: {}, open9: '', open10: '', essay: '',
+          });
         } catch (err) {
-          set({ grading: false, gradingError: programErrorMessage(err), screen: 'result' });
+          if (get().user?.id === user.id) {
+            set({ grading: false, checkingContext: null, gradingError: programErrorMessage(err), screen: 'test' });
+          }
         }
       },
 
@@ -951,6 +993,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'chunki/v1',
+      // Interrupted placement checks persist as their editable draft screen.
       // 'checking' is a pure loading state (see submitTest/exPrimary) with no
       // way back in the UI (CheckingScreen has no NavigationBar, and
       // BACK_MAP has no entry for it) — if the tab closed/reloaded mid-check,
@@ -980,6 +1023,8 @@ export const useAppStore = create<AppState>()(
           grading,
           gradingError,
           checkingContext,
+          testStarting,
+          testStartError,
           studyGoal,
           topicStudyError,
           user,
@@ -1004,6 +1049,8 @@ export const useAppStore = create<AppState>()(
         void flying;
         void grading;
         void gradingError;
+        void testStarting;
+        void testStartError;
         void checkingContext;
         void studyGoal;
         void topicStudyError;
@@ -1021,7 +1068,7 @@ export const useAppStore = create<AppState>()(
         void isPremium;
         void programStatus;
         void programTopics;
-        return rest;
+        return { ...rest, screen: s.screen === 'checking' && checkingContext === 'placement' ? 'test' : s.screen };
       },
     },
   ),

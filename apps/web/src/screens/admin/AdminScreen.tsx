@@ -6,6 +6,7 @@ import { CharactersSection } from './CharactersSection';
 import { AiLogsSection } from './AiLogsSection';
 import { TimecodesSection } from './TimecodesSection';
 import { PaymentsSection } from './PaymentsSection';
+import { GrammarTestsSection } from './GrammarTestsSection';
 import { ProgramSection } from './ProgramSection';
 import { ChunkGroupsSection } from './ChunkGroupsSection';
 
@@ -30,6 +31,8 @@ export function AdminScreen({ onOpenMenu }: { onOpenMenu: () => void }) {
         <CharactersSection onOpenMenu={onOpenMenu} />
       ) : adminSection === 'program' ? (
         <ProgramSection onOpenMenu={onOpenMenu} />
+      ) : adminSection === 'grammarTests' ? (
+        <GrammarTestsSection onOpenMenu={onOpenMenu} />
       ) : adminSection === 'payments' ? (
         <PaymentsSection onOpenMenu={onOpenMenu} />
       ) : adminSection === 'timecodes' ? (

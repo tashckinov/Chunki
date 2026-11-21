@@ -58,6 +58,7 @@ function CurrentScreen({ onOpenAdminMenu }: { onOpenAdminMenu: () => void }) {
   const screen = useAppStore((s) => s.screen);
   const authChecked = useAppStore((s) => s.authChecked);
   const user = useAppStore((s) => s.user);
+  const hasTestDraft = useAppStore((s) => !!s.testVariant && s.testDraftOwner === s.user?.id);
   // A confirmed-logged-out visitor (not just "haven't checked yet" — see the
   // authChecked guard) sees only the guest gallery, regardless of whatever
   // `screen` happens to be set to (e.g. left over from before signing out).
@@ -66,7 +67,7 @@ function CurrentScreen({ onOpenAdminMenu }: { onOpenAdminMenu: () => void }) {
     case 'goals':
       return <GoalsScreen />;
     case 'test':
-      return <TestScreen />;
+      return !authChecked ? null : hasTestDraft ? <TestScreen /> : <GoalsScreen />;
     case 'checking':
       return <CheckingScreenForContext />;
     case 'result':

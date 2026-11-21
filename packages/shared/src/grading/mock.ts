@@ -1,4 +1,4 @@
-import { READING_QUESTIONS } from '../content.js';
+import { BUILTIN_PLACEMENT_TEST } from '../content.js';
 import type {
   ExerciseItem,
   ExercisesGradeResult,
@@ -70,13 +70,13 @@ function pickTopics(count: number, seed: number): TopicSuggestion[] {
 export class MockGradingProvider implements GradingProvider {
   name = 'mock';
 
-  async gradePlacementTest(input: PlacementTestSubmission): Promise<PlacementGradeResult> {
-    const mcqScore = scoreMcq(input.mcqAnswers);
+  async gradePlacementTest(input: PlacementTestSubmission, definition = BUILTIN_PLACEMENT_TEST): Promise<PlacementGradeResult> {
+    const mcqScore = scoreMcq(input.mcqAnswers, definition.mcq);
     const mcqRatio = mcqScore.correct / mcqScore.total;
 
     const openGrades: Record<number, GradeDetail> = {};
-    openGrades[READING_QUESTIONS[0].n] = gradeFreeText(input.open9, 6);
-    openGrades[READING_QUESTIONS[1].n] = gradeFreeText(input.open10, 6);
+    openGrades[definition.readingQuestions[0].n] = gradeFreeText(input.open9, 6);
+    openGrades[definition.readingQuestions[1].n] = gradeFreeText(input.open10, 6);
     const essayGrade = gradeFreeText(input.essay, 40);
 
     const grammarScore = mcqRatio;

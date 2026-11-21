@@ -1,4 +1,5 @@
 import type { ExerciseItem, ExercisesGradeResult, PlacementGradeResult, PlacementTestSubmission, TopicStudyContent, TopicSuggestion } from '@app/shared';
+import { findGrammarTest } from '../grammarTests/repository.js';
 import { getGradingProvider } from '../../grading/index.js';
 import { withAiCallLogging } from '../aiLogs/service.js';
 import { resolveEffectiveTariff, listUpsellTariffs, type PublicTariff } from '../subscriptionTariffs/service.js';
@@ -65,6 +66,7 @@ async function checkProgramAllowed(userId: string): Promise<PublicTariff[] | nul
 }
 
 export type SubmitPlacementTestResult =
+  | { kind: 'variant_not_found' }
   | { kind: 'not_allowed'; upsellTariffs: PublicTariff[] }
   | { kind: 'ok'; result: PlacementGradeResult; topics: UserTopicSummary[] };
 
@@ -72,11 +74,14 @@ export async function submitPlacementTest(userId: string, input: PlacementTestSu
   const upsellTariffs = await checkProgramAllowed(userId);
   if (upsellTariffs) return { kind: 'not_allowed', upsellTariffs };
 
+  const definition = await findGrammarTest(input.variantId);
+  if (!definition) return { kind: 'variant_not_found' };
   const provider = getGradingProvider();
-  const result = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: provider.model ?? null, request: input }, () => provider.gradePlacementTest(input));
+  const result = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: provider.model ?? null, request: input }, () => provider.gradePlacementTest(input, definition));
 
   await createPlacementTest({
     userId,
+    variantId: input.variantId === 'builtin' ? undefined : input.variantId,
     fromLevel: input.fromLevel,
     toLevel: input.toLevel,
     purpose: input.purpose,

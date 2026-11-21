@@ -1,4 +1,3 @@
-import { ESSAY_PROMPT, READING_PASSAGE, READING_QUESTIONS } from '@app/shared';
 import { useAppStore } from '../store/appStore';
 import { useTestView } from '../store/derived';
 import { NavigationBar } from '../components/ui/NavigationBar';
@@ -10,6 +9,7 @@ import { Textarea } from '../components/ui/Textarea';
 export function TestScreen() {
   const s = useAppStore();
   const v = useTestView();
+  const { readingPassage, readingQuestions, essayPrompt } = v.definition;
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
@@ -59,19 +59,19 @@ export function TestScreen() {
       {s.testPart === 2 && (
         <div className="scroll-clean flex-1 min-h-0 px-5 pb-6 flex flex-col gap-6">
           <div className="text-meta">Часть 2 · Reading</div>
-          <p className="text-[17px] leading-[27px] border-l-2 border-border pl-4">{READING_PASSAGE}</p>
+          <p className="text-[17px] leading-[27px] border-l-2 border-border pl-4">{readingPassage}</p>
           <div className="flex flex-col gap-3">
             <div className="text-body">
-              {READING_QUESTIONS[0].n}. {READING_QUESTIONS[0].q}{' '}
+              {readingQuestions[0].n}. {readingQuestions[0].q}{' '}
               <span className="text-text-secondary">Ответь своими словами на английском, не копируя предложение.</span>
             </div>
-            <Textarea value={s.open9} onChange={s.setOpen9} placeholder="Your answer" rows={3} />
+            <Textarea value={s.open9} onChange={s.setOpen9} maxLength={4000} placeholder="Your answer" rows={3} />
           </div>
           <div className="flex flex-col gap-3">
             <div className="text-body">
-              {READING_QUESTIONS[1].n}. {READING_QUESTIONS[1].q}
+              {readingQuestions[1].n}. {readingQuestions[1].q}
             </div>
-            <Textarea value={s.open10} onChange={s.setOpen10} placeholder="Your answer" rows={3} />
+            <Textarea value={s.open10} onChange={s.setOpen10} maxLength={4000} placeholder="Your answer" rows={3} />
           </div>
           <Button size="lg" onClick={s.goPart3} className="w-full">
             Часть 3
@@ -83,13 +83,14 @@ export function TestScreen() {
         <div className="scroll-clean flex-1 min-h-0 px-5 pb-6 flex flex-col gap-6">
           <div className="text-meta">Часть 3 · Active English</div>
           <div className="text-body">11. Напиши 5–8 предложений на английском:</div>
-          <p className="text-[19px] leading-[28px] italic border-l-2 border-accent pl-4">{ESSAY_PROMPT}</p>
+          <p className="text-[19px] leading-[28px] italic border-l-2 border-accent pl-4">{essayPrompt}</p>
           <div className="text-body-secondary -mt-3">Не старайся специально писать сложно. Пиши так, как реально написал бы человеку в переписке.</div>
-          <Textarea value={s.essay} onChange={s.setEssay} placeholder="Your answer" rows={9} />
+          <Textarea value={s.essay} onChange={s.setEssay} maxLength={8000} placeholder="Your answer" rows={9} />
           <div className="flex justify-between text-meta -mt-3">
             <span>{v.essayWords} слов</span>
             <span>нужно 5–8 предложений</span>
           </div>
+          {s.gradingError && <p role="alert" className="text-negative">Не удалось проверить тест. Ответы сохранены, попробуйте отправить ещё раз.</p>}
           <Button size="lg" onClick={s.submitTest} disabled={s.grading} className="w-full">
             Отправить на проверку
           </Button>

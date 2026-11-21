@@ -1,4 +1,4 @@
-import type { CEFRLevel, ExercisesGradeResult, PlacementGradeResult, TopicCategory } from '@app/shared';
+import type { ExercisesGradeResult, PlacementGradeResult, PlacementTestSubmission, PlacementTestVariant, TopicCategory } from '@app/shared';
 import { getJson, postJson } from './collections';
 
 export interface UserTopicSummary {
@@ -19,17 +19,12 @@ export async function fetchProgram(): Promise<ProgramState> {
   return getJson('/api/program');
 }
 
-export interface PlacementTestInput {
-  fromLevel: CEFRLevel | null;
-  toLevel: CEFRLevel;
-  purpose: string[];
-  mcqAnswers: Record<number, string>;
-  open9: string;
-  open10: string;
-  essay: string;
+export function fetchPlacementVariant(previous?: string): Promise<PlacementTestVariant> {
+  const query = previous ? `?previous=${encodeURIComponent(previous)}` : '';
+  return getJson(`/api/program/placement-variant${query}`);
 }
 
-export async function submitPlacementTest(input: PlacementTestInput): Promise<{ result: PlacementGradeResult; topics: UserTopicSummary[] }> {
+export async function submitPlacementTest(input: PlacementTestSubmission): Promise<{ result: PlacementGradeResult; topics: UserTopicSummary[] }> {
   return postJson('/api/program/placement-test', input);
 }
 

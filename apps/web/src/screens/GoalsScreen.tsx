@@ -5,7 +5,8 @@ import { Chip } from '../components/ui/Chip';
 import { Button } from '../components/ui/Button';
 
 export function GoalsScreen() {
-  const { startTest } = useAppStore();
+  const { startTest, testStarting, testStartError } = useAppStore();
+  const hasDraft = useAppStore((s) => !!s.testVariant && s.testDraftOwner === s.user?.id);
   const { levelsFrom, levelsTo, purposes } = useGoalsView();
 
   return (
@@ -54,9 +55,15 @@ export function GoalsScreen() {
         <div className="pt-2 border-t border-border">
           <div className="text-body-secondary pt-4">Дальше 11 заданий: грамматика и лексика, чтение, свободное письмо. Примерно 15 минут.</div>
         </div>
-        <Button size="lg" onClick={startTest} className="w-full mt-auto">
-          Перейти к тесту
-        </Button>
+        <div className="mt-auto flex flex-col gap-2">
+          {testStartError && <p role="alert" className="text-negative">{testStartError}</p>}
+          <Button size="lg" disabled={testStarting} onClick={() => void startTest()} className="w-full">
+            {testStarting ? 'Загружаем тест…' : hasDraft ? 'Продолжить тест' : 'Перейти к тесту'}
+          </Button>
+          {hasDraft && <Button variant="ghost" disabled={testStarting} onClick={() => {
+            if (window.confirm('Начать новый тест? Ответы текущего черновика будут удалены.')) void startTest(true);
+          }}>Начать заново</Button>}
+        </div>
       </div>
     </div>
   );

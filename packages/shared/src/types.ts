@@ -38,7 +38,20 @@ export interface TopicStudyContent {
 
 // ---- grading: request payloads ----
 
+export interface PlacementTestDefinition {
+  mcq: McqQuestion[];
+  readingPassage: string;
+  readingQuestions: ReadingQuestion[];
+  essayPrompt: string;
+}
+
+export interface PlacementTestVariant {
+  id: string;
+  definition: Omit<PlacementTestDefinition, 'mcq'> & { mcq: Omit<McqQuestion, 'correct'>[] };
+}
+
 export interface PlacementTestSubmission {
+  variantId?: string;
   fromLevel: CEFRLevel | null;
   toLevel: CEFRLevel;
   purpose: string[];
@@ -97,7 +110,7 @@ export interface ExercisesGradeResult {
 export interface GradingProvider {
   name: string;
   model?: string;
-  gradePlacementTest(input: PlacementTestSubmission): Promise<PlacementGradeResult>;
+  gradePlacementTest(input: PlacementTestSubmission, definition?: PlacementTestDefinition): Promise<PlacementGradeResult>;
   gradeExercises(input: ExercisesSubmission): Promise<ExercisesGradeResult>;
   generateTopicStudy(topic: TopicSuggestion): Promise<TopicStudyContent>;
   generateTopicExercises(topic: TopicSuggestion): Promise<ExerciseItem[]>;
