@@ -1,7 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useAppStore } from '../../store/appStore';
-import { Sheet } from '../../components/ui/Sheet';
-import { Icon } from '../../components/ui/Icon';
 import { UsersSection } from './UsersSection';
 import { ContentSection } from './ContentSection';
 import { CharactersSection } from './CharactersSection';
@@ -9,15 +7,11 @@ import { AiLogsSection } from './AiLogsSection';
 import { PaymentsSection } from './PaymentsSection';
 import { ProgramSection } from './ProgramSection';
 import { ChunkGroupsSection } from './ChunkGroupsSection';
-import { ADMIN_SECTIONS } from './sections';
 
-export function AdminScreen() {
+export function AdminScreen({ onOpenMenu }: { onOpenMenu: () => void }) {
   const user = useAppStore((s) => s.user);
   const goHome = useAppStore((s) => s.goHome);
-  const back = useAppStore((s) => s.back);
   const adminSection = useAppStore((s) => s.adminSection);
-  const setAdminSection = useAppStore((s) => s.setAdminSection);
-  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     if (user && !user.isAdmin) goHome();
@@ -25,60 +19,24 @@ export function AdminScreen() {
 
   if (!user?.isAdmin) return null;
 
-  const openMenu = () => setMenuOpen(true);
-
   return (
     <div className="flex-1 min-h-0 flex flex-col">
       {adminSection === 'users' ? (
-        <UsersSection onOpenMenu={openMenu} />
+        <UsersSection onOpenMenu={onOpenMenu} />
       ) : adminSection === 'content' ? (
-        <ContentSection onOpenMenu={openMenu} />
+        <ContentSection onOpenMenu={onOpenMenu} />
       ) : adminSection === 'characters' ? (
-        <CharactersSection onOpenMenu={openMenu} />
+        <CharactersSection onOpenMenu={onOpenMenu} />
       ) : adminSection === 'program' ? (
-        <ProgramSection onOpenMenu={openMenu} />
+        <ProgramSection onOpenMenu={onOpenMenu} />
       ) : adminSection === 'payments' ? (
-        <PaymentsSection onOpenMenu={openMenu} />
+        <PaymentsSection onOpenMenu={onOpenMenu} />
       ) : adminSection === 'chunkGroups' ? (
-        <ChunkGroupsSection onOpenMenu={openMenu} />
+        <ChunkGroupsSection onOpenMenu={onOpenMenu} />
       ) : (
-        <AiLogsSection onOpenMenu={openMenu} />
+        <AiLogsSection onOpenMenu={onOpenMenu} />
       )}
 
-      {/* Mobile-only: desktop switches sections via the persistent sidebar instead (see App.tsx). */}
-      <Sheet open={menuOpen} onOpenChange={setMenuOpen} title="Админка">
-        <div className="flex flex-col gap-1">
-          {ADMIN_SECTIONS.map((s) => (
-            <button
-              key={s.section}
-              type="button"
-              onClick={() => {
-                setAdminSection(s.section);
-                setMenuOpen(false);
-              }}
-              className={`pressable flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5 text-[14.5px] font-medium text-left ${
-                s.section === adminSection ? 'bg-accent-subtle text-accent' : 'text-text-secondary'
-              }`}
-            >
-              <Icon name={s.icon} size={19} />
-              {s.label}
-            </button>
-          ))}
-          <div className="border-t border-border mt-2 pt-2">
-            <button
-              type="button"
-              onClick={() => {
-                setMenuOpen(false);
-                back();
-              }}
-              className="pressable flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5 text-[14.5px] font-medium text-left text-text-secondary"
-            >
-              <Icon name="ArrowBack" size={19} />
-              Назад к приложению
-            </button>
-          </div>
-        </div>
-      </Sheet>
     </div>
   );
 }
