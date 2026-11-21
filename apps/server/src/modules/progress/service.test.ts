@@ -313,6 +313,28 @@ describe('submitProductionAnswer — candidate chunks + crediting', () => {
     expect(repo.upsertProgress).toHaveBeenCalledWith(userId, chunkId, expect.objectContaining({ state: 'passive', timesProductionPassed: 0 }));
   });
 
+  it('keeps a valid verdict and replaces feedback in the wrong language without retrying', async () => {
+    fakeJudge.judgeProduction.mockResolvedValue({ isAppropriate: true, usedChunkId: chunkId, feedback: 'Your reply is natural.' });
+
+    const result = await submitProductionAnswer(userId, chunkId, 'Sounds good.', 'ru');
+
+    expect(result).toMatchObject({
+      kind: 'ok',
+      usedChunkId: chunkId,
+      feedback: 'Ответ подходит к ситуации, и вы использовали знакомую фразу.',
+    });
+    expect(fakeJudge.judgeProduction).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ feedbackLanguage: 'ru' }));
+  });
+
+  it('keeps Russian feedback containing an English example', async () => {
+    const feedback = 'Лучше сказать «We’ll get the room key after we check in».';
+    fakeJudge.judgeProduction.mockResolvedValue({ isAppropriate: true, usedChunkId: chunkId, feedback });
+
+    const result = await submitProductionAnswer(userId, chunkId, 'We get room key after check in.');
+
+    expect(result).toMatchObject({ kind: 'ok', feedback });
+  });
+
   it('marks the original chunk passive (attempted, not passed) when appropriate but no known chunk was used', async () => {
     fakeJudge.judgeProduction.mockResolvedValue({ isAppropriate: true, usedChunkId: null, feedback: 'Смысл верный.' });
 

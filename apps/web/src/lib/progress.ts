@@ -1,3 +1,4 @@
+import type { ProductionFeedbackLanguage } from '@app/shared';
 import { ApiError, getJson, postJson } from './collections';
 import type { Tariff } from './payments';
 
@@ -80,9 +81,9 @@ export async function getProductionCheck(chunkId: string): Promise<ProductionChe
   return getJson<ProductionCheckAvailability>(`/api/progress/production-check/${chunkId}`);
 }
 
-export async function postProductionCheck(chunkId: string, answer: string): Promise<ProductionCheckResult> {
+export async function postProductionCheck(chunkId: string, answer: string, feedbackLanguage: ProductionFeedbackLanguage): Promise<ProductionCheckResult> {
   try {
-    return await postJson(`/api/progress/production-check/${chunkId}`, { answer });
+    return await postJson(`/api/progress/production-check/${chunkId}`, { answer, feedbackLanguage });
   } catch (err) {
     if (err instanceof ApiError && err.status === 502) {
       throw new Error('Извините, не смогли проверить ваш ответ.');

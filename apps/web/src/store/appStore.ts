@@ -924,7 +924,7 @@ export const useAppStore = create<AppState>()(
         set((st) => ({ sessionProductionPending: { ...st.sessionProductionPending, [chunkId]: true } }));
         get().advanceDeck();
 
-        postProductionCheck(chunkId, answer)
+        postProductionCheck(chunkId, answer, s.interfaceMode === 'ru-en' ? 'ru' : 'en')
           .then(({ isAppropriate, usedChunkId, usedChunkText, feedback, progress, modelAnswer, checkId }) => {
             set((st) => {
               const { [chunkId]: _drop, ...pending } = st.sessionProductionPending;

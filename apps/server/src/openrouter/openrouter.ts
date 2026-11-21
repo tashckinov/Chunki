@@ -19,6 +19,7 @@ export class OpenRouterProductionJudgeProvider implements ProductionJudgeProvide
 
   async judgeProduction(input: ProductionCheckInput): Promise<ProductionCheckResult> {
     const client = this.#client();
+    const language = input.feedbackLanguage === 'en' ? 'English' : 'Russian';
 
     const candidateLines = input.candidateChunks.map((c) => `- id "${c.id}": "${c.text}"`).join('\n');
     const user = [
@@ -50,7 +51,7 @@ export class OpenRouterProductionJudgeProvider implements ProductionJudgeProvide
         {
           role: 'system',
           content:
-            'You are judging a Russian-speaking English learner\'s free-text reply to a situational prompt: whether it is an appropriate natural reply, and whether it actually produced one of a small set of known target phrases. Always respond only via the provided tool.',
+            `Evaluate an English learner's reply for appropriateness and use of the target phrases. Respond only via the provided tool. Write the feedback in ${language}, even if the learner wrote or requested another language. Enclose any quoted examples in quotation marks and keep them in their original language.`,
         },
         { role: 'user', content: user },
       ],
@@ -69,7 +70,7 @@ export class OpenRouterProductionJudgeProvider implements ProductionJudgeProvide
                   enum: usedChunkIdEnum,
                   description: 'The id of whichever known phrase was actually used, or null if none of them was.',
                 },
-                feedback: { type: 'string', description: 'One short sentence in Russian, the single most useful piece of feedback.' },
+                feedback: { type: 'string', description: `One short sentence in ${language}, with the single most useful piece of feedback.` },
               },
               required: ['isAppropriate', 'usedChunkId', 'feedback'],
             },
