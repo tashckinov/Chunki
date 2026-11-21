@@ -5,6 +5,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import multipart from '@fastify/multipart';
 import { z } from 'zod';
 import { listProductionModelStats } from '../aiLogs/repository.js';
+import { createTimecode, listTimecodes } from '../timecodes/service.js';
 import { requireAdmin } from '../auth/requireAuth.js';
 import { MAX_UPLOAD_BYTES, UPLOADS_DIR, resizeImage } from '../../config/uploads.js';
 import {
@@ -347,6 +348,21 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       return { error: 'invalid_request' };
     }
     return { logs: await listAiCallLogsForAdmin(parsed.data.limit) };
+  });
+
+  app.get('/timecodes', async () => ({ timecodes: await listTimecodes() }));
+
+  app.post('/timecodes', async (request, reply) => {
+    const parsed = z.object({
+      tariffId: z.string().uuid(),
+      months: z.number().int().min(1).max(120),
+      maxUses: z.number().int().min(1).max(10000),
+    }).safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid_request' });
+    const { tariffId, months, maxUses } = parsed.data;
+    const timecode = await createTimecode(tariffId, months, maxUses);
+    if (!timecode) return reply.code(404).send({ error: 'tariff_not_found' });
+    return reply.code(201).send({ timecode });
   });
 
   app.get('/payments', async (request, reply) => {

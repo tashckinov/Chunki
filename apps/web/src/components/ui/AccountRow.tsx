@@ -4,6 +4,7 @@ import { useAppStore } from '../../store/appStore';
 import { APP_VERSION } from '../../lib/version';
 import { Dialog } from './Dialog';
 import { Button } from './Button';
+import { TimecodeSetting } from './TimecodeSetting';
 import { StudyReminderSetting } from './StudyReminderSetting';
 import { StudyGoalForm } from './StudyGoalForm';
 import { SegmentedControl } from './SegmentedControl';
@@ -183,6 +184,7 @@ export function AccountDialog({ open, onOpenChange }: { open: boolean; onOpenCha
             onOpenChange(false);
           }}
         />
+        {open && <TimecodeSetting key={user.id} />}
         <InterfaceModeSetting />
         {open && <>
           <StudyGoalSetting />

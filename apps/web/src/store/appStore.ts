@@ -104,7 +104,7 @@ const BACK_MAP: Partial<Record<Screen, Screen>> = {
   admin: 'cardslib',
 };
 
-export type AdminSection = 'users' | 'content' | 'characters' | 'program' | 'payments' | 'chunkGroups' | 'aiLogs';
+export type AdminSection = 'users' | 'content' | 'characters' | 'program' | 'payments' | 'timecodes' | 'chunkGroups' | 'aiLogs';
 
 interface AppState {
   screen: Screen;
