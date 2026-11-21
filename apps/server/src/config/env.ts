@@ -34,9 +34,9 @@ const envSchema = z.object({
   // Existing grading config (unrelated to auth), kept as-is. The model
   // default lives here (not as a `||` fallback in grading/anthropic.ts) so
   // every provider's default model is discoverable in one place.
-  GRADING_PROVIDER: z.preprocess(emptyToUndefined, z.enum(['mock', 'anthropic']).optional()),
-  ANTHROPIC_API_KEY: z.string().optional(),
-  ANTHROPIC_MODEL: z.preprocess(emptyToUndefined, z.string().default('claude-sonnet-5')),
+  // Treat the old production override as OpenRouter during the migration.
+  GRADING_PROVIDER: z.preprocess((value) => value === 'anthropic' ? 'openrouter' : emptyToUndefined(value), z.enum(['mock', 'openrouter']).optional()),
+  OPENROUTER_GRADING_MODEL: z.preprocess(emptyToUndefined, z.string().default('openai/gpt-4.1')),
 
   // Chunk production-check judge — same optional/auto-select shape as the
   // grading vars above, via OpenRouter instead of Anthropic directly.

@@ -1,7 +1,7 @@
 import { MockGradingProvider } from '@app/shared';
 import type { GradingProvider } from '@app/shared';
 import { loadEnv } from '../config/env.js';
-import { AnthropicGradingProvider } from './anthropic.js';
+import { OpenRouterGradingProvider } from './openrouter.js';
 
 let cached: GradingProvider | null = null;
 
@@ -12,12 +12,9 @@ export function getGradingProvider(): GradingProvider {
   if (cached) return cached;
 
   const env = loadEnv();
-  const explicit = env.GRADING_PROVIDER;
-  const hasApiKey = !!env.ANTHROPIC_API_KEY;
-  const isProd = env.NODE_ENV === 'production';
+  const useOpenRouter = env.GRADING_PROVIDER !== 'mock'
+    && (env.GRADING_PROVIDER !== undefined || env.NODE_ENV === 'production' || !!env.OPENROUTER_API_KEY);
 
-  const useAnthropic = explicit ? explicit === 'anthropic' : isProd || hasApiKey;
-
-  cached = useAnthropic ? new AnthropicGradingProvider(env) : new MockGradingProvider();
+  cached = useOpenRouter ? new OpenRouterGradingProvider(env) : new MockGradingProvider();
   return cached;
 }

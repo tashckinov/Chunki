@@ -96,6 +96,7 @@ export interface ExercisesGradeResult {
 
 export interface GradingProvider {
   name: string;
+  model?: string;
   gradePlacementTest(input: PlacementTestSubmission): Promise<PlacementGradeResult>;
   gradeExercises(input: ExercisesSubmission): Promise<ExercisesGradeResult>;
   generateTopicStudy(topic: TopicSuggestion): Promise<TopicStudyContent>;

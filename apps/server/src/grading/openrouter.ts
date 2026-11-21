@@ -1,4 +1,5 @@
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
+import { Ajv } from 'ajv';
 import { scoreMcq } from '@app/shared';
 import type { Env } from '../config/env.js';
 import type {
@@ -41,19 +42,15 @@ const GRADE_DETAIL_SCHEMA = {
   required: ['correctness', 'chunkUsage', 'grammar', 'naturalness', 'score', 'feedback', 'suggestedAnswer'],
 } as const;
 
-async function callTool<T>(client: Anthropic, opts: { model: string; system: string; user: string; toolName: string; toolDescription: string; schema: unknown }): Promise<T> {
-  const response = await client.messages.create({
-    model: opts.model,
-    max_tokens: 2048,
-    system: opts.system,
-    messages: [{ role: 'user', content: opts.user }],
-    tools: [{ name: opts.toolName, description: opts.toolDescription, input_schema: opts.schema as Anthropic.Tool.InputSchema }],
-    tool_choice: { type: 'tool', name: opts.toolName },
-  });
+const validator = new Ajv();
 
-  const toolUse = response.content.find((block): block is Anthropic.ToolUseBlock => block.type === 'tool_use');
-  if (!toolUse) throw new Error('Anthropic response did not include the expected tool call.');
-  return toolUse.input as T;
+interface ToolRequest {
+  system: string;
+  user: string;
+  toolName: string;
+  toolDescription: string;
+  schema: Record<string, unknown>;
+  maxTokens?: number;
 }
 
 /** Scores the deterministic (multiple-choice) items locally — no need to ask
@@ -70,27 +67,63 @@ function scoreChoiceItems(items: ExerciseItem[], answers: Record<number, string>
   return { correct, total };
 }
 
-export class AnthropicGradingProvider implements GradingProvider {
-  name = 'anthropic';
+export class OpenRouterGradingProvider implements GradingProvider {
+  readonly name = 'openrouter';
+  readonly model: string;
 
-  #env: Pick<Env, 'ANTHROPIC_API_KEY' | 'ANTHROPIC_MODEL'>;
-
-  constructor(env: Pick<Env, 'ANTHROPIC_API_KEY' | 'ANTHROPIC_MODEL'>) {
-    this.#env = env;
+  constructor(private readonly env: Pick<Env, 'OPENROUTER_API_KEY' | 'OPENROUTER_GRADING_MODEL'>) {
+    this.model = env.OPENROUTER_GRADING_MODEL;
   }
 
-  #client(): Anthropic {
-    const apiKey = this.#env.ANTHROPIC_API_KEY;
-    if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not set — required for the anthropic grading provider.');
-    return new Anthropic({ apiKey });
-  }
+  async #callTool<T>(request: ToolRequest): Promise<T> {
+    const apiKey = this.env.OPENROUTER_API_KEY;
+    if (!apiKey) throw new Error('OPENROUTER_API_KEY is required for grammar grading.');
+    const client = new OpenAI({ apiKey, baseURL: 'https://openrouter.ai/api/v1', maxRetries: 0, timeout: 45_000 });
+    const options: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming & { provider: { require_parameters: boolean } } = {
+      model: this.model,
+      max_tokens: request.maxTokens ?? 2048,
+      provider: { require_parameters: true },
+      messages: [
+        { role: 'system', content: request.system },
+        { role: 'user', content: request.user },
+      ],
+      tools: [{ type: 'function', function: {
+        name: request.toolName,
+        description: request.toolDescription,
+        parameters: request.schema,
+      } }],
+      tool_choice: { type: 'function', function: { name: request.toolName } },
+    };
 
-  get #model(): string {
-    return this.#env.ANTHROPIC_MODEL;
+    let response;
+    try {
+      response = await client.chat.completions.create(options);
+    } catch (error) {
+      if (!(error instanceof OpenAI.APIError)) throw error;
+      throw new Error(`OpenRouter grammar request failed (model=${this.model}, tool=${request.toolName}, status=${error.status ?? 'connection'}, type=${error.name})`);
+    }
+    const choice = response.choices?.[0];
+    const tool = choice?.message?.tool_calls?.find((call) => call.type === 'function' && call.function.name === request.toolName);
+    if (choice?.finish_reason === 'length' || !tool) {
+      throw new Error(`OpenRouter grammar response missing a complete tool call (model=${this.model}, tool=${request.toolName}, finish_reason=${choice?.finish_reason ?? 'unknown'})`);
+    }
+
+    let output: unknown;
+    try {
+      output = JSON.parse(tool.function.arguments);
+    } catch {
+      throw new Error(`OpenRouter grammar response contained invalid JSON (model=${this.model}, tool=${request.toolName})`);
+    }
+    const valid = validator.validate(request.schema, output);
+    const issue = validator.errors?.[0];
+    validator.removeSchema(request.schema);
+    if (!valid) {
+      throw new Error(`OpenRouter grammar response failed validation (model=${this.model}, tool=${request.toolName}, field=${issue?.instancePath || '/'}, rule=${issue?.keyword ?? 'unknown'})`);
+    }
+    return output as T;
   }
 
   async gradePlacementTest(input: PlacementTestSubmission): Promise<PlacementGradeResult> {
-    const client = this.#client();
     const mcqScore = scoreMcq(input.mcqAnswers);
 
     type ToolOutput = {
@@ -108,9 +141,11 @@ export class AnthropicGradingProvider implements GradingProvider {
       properties: {
         openGrades: {
           type: 'array',
+          minItems: READING_QUESTIONS.length,
+          maxItems: READING_QUESTIONS.length,
           items: {
             type: 'object',
-            properties: { n: { type: 'number' }, ...GRADE_DETAIL_SCHEMA.properties },
+            properties: { n: { type: 'integer', enum: READING_QUESTIONS.map(({ n }) => n) }, ...GRADE_DETAIL_SCHEMA.properties },
             required: ['n', ...GRADE_DETAIL_SCHEMA.required],
           },
         },
@@ -150,11 +185,11 @@ export class AnthropicGradingProvider implements GradingProvider {
       'Grade each open reading answer for comprehension correctness (not grammar — they answered in English but the point is whether they understood the passage). Grade the essay for grammar, natural phrasing, and range of constructions used at CEFR level. Use the multiple-choice score as strong signal for the "Грамматика" skill bar. Produce an overall CEFR level, four skill bars (Грамматика, Чтение и понимание, Лексика и чанки, Письмо), one sentence on what is above the overall level, one sentence on what pulls it down, and a personalized study plan of around 10 concrete topics (grammar points, lexical chunks, skills) worth studying next given this learner\'s level, goal, and purpose — each with a short kebab-case key, a Russian title, a category, and a one-sentence rationale grounded in something specific from this test. All prose fields must be in Russian except suggestedAnswer/chunkUsage which are English.',
     ].join('\n');
 
-    const out = await callTool<ToolOutput>(client, {
-      model: this.#model,
+    const out = await this.#callTool<ToolOutput>({
       system: 'You are an expert CEFR English examiner grading a Russian-speaking learner and building them a personalized study plan. Be precise, concise, and encouraging. Always respond only via the provided tool.',
       user,
       toolName: 'submit_placement_grade',
+      maxTokens: 4096,
       toolDescription: 'Submit the structured grade and study plan for a CEFR placement test.',
       schema,
     });
@@ -163,6 +198,10 @@ export class AnthropicGradingProvider implements GradingProvider {
     for (const g of out.openGrades) {
       const { n, ...rest } = g;
       openGrades[n] = rest;
+    }
+
+    if (Object.keys(openGrades).length !== READING_QUESTIONS.length) {
+      throw new Error('OpenRouter grammar assessment returned duplicate reading grades.');
     }
 
     return {
@@ -178,7 +217,6 @@ export class AnthropicGradingProvider implements GradingProvider {
   }
 
   async gradeExercises(input: ExercisesSubmission): Promise<ExercisesGradeResult> {
-    const client = this.#client();
     const choiceScore = scoreChoiceItems(input.items, input.answers);
     const writeItems = input.items
       .map((item, i) => ({ item, i }))
@@ -195,9 +233,11 @@ export class AnthropicGradingProvider implements GradingProvider {
       properties: {
         writeGrades: {
           type: 'array',
+          minItems: writeItems.length,
+          maxItems: writeItems.length,
           items: {
             type: 'object',
-            properties: { itemIndex: { type: 'number' }, ...GRADE_DETAIL_SCHEMA.properties },
+            properties: { itemIndex: { type: 'integer', enum: writeItems.map(({ i }) => i) }, ...GRADE_DETAIL_SCHEMA.properties },
             required: ['itemIndex', ...GRADE_DETAIL_SCHEMA.required],
           },
         },
@@ -222,16 +262,19 @@ export class AnthropicGradingProvider implements GradingProvider {
     ].join('\n\n');
 
     const out = writeItems.length
-      ? await callTool<ToolOutput>(client, {
-          model: this.#model,
+      ? await this.#callTool<ToolOutput>({
           system: 'You are an expert CEFR English tutor grading exercise answers for a Russian-speaking learner. Always respond only via the provided tool.',
           user,
           toolName: 'submit_exercise_grade',
+          maxTokens: 4096,
           toolDescription: 'Submit structured grades for free-text exercise answers.',
           schema,
         })
       : { writeGrades: [], notes: [], discoveredTopics: [] };
 
+    if (new Set(out.writeGrades.map(({ itemIndex }) => itemIndex)).size !== writeItems.length) {
+      throw new Error('OpenRouter grammar assessment returned duplicate exercise grades.');
+    }
     const writeCorrect = out.writeGrades.reduce((sum, g) => sum + g.score, 0);
     const totalCorrect = choiceScore.correct + writeCorrect;
     const totalPossible = choiceScore.total + writeItems.length || 1;
@@ -248,7 +291,6 @@ export class AnthropicGradingProvider implements GradingProvider {
   }
 
   async generateTopicStudy(topic: TopicSuggestion): Promise<TopicStudyContent> {
-    const client = this.#client();
 
     const schema = {
       type: 'object',
@@ -271,8 +313,7 @@ export class AnthropicGradingProvider implements GradingProvider {
       required: ['explanation', 'keyPoints', 'contrastExamples', 'exampleChunks'],
     };
 
-    return callTool<TopicStudyContent>(client, {
-      model: this.#model,
+    return this.#callTool<TopicStudyContent>({
       system: 'You are an expert English teacher writing concise study material in Russian for a Russian-speaking learner. Always respond only via the provided tool.',
       user: `Write study material for this topic: "${topic.title}" (category: ${topic.category}). Context for why the learner needs it: ${topic.rationale}`,
       toolName: 'submit_topic_study',
@@ -282,7 +323,6 @@ export class AnthropicGradingProvider implements GradingProvider {
   }
 
   async generateTopicExercises(topic: TopicSuggestion): Promise<ExerciseItem[]> {
-    const client = this.#client();
 
     type ToolOutput = {
       items: { type: 'choice' | 'write'; q: string; options?: string[]; answer?: string; rows?: number; placeholder?: string }[];
@@ -313,8 +353,7 @@ export class AnthropicGradingProvider implements GradingProvider {
       required: ['items'],
     };
 
-    const out = await callTool<ToolOutput>(client, {
-      model: this.#model,
+    const out = await this.#callTool<ToolOutput>({
       system: 'You are an expert English teacher writing a short practice quiz for a Russian-speaking learner. Always respond only via the provided tool.',
       user: `Write 5-8 practice exercises drilling this exact topic: "${topic.title}" (category: ${topic.category}). Context: ${topic.rationale}`,
       toolName: 'submit_topic_exercises',

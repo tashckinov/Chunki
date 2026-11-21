@@ -11,8 +11,8 @@ Implementation of the `LearningPlan.dc.html` design (see below for the original 
 - `packages/shared` — types + static content (questions, topics, chunk cards) shared by both.
 
 Grading is provider-agnostic (`GradingProvider` interface in `packages/shared`): a `MockGradingProvider`
-(deterministic, no network — used by default in dev) and an `AnthropicGradingProvider` (used by default
-in production, or whenever `ANTHROPIC_API_KEY` is set) that calls Claude with a forced tool call to get
+(deterministic, no network — used by default in dev) and an `OpenRouterGradingProvider` (used by default
+in production, or whenever `OPENROUTER_API_KEY` is set) that calls GPT-4.1 through OpenRouter by default with a forced tool call to get
 structured JSON back. The same provider also generates each topic's study material and practice
 exercises on demand (see `apps/server/src/modules/program/`) — the placement test, its ~10 follow-up
 topics, per-topic study/exercises, and the later spaced reconfirmation are all real and persisted per
@@ -28,7 +28,7 @@ Every push to `main` builds `apps/web` and deploys it to GitHub Pages
 (`.github/workflows/deploy-pages.yml`) at `https://<owner>.github.io/Chunki/`, pointed at a real backend
 (`VITE_API_BASE_URL`, see `package.json`'s `build:pages` script) — grading and the whole placement-test/
 program flow are real end to end there too, not client-side mocked; whether that backend uses real
-Claude or the deterministic mock provider depends on whether it has `ANTHROPIC_API_KEY` set (see
+OpenRouter or the deterministic mock provider depends on whether it has `OPENROUTER_API_KEY` set (see
 `apps/server/README.md`). Build it yourself with `npm run build:pages -w apps/web`.
 
 If Pages hasn't been turned on for the repo yet, the workflow's `configure-pages` step enables it
@@ -56,8 +56,8 @@ npm run dev:web              # http://localhost:5173 — proxies /api to the ser
 Or run the whole backend in Docker too: `docker compose up --build` (see `apps/server/README.md`
 for the full set of Docker Compose commands, Google OAuth setup, and how auth/sessions work).
 
-To use real Claude grading instead of the mock adapter, copy `apps/server/.env.example` to
-`apps/server/.env` and set `ANTHROPIC_API_KEY` (`GRADING_PROVIDER=anthropic` to force it in dev).
+To use OpenRouter grading instead of the mock adapter, copy `apps/server/.env.example` to
+`apps/server/.env` and set `OPENROUTER_API_KEY` (`GRADING_PROVIDER=openrouter` to force it in dev).
 
 `npm run build` builds shared → server → web in order; `npm run typecheck` typechecks all three.
 
