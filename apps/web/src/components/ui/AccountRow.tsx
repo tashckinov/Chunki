@@ -4,7 +4,7 @@ import { useAppStore } from '../../store/appStore';
 import { APP_VERSION } from '../../lib/version';
 import { Dialog } from './Dialog';
 import { Button } from './Button';
-import { StudyGoalForm } from './StudyGoalDialog';
+import { StudyGoalForm } from './StudyGoalForm';
 import { SegmentedControl } from './SegmentedControl';
 import { Icon } from './Icon';
 
