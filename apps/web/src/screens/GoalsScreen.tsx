@@ -10,11 +10,10 @@ export function GoalsScreen() {
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      <NavigationBar sidebarMenu hideBackOnDesktop />
+      <NavigationBar size="large" title="С чего начнём" />
       <div className="scroll-clean flex-1 min-h-0 px-5 pb-8 flex flex-col gap-8">
         <div>
-          <div className="text-page-title">С чего начнём</div>
-          <div className="text-body-secondary mt-2">
+          <div className="text-body-secondary">
             Программа собирается под цель и результат теста. Открытые ответы проверяем по смыслу, а не по совпадению слов.
           </div>
         </div>
