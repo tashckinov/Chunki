@@ -20,7 +20,7 @@ export async function completeStudyIntro(userId: string): Promise<void> {
 export async function saveStudyGoal(userId: string, goal: DailyCardGoal): Promise<StudyGoalStatus> {
   const { rows } = await pool.query<StudyGoalStatus>(
     `UPDATE users
-     SET daily_card_goal = COALESCE(daily_card_goal, $2)
+     SET daily_card_goal = $2
      WHERE id = $1 AND study_intro_completed_at IS NOT NULL
      RETURNING true AS "introCompleted", daily_card_goal AS "dailyCardGoal"`,
     [userId, goal],

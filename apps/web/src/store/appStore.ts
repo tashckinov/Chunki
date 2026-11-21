@@ -157,6 +157,8 @@ interface AppState {
   deckIndex: number;
   studyGoal: StudyGoalStatus | null;
   introDeckOwner: string | null;
+  deckCursorKey: string | null;
+  lastDeckChunkByScope: Record<string, string>;
   completedIntroOwner: string | null;
   refreshStudyGoal: () => Promise<void>;
   saveStudyGoal: (goal: DailyCardGoal) => Promise<void>;
@@ -260,7 +262,7 @@ interface AppState {
   goHome: () => void;
   goProgram: () => void;
   goCardsLib: () => void;
-  goDeck: (chunks?: ChunkSummary[]) => void;
+  goDeck: (chunks?: ChunkSummary[], collectionSlug?: string) => Promise<void>;
   loadCollections: () => Promise<void>;
   /** Refetches the program (topic list + statuses) — called by checkAuth() and after grading a topic test. */
   loadProgram: () => Promise<void>;
@@ -347,6 +349,8 @@ export const useAppStore = create<AppState>()(
       deckIndex: 0,
       studyGoal: null,
       introDeckOwner: null,
+      deckCursorKey: null,
+      lastDeckChunkByScope: {},
       completedIntroOwner: null,
       activeDeckChunks: [],
       blockedChunkIds: {},
@@ -490,7 +494,7 @@ export const useAppStore = create<AppState>()(
         const status = await postStudyGoal(goal);
         if (get().user?.id === user.id) set({ studyGoal: status, completedIntroOwner: null });
       },
-      goDeck: async (chunks) => {
+      goDeck: async (chunks, collectionSlug) => {
         const user = get().user;
         if (!user) return;
         if (!get().studyGoal) await get().refreshStudyGoal();
@@ -502,10 +506,17 @@ export const useAppStore = create<AppState>()(
           return;
         }
         const eligible = (chunks ?? flattenChunks(Object.values(s.collectionDetails))).filter((c) => !s.blockedChunkIds[c.id]);
-        const resolved = introCompleted ? eligible : eligible.slice(0, INTRO_CHUNK_COUNT);
+        if (!eligible.length) return;
+        const scope = collectionSlug ? `collection:${collectionSlug}` : 'all';
+        const cursorKey = `${user.id}:${scope}`;
+        const lastChunk = s.lastDeckChunkByScope[cursorKey];
+        const start = (eligible.findIndex((chunk) => chunk.id === lastChunk) + 1) % eligible.length;
+        const size = introCompleted ? s.studyGoal?.dailyCardGoal ?? INTRO_CHUNK_COUNT : INTRO_CHUNK_COUNT;
+        const resolved = [...eligible.slice(start), ...eligible.slice(0, start)].slice(0, size);
         set({
           screen: 'deck',
-          introDeckOwner: introCompleted ? null : s.user.id,
+          introDeckOwner: introCompleted ? null : user.id,
+          deckCursorKey: cursorKey,
           activeDeckChunks: resolved,
           deckIndex: 0,
           flipped: false,
@@ -710,7 +721,12 @@ export const useAppStore = create<AppState>()(
         const finished = next >= s.activeDeckChunks.length;
         const owner = s.introDeckOwner;
         const introFinished = finished && owner !== null && owner === s.user?.id && s.activeDeckChunks.length > 0;
+        const currentChunk = s.activeDeckChunks[s.deckIndex];
+        const cursorKey = s.deckCursorKey;
         set({
+          ...(currentChunk && cursorKey?.startsWith(`${s.user?.id}:`)
+            ? { lastDeckChunkByScope: { ...s.lastDeckChunkByScope, [cursorKey]: currentChunk.id } }
+            : {}),
           ...(introFinished ? { completedIntroOwner: owner, introDeckOwner: null } : {}),
           deckIndex: next,
           flipped: false,

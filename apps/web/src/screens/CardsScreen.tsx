@@ -23,7 +23,7 @@ function CollectionCardHeader({ detail, progress }: { detail: CollectionDetail; 
   return (
     <button
       type="button"
-      onClick={() => goDeck(detail.chunks)}
+      onClick={() => goDeck(detail.chunks, detail.slug)}
       className="pressable flex flex-col min-[768px]:flex-row min-[768px]:items-center text-left"
     >
       {detail.bannerUrl && (
