@@ -1,7 +1,8 @@
 import type { PoolClient } from 'pg';
-import type { CEFRLevel, PlacementGradeResult, TopicCategory, TopicSuggestion } from '@app/shared';
+import type { CEFRLevel, PlacementGradeResult, TopicCategory, TopicSuggestion, TopicStudyContent } from '@app/shared';
 import { pool } from '../../db/pool.js';
 import { buildValuesClause } from '../../db/bulkInsert.js';
+import { resolveTopics } from './topicCatalog.js';
 
 export type UserTopicStatus = 'assigned' | 'passed_once' | 'mastered';
 export type UserTopicSource = 'placement' | 'discovered';
@@ -10,9 +11,11 @@ export type TopicAttemptKind = 'initial' | 'reconfirm';
 export interface UserTopicRow {
   id: string;
   user_id: string;
-  key: string;
-  title: string;
-  category: TopicCategory;
+  catalog_key: string;
+  catalog_title: string;
+  catalog_category: TopicCategory;
+  level: CEFRLevel | null;
+  catalog_study: TopicStudyContent | null;
   rationale: string;
   source: UserTopicSource;
   status: UserTopicStatus;
@@ -104,7 +107,7 @@ export async function findPlacementResult(userId: string, id: string): Promise<P
   return rows[0] ?? null;
 }
 
-export async function savePlacementTest(input: NewPlacementTest, topics: TopicSuggestion[], token: string): Promise<void> {
+export async function savePlacementTest(input: NewPlacementTest, topics: TopicSuggestion[], levels: readonly CEFRLevel[], token: string): Promise<TopicSuggestion[]> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -114,9 +117,10 @@ export async function savePlacementTest(input: NewPlacementTest, topics: TopicSu
     );
     if (!lock.rowCount) throw new Error('Placement check reservation was replaced');
     await createPlacementTest(input, client);
-    await insertNewUserTopics(input.userId, topics, 'placement', client);
+    const inserted = await insertNewUserTopics(input.userId, topics, levels, 'placement', client);
     await client.query('DELETE FROM placement_test_checks WHERE user_id = $1 AND token = $2', [input.userId, token]);
     await client.query('COMMIT');
+    return inserted;
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -153,35 +157,52 @@ async function createPlacementTest(input: NewPlacementTest, client: PoolClient):
   );
 }
 
-/** Inserts topics for a user, skipping any whose `key` they already have
- * (ON CONFLICT DO NOTHING) — this is how a re-discovered weak spot dedupes
- * against an existing (possibly already-mastered) topic. Returns only the
- * rows that were actually newly inserted. */
-export async function insertNewUserTopics(userId: string, topics: TopicSuggestion[], source: UserTopicSource, db: Pick<PoolClient, 'query'> = pool): Promise<UserTopicRow[]> {
-  const rows = buildValuesClause(topics.map((topic) => [userId, topic.key, topic.title, topic.category, topic.rationale, source]));
+async function insertNewUserTopics(
+  userId: string,
+  candidates: TopicSuggestion[],
+  levels: readonly CEFRLevel[],
+  source: UserTopicSource,
+  db: PoolClient,
+): Promise<TopicSuggestion[]> {
+  if (candidates.length === 0 || levels.length === 0) return [];
+  const { rows: assigned } = await db.query<{ catalog_key: string }>('SELECT catalog_key FROM user_topics WHERE user_id = $1', [userId]);
+  const topics = await resolveTopics(db, candidates, levels, new Set(assigned.map(({ catalog_key }) => catalog_key)));
+  const rows = buildValuesClause(topics.map((topic) => [userId, topic.key, topic.key, topic.title, topic.category, topic.rationale, source]));
   if (!rows) return [];
-  const { rows: inserted } = await db.query<UserTopicRow>(
-    `INSERT INTO user_topics (user_id, key, title, category, rationale, source)
+  const { rows: inserted } = await db.query<{ catalog_key: string }>(
+    `INSERT INTO user_topics (user_id, catalog_key, key, title, category, rationale, source)
      VALUES ${rows.placeholders}
-     ON CONFLICT (user_id, key) DO NOTHING
-     RETURNING *`,
+     ON CONFLICT (user_id, catalog_key) DO NOTHING
+     RETURNING catalog_key`,
     rows.values,
   );
-  return inserted;
+  const insertedKeys = new Set(inserted.map(({ catalog_key }) => catalog_key));
+  return topics.filter(({ key }) => insertedKeys.has(key));
+}
+
+const USER_TOPIC_SELECT = `SELECT t.*, c.title AS catalog_title, c.category AS catalog_category, c.level,
+  c.study_content AS catalog_study FROM user_topics t JOIN program_topics c ON c.key = t.catalog_key`;
+
+export async function listAssignedTopicKeys(userId: string): Promise<string[]> {
+  const { rows } = await pool.query<{ catalog_key: string }>(
+    'SELECT catalog_key FROM user_topics WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 80',
+    [userId],
+  );
+  return rows.map(({ catalog_key }) => catalog_key);
 }
 
 export async function findUserTopics(userId: string): Promise<UserTopicRow[]> {
-  const { rows } = await pool.query<UserTopicRow>(`SELECT * FROM user_topics WHERE user_id = $1 ORDER BY created_at ASC`, [userId]);
+  const { rows } = await pool.query<UserTopicRow>(`${USER_TOPIC_SELECT} WHERE t.user_id = $1 ORDER BY t.created_at, t.id`, [userId]);
   return rows;
 }
 
 export async function findUserTopic(userId: string, id: string): Promise<UserTopicRow | null> {
-  const { rows } = await pool.query<UserTopicRow>(`SELECT * FROM user_topics WHERE user_id = $1 AND id = $2`, [userId, id]);
+  const { rows } = await pool.query<UserTopicRow>(
+    `${USER_TOPIC_SELECT} WHERE t.user_id = $1
+     AND t.id = COALESCE((SELECT topic_id FROM user_topic_redirects WHERE old_id = $2), $2)`,
+    [userId, id],
+  );
   return rows[0] ?? null;
-}
-
-export async function updateTopicStudyContent(id: string, studyContent: unknown): Promise<void> {
-  await pool.query(`UPDATE user_topics SET study_content = $2, updated_at = now() WHERE id = $1`, [id, JSON.stringify(studyContent)]);
 }
 
 export interface TopicStatusPatch {
@@ -189,17 +210,6 @@ export interface TopicStatusPatch {
   passedOnceAt?: Date | null;
   nextReviewAt?: Date | null;
   masteredAt?: Date | null;
-}
-
-export async function updateTopicStatus(id: string, patch: TopicStatusPatch): Promise<UserTopicRow> {
-  const { rows } = await pool.query<UserTopicRow>(
-    `UPDATE user_topics
-     SET status = $2, passed_once_at = $3, next_review_at = $4, mastered_at = $5, updated_at = now()
-     WHERE id = $1
-     RETURNING *`,
-    [id, patch.status, patch.passedOnceAt ?? null, patch.nextReviewAt ?? null, patch.masteredAt ?? null],
-  );
-  return rows[0];
 }
 
 export interface TopicAttemptRow {
@@ -234,16 +244,49 @@ export interface AttemptResultPatch {
   scoreOutOf10: number;
   passed: boolean;
   notes: unknown;
-  discoveredTopics: unknown;
+  discoveredTopics: TopicSuggestion[];
 }
 
-export async function updateAttemptResult(id: string, patch: AttemptResultPatch): Promise<void> {
-  await pool.query(
-    `UPDATE topic_attempts
-     SET answers = $2, score_out_of_10 = $3, passed = $4, notes = $5, discovered_topics = $6, graded_at = now()
-     WHERE id = $1`,
-    [id, JSON.stringify(patch.answers), patch.scoreOutOf10, patch.passed, JSON.stringify(patch.notes), JSON.stringify(patch.discoveredTopics)],
-  );
+export async function saveTopicGrade(
+  userId: string,
+  attempt: TopicAttemptRow,
+  patch: AttemptResultPatch,
+  progress: TopicStatusPatch,
+  levels: readonly CEFRLevel[],
+): Promise<TopicSuggestion[] | null> {
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    const pending = await db.query(
+      'SELECT id FROM topic_attempts WHERE id = $1 AND graded_at IS NULL FOR UPDATE',
+      [attempt.id],
+    );
+    if (!pending.rowCount) {
+      await db.query('ROLLBACK');
+      return null;
+    }
+    await db.query(
+      `UPDATE user_topics
+       SET status = $2, passed_once_at = $3, next_review_at = $4, mastered_at = $5, updated_at = now()
+       WHERE id = $1 AND status = $6`,
+      [attempt.user_topic_id, progress.status, progress.passedOnceAt ?? null, progress.nextReviewAt ?? null, progress.masteredAt ?? null,
+        attempt.kind === 'initial' ? 'assigned' : 'passed_once'],
+    );
+    const inserted = await insertNewUserTopics(userId, patch.discoveredTopics, levels, 'discovered', db);
+    await db.query(
+      `UPDATE topic_attempts
+       SET answers = $2, score_out_of_10 = $3, passed = $4, notes = $5, discovered_topics = $6, graded_at = now()
+       WHERE id = $1`,
+      [attempt.id, JSON.stringify(patch.answers), patch.scoreOutOf10, patch.passed, JSON.stringify(patch.notes), JSON.stringify(inserted)],
+    );
+    await db.query('COMMIT');
+    return inserted;
+  } catch (err) {
+    await db.query('ROLLBACK');
+    throw err;
+  } finally {
+    db.release();
+  }
 }
 
 export interface AdminTopicActivityRow {
@@ -259,8 +302,9 @@ export interface AdminTopicActivityRow {
 
 export async function listRecentActivityForAdmin(limit: number): Promise<AdminTopicActivityRow[]> {
   const { rows } = await pool.query<AdminTopicActivityRow>(
-    `SELECT t.id, u.email AS user_email, t.title, t.category, t.status, t.source, t.next_review_at, t.updated_at
+    `SELECT t.id, u.email AS user_email, c.title, c.category, t.status, t.source, t.next_review_at, t.updated_at
      FROM user_topics t
+     JOIN program_topics c ON c.key = t.catalog_key
      LEFT JOIN users u ON u.id = t.user_id
      ORDER BY t.updated_at DESC
      LIMIT $1`,

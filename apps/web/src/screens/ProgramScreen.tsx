@@ -115,8 +115,9 @@ export function ProgramScreen() {
                 {topic.status === 'mastered' ? '✓' : i + 1}
               </div>
               <div className="flex-1">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <div className="text-[15.5px] leading-[22px]">{topic.title}</div>
+                  {topic.level && <span className="text-meta">{topic.level}</span>}
                   {topic.source === 'discovered' && <span className="text-[11px] font-medium text-accent rounded-full bg-accent-subtle px-2 py-0.5">найдено ИИ</span>}
                 </div>
                 <div className="text-meta mt-0.5">{meta}</div>

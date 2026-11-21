@@ -1,4 +1,4 @@
-import type { ExercisesGradeResult, PlacementGradeResult, PlacementOverview, PlacementResultSummary, PlacementTestSubmission, PlacementTestVariant, TopicCategory } from '@app/shared';
+import type { CEFRLevel, ExercisesGradeResult, PlacementGradeResult, PlacementOverview, PlacementResultSummary, PlacementTestSubmission, PlacementTestVariant, TopicCategory } from '@app/shared';
 import { getJson, postJson } from './collections';
 
 export interface UserTopicSummary {
@@ -6,6 +6,7 @@ export interface UserTopicSummary {
   key: string;
   title: string;
   category: TopicCategory;
+  level: CEFRLevel | null;
   rationale: string;
   source: 'placement' | 'discovered';
   status: 'assigned' | 'passed_once' | 'mastered';
