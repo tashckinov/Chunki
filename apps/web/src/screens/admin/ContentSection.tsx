@@ -26,7 +26,7 @@ import {
   type NewChunkInput,
 } from '../../lib/admin';
 import { fetchCharacters, type Character } from '../../lib/characters';
-import { saveAdminDialogue, type DialogueKind } from '../../lib/dialogues';
+import { fetchAdminDialogue, saveAdminDialogue, type DialogueKind } from '../../lib/dialogues';
 import { buildBulkDialogueAiPrompt } from '../../lib/dialogueAiPrompt';
 import { buildBulkChunkCreatePrompt, buildBulkSentencesRegeneratePrompt, buildBulkSituationsRegeneratePrompt } from '../../lib/chunkAiPrompt';
 import { parseBulkDialogueImport, toPlaybackMessages, type BulkParsedDialogue } from '../../lib/dialogueImport';
@@ -45,6 +45,7 @@ import { useTimedFlag } from '../../lib/timedFlag';
 import { Sheet } from '../../components/ui/Sheet';
 import { DialoguePlayback } from '../../components/dialogue/DialoguePlayback';
 import { DialogueBuilderView } from './DialogueBuilderView';
+import { ContentJourney, answerFormat, type ContentStage } from './ContentJourney';
 import { ChunkDetailView } from './ChunkDetailView';
 
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const;
@@ -88,7 +89,7 @@ function SaveButton({ onClick, disabled, saving }: { onClick: () => void; disabl
 type ContentView =
   | { kind: 'collections' }
   | { kind: 'chunks'; collectionId: string }
-  | { kind: 'chunkDetail'; collectionId: string; chunk: AdminChunk }
+  | { kind: 'chunkDetail'; collectionId: string; chunk: AdminChunk; stage?: ContentStage }
   | { kind: 'editChunk'; collectionId: string; chunk: AdminChunk | 'new' }
   | { kind: 'editCollection'; collectionId?: string } // no collectionId = creating a new one, from the collections root
   | { kind: 'editDialogue'; collectionId: string; chunk: AdminChunk }
@@ -327,6 +328,12 @@ function CollectionEditView({
   );
 }
 
+function ImportImpact({ total, replacements }: { total: number; replacements: number }) {
+  return <p className="rounded-xl bg-surface-subtle p-3 text-[13px]">
+    Чанков в импорте: {total} · заполнение пустых: {total - replacements} · замена материала: {replacements}
+  </p>;
+}
+
 /** Row of one entry in the bulk-import preview list — collapsed by default, expands to the full DialoguePlayback preview. */
 function BulkPreviewRow({ item, chunkText, characters }: { item: BulkParsedDialogue; chunkText: string; characters: Character[] }) {
   const [expanded, setExpanded] = useState(false);
@@ -411,6 +418,7 @@ function BulkDialogueAiSheet({
   const [copied, flashCopied] = useTimedFlag();
   const [importText, setImportText] = useState('');
   const [importError, setImportError] = useState<string | null>(null);
+  const [replacements, setReplacements] = useState<string[]>([]);
   const [preview, setPreview] = useState<BulkParsedDialogue[] | null>(null);
   const { saving, saveSummary, saveAll: runSaveAll, reset: resetSave } = useBulkSave<BulkParsedDialogue, string>();
 
@@ -429,7 +437,9 @@ function BulkDialogueAiSheet({
     flashCopied();
   }
 
-  function handleParse() {
+  const [checking, setChecking] = useState(false);
+
+  async function handleParse() {
     const result = parseBulkDialogueImport(importText, chunks, characters ?? []);
     if (result.kind === 'error') {
       setImportError(result.message);
@@ -437,11 +447,22 @@ function BulkDialogueAiSheet({
     }
     setImportError(null);
     resetSave();
-    setPreview(result.dialogues);
+    setChecking(true);
+    try {
+      const existing = await Promise.all(result.dialogues.map(async (item) =>
+        (await fetchAdminDialogue(item.chunkId, kind)) ? item.chunkId : null,
+      ));
+      setReplacements(existing.filter((id): id is string => id !== null));
+      setPreview(result.dialogues);
+    } catch {
+      setImportError('Не удалось проверить, какие комиксы будут заменены. Попробуйте ещё раз.');
+    } finally {
+      setChecking(false);
+    }
   }
 
   async function saveAll() {
-    if (!preview) return;
+    if (!preview || (replacements.length > 0 && !window.confirm(`Заменить сохранённый материал в чанках: ${replacements.length}?`))) return;
     await runSaveAll(
       preview,
       (item) => item.chunkId,
@@ -454,6 +475,7 @@ function BulkDialogueAiSheet({
   }
 
   function closeSheet(next: boolean) {
+    if (checking) return;
     if (next) {
       onOpenChange(true);
       return;
@@ -496,15 +518,19 @@ function BulkDialogueAiSheet({
             rows={10}
           />
           {importError && <div className="text-negative text-[13px]">{importError}</div>}
-          <Button size="sm" onClick={handleParse} disabled={!importText.trim()}>
-            Вставить и посмотреть
+          <Button size="sm" onClick={handleParse} disabled={!importText.trim() || checking}>
+            {checking ? 'Проверяем комиксы…' : 'Вставить и посмотреть'}
           </Button>
         </div>
       ) : (
         <div className="flex flex-col gap-3">
+          <ImportImpact total={preview.length} replacements={replacements.length} />
           <div className="flex flex-col gap-2 max-h-[45vh] overflow-y-auto">
             {preview.map((item) => (
-              <BulkPreviewRow key={item.chunkId} item={item} chunkText={chunks.find((c) => c.id === item.chunkId)?.text ?? item.chunkId} characters={characters ?? []} />
+              <div key={item.chunkId} className="flex flex-col gap-1">
+                <span className="px-1 text-meta">{replacements.includes(item.chunkId) ? 'Заменит текущий материал' : 'Заполнит пустой блок'}</span>
+                <BulkPreviewRow item={item} chunkText={chunks.find((c) => c.id === item.chunkId)?.text ?? item.chunkId} characters={characters ?? []} />
+              </div>
             ))}
           </div>
           {saveSummary && (
@@ -725,6 +751,7 @@ function BulkSentencesRegenerateAiSheet({
   const [copied, flashCopied] = useTimedFlag();
   const [importText, setImportText] = useState('');
   const [importError, setImportError] = useState<string | null>(null);
+  const [replacements, setReplacements] = useState<string[]>([]);
   const [preview, setPreview] = useState<BulkParsedSentences[] | null>(null);
   const { saving, saveSummary, saveAll: runSaveAll, reset: resetSave } = useBulkSave<BulkParsedSentences, string>();
 
@@ -741,11 +768,12 @@ function BulkSentencesRegenerateAiSheet({
     }
     setImportError(null);
     resetSave();
+    setReplacements(result.items.filter((item) => chunks.find((c) => c.id === item.chunkId)?.sentences.length).map((item) => item.chunkId));
     setPreview(result.items);
   }
 
   async function saveAll() {
-    if (!preview) return;
+    if (!preview || (replacements.length > 0 && !window.confirm(`Заменить сохранённый материал в чанках: ${replacements.length}?`))) return;
     await runSaveAll(
       preview,
       (item) => item.chunkId,
@@ -795,9 +823,13 @@ function BulkSentencesRegenerateAiSheet({
         </div>
       ) : (
         <div className="flex flex-col gap-3">
+          <ImportImpact total={preview.length} replacements={replacements.length} />
           <div className="flex flex-col gap-2 max-h-[45vh] overflow-y-auto">
             {preview.map((item) => (
-              <BulkSentencesPreviewRow key={item.chunkId} item={item} chunkText={chunks.find((c) => c.id === item.chunkId)?.text ?? item.chunkId} />
+              <div key={item.chunkId} className="flex flex-col gap-1">
+                <span className="px-1 text-meta">{replacements.includes(item.chunkId) ? 'Заменит текущий материал' : 'Заполнит пустой блок'}</span>
+                <BulkSentencesPreviewRow item={item} chunkText={chunks.find((c) => c.id === item.chunkId)?.text ?? item.chunkId} />
+              </div>
             ))}
           </div>
           {saveSummary && (
@@ -863,6 +895,7 @@ function BulkSituationsRegenerateAiSheet({
   const [copied, flashCopied] = useTimedFlag();
   const [importText, setImportText] = useState('');
   const [importError, setImportError] = useState<string | null>(null);
+  const [replacements, setReplacements] = useState<string[]>([]);
   const [preview, setPreview] = useState<BulkParsedSituations[] | null>(null);
   const { saving, saveSummary, saveAll: runSaveAll, reset: resetSave } = useBulkSave<BulkParsedSituations, string>();
 
@@ -879,11 +912,12 @@ function BulkSituationsRegenerateAiSheet({
     }
     setImportError(null);
     resetSave();
+    setReplacements(result.items.filter((item) => chunks.find((c) => c.id === item.chunkId)?.situationPrompts.length).map((item) => item.chunkId));
     setPreview(result.items);
   }
 
   async function saveAll() {
-    if (!preview) return;
+    if (!preview || (replacements.length > 0 && !window.confirm(`Заменить сохранённый материал в чанках: ${replacements.length}?`))) return;
     await runSaveAll(
       preview,
       (item) => item.chunkId,
@@ -933,9 +967,13 @@ function BulkSituationsRegenerateAiSheet({
         </div>
       ) : (
         <div className="flex flex-col gap-3">
+          <ImportImpact total={preview.length} replacements={replacements.length} />
           <div className="flex flex-col gap-2 max-h-[45vh] overflow-y-auto">
             {preview.map((item) => (
-              <BulkSituationsPreviewRow key={item.chunkId} item={item} chunkText={chunks.find((c) => c.id === item.chunkId)?.text ?? item.chunkId} />
+              <div key={item.chunkId} className="flex flex-col gap-1">
+                <span className="px-1 text-meta">{replacements.includes(item.chunkId) ? 'Заменит текущий материал' : 'Заполнит пустой блок'}</span>
+                <BulkSituationsPreviewRow item={item} chunkText={chunks.find((c) => c.id === item.chunkId)?.text ?? item.chunkId} />
+              </div>
             ))}
           </div>
           {saveSummary && (
@@ -981,25 +1019,25 @@ function BulkAiMenuSheet({
         />
         <ListRow
           leading={<Icon name="Refresh" size={20} />}
-          title="Обновить предложения"
+          title="Карточка · примеры предложений"
           subtitle="Пересоздать примеры предложений (с разбором по частям) у существующих чанков"
           onClick={() => onPick('sentences')}
         />
         <ListRow
           leading={<Icon name="Chat" size={20} />}
-          title="Обновить текстовые сценарии Ситуации"
+          title="Проверка ответа · текстовые сценарии"
           subtitle="Пересоздать текстовые сценарии для упражнения «Ситуация» (с разбором по частям)"
           onClick={() => onPick('situations')}
         />
         <ListRow
           leading={<Icon name="Characters" size={20} />}
-          title="Обновить комиксы «Не знаю»"
+          title="После «Не знаю» · комиксы"
           subtitle="Сгенерировать комиксы, которые показываются при свайпе «Не знаю», для всех чанков коллекции сразу"
           onClick={() => onPick('dialogues')}
         />
         <ListRow
           leading={<Icon name="Edit" size={20} />}
-          title="Обновить комиксы Ситуации"
+          title="Проверка ответа · комиксы"
           subtitle="Сгенерировать комиксы с репликой-пропуском для упражнения «Ситуация» — для всех чанков коллекции сразу"
           onClick={() => onPick('situationDialogues')}
           divider={false}
@@ -1015,6 +1053,9 @@ export function ContentSection({ onOpenMenu }: { onOpenMenu: () => void }) {
   const [characters, setCharacters] = useState<Character[] | null>(null);
   const [groups, setGroups] = useState<AdminChunkGroup[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState('all');
+  const [stage, setStage] = useState<ContentStage>();
   const [view, setView] = useState<ContentView>({ kind: 'collections' });
   const [bulkAiMenuOpen, setBulkAiMenuOpen] = useState(false);
   const [bulkAiOpen, setBulkAiOpen] = useState(false);
@@ -1080,9 +1121,11 @@ export function ContentSection({ onOpenMenu }: { onOpenMenu: () => void }) {
       setChunks(null);
       return;
     }
+    let active = true;
     fetchAdminChunks(activeCollectionId)
-      .then(setChunks)
-      .catch(() => setError('Не удалось загрузить чанки.'));
+      .then((items) => { if (active) setChunks(items); })
+      .catch(() => { if (active) setError('Не удалось загрузить чанки.'); });
+    return () => { active = false; };
   }, [activeCollectionId]);
 
   function bumpChunkCount(collectionId: string, delta: number) {
@@ -1182,7 +1225,13 @@ export function ContentSection({ onOpenMenu }: { onOpenMenu: () => void }) {
     return (
       <ChunkDetailView
         chunk={chunk}
+        initialStage={view.stage}
         groups={groups}
+        characters={characters ?? []}
+        onSaveSentences={async (sentences) => {
+          const updated = await updateAdminChunk(chunk.id, { sentences });
+          handleBulkSentencesSaved(chunk.id, updated.sentences);
+        }}
         onBack={() => setView({ kind: 'chunks', collectionId })}
         onEditCore={() => setView({ kind: 'editChunk', collectionId, chunk })}
         onOpenBrowseDialogue={() => setView({ kind: 'editDialogue', collectionId, chunk })}
@@ -1200,12 +1249,12 @@ export function ContentSection({ onOpenMenu }: { onOpenMenu: () => void }) {
 
   if (view.kind === 'editDialogue') {
     const { collectionId, chunk } = view;
-    return <DialogueBuilderView chunk={chunk} kind="browse" onBack={() => setView({ kind: 'chunkDetail', collectionId, chunk })} />;
+    return <DialogueBuilderView chunk={chunk} kind="browse" onBack={() => setView({ kind: 'chunkDetail', collectionId, chunk, stage: 'browse' })} />;
   }
 
   if (view.kind === 'editSituationDialogue') {
     const { collectionId, chunk } = view;
-    return <DialogueBuilderView chunk={chunk} kind="situation" groups={groups} onBack={() => setView({ kind: 'chunkDetail', collectionId, chunk })} />;
+    return <DialogueBuilderView chunk={chunk} kind="situation" groups={groups} onBack={() => setView({ kind: 'chunkDetail', collectionId, chunk, stage: 'answer' })} />;
   }
 
   if (view.kind === 'editCollection') {
@@ -1223,6 +1272,13 @@ export function ContentSection({ onOpenMenu }: { onOpenMenu: () => void }) {
   if (view.kind === 'chunks') {
     const { collectionId } = view;
     const selected = collections?.find((c) => c.id === collectionId) ?? null;
+    const term = query.trim().toLocaleLowerCase('ru');
+    const visible = chunks?.filter((c) =>
+      (c.text.toLocaleLowerCase('ru').includes(term) || c.translation.toLocaleLowerCase('ru').includes(term))
+      && (filter === 'all' || filter === 'examples' && !c.sentences.length
+        || filter === 'browse' && !c.hasDialogue
+        || filter === 'answer' && !c.hasSituationDialogue && !c.situationPrompts.length),
+    );
     return (
       <div className="flex-1 min-h-0 flex flex-col">
         <NavigationBar title={selected?.title ?? 'Чанки'} onBack={() => setView({ kind: 'collections' })} />
@@ -1249,20 +1305,45 @@ export function ContentSection({ onOpenMenu }: { onOpenMenu: () => void }) {
                 </Button>
               </div>
             </div>
-            {chunks && chunks.length > 0 && (
-              <div className="text-meta">
-                Не знаю: {chunks.filter((c) => c.hasDialogue).length}/{chunks.length} · Ситуация (комикс): {chunks.filter((c) => c.hasSituationDialogue).length}/{chunks.length}
+            <ContentJourney selected={stage} onSelect={(next) => setStage(stage === next ? undefined : next)} />
+            {stage && <p className="rounded-xl bg-accent-subtle p-3 text-[13px]">{{
+              card: 'Добавьте примеры в разделе «Карточка». Один из них появится на обороте.',
+              browse: 'Комикс с примером открывается после «Не знаю» и доступен в галерее.',
+              recognition: 'Варианты перевода приложение подбирает автоматически.',
+              answer: 'Готовый комикс открывается первым. Если его нет, используется текстовый сценарий.',
+            }[stage]}</p>}
+            {!!chunks?.length && <>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {([
+                  ['Примеры на карточке', chunks.filter((c) => c.sentences.length).length],
+                  ['После «Не знаю»', chunks.filter((c) => c.hasDialogue).length],
+                  ['Проверка ответа', chunks.filter((c) => c.hasSituationDialogue || c.situationPrompts.length).length],
+                ] as const).map(([label, count]) => (
+                  <div key={label} className="rounded-xl border border-border p-3">
+                    <div className="text-meta">{label}</div>
+                    <div className="font-semibold tabular-nums">{count} / {chunks.length}</div>
+                  </div>
+                ))}
               </div>
-            )}
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="flex flex-col gap-1 text-meta">Поиск по фразе и переводу
+                  <Input value={query} onChange={setQuery} placeholder="Например, check in" />
+                </label>
+                <label className="flex flex-col gap-1 text-meta">Фильтр по материалам
+                  <select value={filter} onChange={(event) => setFilter(event.target.value)} className="min-h-10 rounded-xl border border-border bg-surface px-3 text-text">
+                    <option value="all">Все чанки</option>
+                    <option value="examples">Без примеров</option>
+                    <option value="browse">Без комикса «Не знаю»</option>
+                    <option value="answer">Без проверки ответа</option>
+                  </select>
+                </label>
+              </div>
+            </>}
             <div className="flex flex-col">
               {chunks === null && <div className="text-body-secondary py-2">Загрузка…</div>}
               {chunks?.length === 0 && <div className="text-body-secondary py-2">В коллекции пока нет чанков.</div>}
-              {chunks?.map((chunk) => {
-                const situationStatus = chunk.hasSituationDialogue
-                  ? 'комикс ✓'
-                  : chunk.situationPrompts.length > 0
-                    ? `текст (${chunk.situationPrompts.length})`
-                    : '—';
+              {!!chunks?.length && !visible?.length && <div className="py-2 text-body-secondary">По этому фильтру ничего не найдено.</div>}
+              {visible?.map((chunk) => {
                 return (
                   <button
                     key={chunk.id}
@@ -1273,7 +1354,12 @@ export function ContentSection({ onOpenMenu }: { onOpenMenu: () => void }) {
                     <div className="flex-1 min-w-0">
                       <div className="text-[14.5px] truncate">{chunk.text}</div>
                       <div className="text-meta truncate">
-                        {chunk.translation} · {chunk.level} · Не знаю: {chunk.hasDialogue ? '✓' : '—'} · Ситуация: {situationStatus}
+                        {chunk.translation} · {chunk.level}
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5 text-meta">
+                        <span className="rounded-full bg-surface-subtle px-2 py-0.5">Примеры: {chunk.sentences.length || 'нет'}</span>
+                        <span className="rounded-full bg-surface-subtle px-2 py-0.5">После «Не знаю»: {chunk.hasDialogue ? 'комикс' : 'без комикса'}</span>
+                        <span className="rounded-full bg-accent-subtle px-2 py-0.5">{answerFormat(chunk)}</span>
                       </div>
                     </div>
                     <Icon name="ChevronForward" size={18} className="text-text-secondary flex-none" />
