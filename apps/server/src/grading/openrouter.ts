@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import { Ajv } from 'ajv';
-import { CEFR_LEVELS, scoreMcq } from '@app/shared';
+import { CEFR_LEVELS, TOPIC_CATEGORIES, scoreMcq } from '@app/shared';
 import type { Env } from '../config/env.js';
 import type {
   ExerciseItem,
@@ -17,15 +17,13 @@ import type {
 } from '@app/shared';
 import { BUILTIN_PLACEMENT_TEST } from '@app/shared';
 
-const TOPIC_CATEGORY_ENUM = ['Грамматика', 'Лексика', 'Использование языка', 'Понимание', 'Письмо'];
-
 const TOPIC_SCHEMA = {
   type: 'object',
   properties: {
     key: { type: 'string', pattern: '^[a-z0-9]+(-[a-z0-9]+)*$', maxLength: 100, description: 'Copy the catalog key for an existing concept. Otherwise use a short English kebab-case key.' },
     title: { type: 'string', minLength: 1, maxLength: 160, description: 'Copy the catalog title or write a concise standard Russian title for a new concept.' },
     level: { type: 'string', enum: CEFR_LEVELS },
-    category: { type: 'string', enum: TOPIC_CATEGORY_ENUM },
+    category: { type: 'string', enum: TOPIC_CATEGORIES },
     rationale: { type: 'string', description: 'One short Russian sentence — concrete evidence from this answer for why this topic is weak.' },
   },
   required: ['key', 'title', 'category', 'level', 'rationale'],

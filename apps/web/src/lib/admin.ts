@@ -1,3 +1,4 @@
+import type { TopicIdentity, TopicStudyContent } from '@app/shared';
 import { getJson, postJson, patchJson, deleteJson, postFormData, type ChunkSentence, type SituationPrompt } from './collections';
 
 export interface AdminUser {
@@ -238,4 +239,22 @@ export interface ProductionModelStats {
 export async function fetchProductionModelStats(): Promise<ProductionModelStats[]> {
   const { models } = await getJson<{ models: ProductionModelStats[] }>('/api/admin/production-model-stats');
   return models;
+}
+
+export interface AdminCatalogTopic extends TopicIdentity {
+  aliases: string[];
+  study: TopicStudyContent | null;
+}
+
+export function fetchAdminTopicCatalog(q: string, offset: number) {
+  const query = new URLSearchParams({ q, offset: String(offset) });
+  return getJson<{ topics: TopicIdentity[]; nextOffset: number | null }>(`/api/admin/topic-catalog?${query}`);
+}
+
+export async function fetchAdminCatalogTopic(key: string) {
+  return (await getJson<{ topic: AdminCatalogTopic }>(`/api/admin/topic-catalog/${encodeURIComponent(key)}`)).topic;
+}
+
+export async function saveAdminCatalogTopic({ key, title, level, category }: TopicIdentity) {
+  return (await patchJson<{ topic: AdminCatalogTopic }>(`/api/admin/topic-catalog/${encodeURIComponent(key)}`, { title, level, category })).topic;
 }

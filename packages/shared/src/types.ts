@@ -17,7 +17,8 @@ export type ExerciseItem =
   | { type: 'choice'; q: string; options: string[]; answer: string }
   | { type: 'write'; q: string; rows: number; placeholder: string };
 
-export type TopicCategory = 'Грамматика' | 'Лексика' | 'Использование языка' | 'Понимание' | 'Письмо';
+export const TOPIC_CATEGORIES = ['Грамматика', 'Лексика', 'Использование языка', 'Понимание', 'Письмо'] as const;
+export type TopicCategory = typeof TOPIC_CATEGORIES[number];
 
 export interface TopicIdentity {
   key: string;

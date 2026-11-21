@@ -72,3 +72,64 @@ export async function saveCatalogStudy(topic: TopicIdentity, study: TopicStudyCo
   );
   return rows[0]?.study_content ?? study;
 }
+
+export interface AdminTopicDetail extends TopicIdentity {
+  aliases: string[];
+  study: TopicStudyContent | null;
+}
+
+export async function listTopicsForReview(search: string, offset: number) {
+  const pageSize = 50;
+  const { rows } = await pool.query<TopicIdentity>(
+    `SELECT key, title, category, level FROM program_topics
+     WHERE $1 = '' OR strpos(title_key, program_topic_name($1)) > 0
+       OR strpos(key, program_topic_name($1)) > 0
+       OR EXISTS (SELECT 1 FROM unnest(aliases) AS a WHERE strpos(a, program_topic_name($1)) > 0)
+     ORDER BY title_key, key LIMIT $2 OFFSET $3`,
+    [search, pageSize + 1, offset],
+  );
+  return { topics: rows.slice(0, pageSize), nextOffset: rows.length > pageSize ? offset + pageSize : null };
+}
+
+export async function getTopicForReview(key: string): Promise<AdminTopicDetail | null> {
+  const { rows } = await pool.query<AdminTopicDetail>(
+    'SELECT key, title, category, level, aliases, study_content AS study FROM program_topics WHERE key = $1', [key],
+  );
+  return rows[0] ?? null;
+}
+
+export async function updateTopicForReview(topic: TopicIdentity) {
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    await db.query("SELECT pg_advisory_xact_lock(hashtext('program-topic-catalog'))");
+    const current = await db.query('SELECT 1 FROM program_topics WHERE key = $1', [topic.key]);
+    if (!current.rowCount) {
+      await db.query('ROLLBACK');
+      return { kind: 'not_found' } as const;
+    }
+
+    const { rows } = await db.query<AdminTopicDetail>(
+      `UPDATE program_topics AS t
+       SET title = $2, category = $3, level = $4,
+           aliases = CASE WHEN title_key <> program_topic_name($2) AND title_key <> '' AND NOT (title_key = ANY(aliases))
+                     THEN array_append(aliases, title_key) ELSE aliases END
+       WHERE key = $1 AND NOT EXISTS (
+         SELECT 1 FROM program_topics other
+         WHERE other.key <> t.key AND (
+           (other.category = $3 AND other.title_key = program_topic_name($2))
+           OR other.key = program_topic_name($2) OR program_topic_name($2) = ANY(other.aliases)
+         )
+       )
+       RETURNING key, title, category, level, aliases, study_content AS study`,
+      [topic.key, topic.title, topic.category, topic.level],
+    );
+    await db.query('COMMIT');
+    return rows[0] ? { kind: 'ok', topic: rows[0] } as const : { kind: 'duplicate' } as const;
+  } catch (error) {
+    await db.query('ROLLBACK');
+    throw error;
+  } finally {
+    db.release();
+  }
+}
