@@ -45,6 +45,7 @@ export default defineConfig({
       // instead of the plugin's default silent/auto-injected registration.
       injectRegister: null,
       workbox: {
+        importScripts: ['reminders.js'],
         // Without this, skipWaiting() (triggered by tapping "Обновить")
         // activates the new worker but doesn't hand it control of the
         // already-open tab — only a future navigation would. That left the

@@ -10,6 +10,8 @@ import { waitForDatabase } from './db/pool.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { collectionsRoutes } from './modules/collections/routes.js';
 import { chunksRoutes } from './modules/chunks/routes.js';
+import { reminderRoutes } from './modules/reminders/routes.js';
+import { startReminderDispatcher } from './modules/reminders/dispatcher.js';
 import { progressRoutes } from './modules/progress/routes.js';
 import { adminRoutes } from './modules/admin/routes.js';
 import { charactersRoutes } from './modules/characters/routes.js';
@@ -42,6 +44,14 @@ async function main() {
   await app.register(authRoutes, { prefix: '/api/auth' });
   await app.register(collectionsRoutes, { prefix: '/api/collections' });
   await app.register(chunksRoutes, { prefix: '/api/chunks' });
+  const vapid = env.WEB_PUSH_PUBLIC_KEY && env.WEB_PUSH_PRIVATE_KEY && env.WEB_PUSH_SUBJECT
+    ? { publicKey: env.WEB_PUSH_PUBLIC_KEY, privateKey: env.WEB_PUSH_PRIVATE_KEY, subject: env.WEB_PUSH_SUBJECT }
+    : null;
+  await app.register(reminderRoutes, { prefix: '/api/reminders', publicKey: vapid?.publicKey });
+  if (vapid) {
+    const stop = startReminderDispatcher(app.log, vapid);
+    app.addHook('onClose', async () => stop());
+  }
   await app.register(progressRoutes, { prefix: '/api/progress' });
   await app.register(adminRoutes, { prefix: '/api/admin' });
   await app.register(charactersRoutes, { prefix: '/api/admin/characters' });
