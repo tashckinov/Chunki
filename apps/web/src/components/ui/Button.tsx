@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react';
 
 const SIZE: Record<'sm' | 'md' | 'lg', string> = {
-  sm: 'h-9 px-4 text-[14px] gap-1.5',
-  md: 'h-11 px-5 text-[15px] gap-2',
-  lg: 'h-[52px] px-6 text-[16px] gap-2',
+  sm: 'min-h-9 px-4 text-[0.875rem] gap-1.5',
+  md: 'min-h-11 px-5 text-[0.9375rem] gap-2',
+  lg: 'min-h-13 px-6 text-base gap-2',
 };
 
 const VARIANT: Record<'primary' | 'secondary' | 'ghost', string> = {
@@ -34,7 +34,7 @@ export function Button({
       type={type}
       disabled={disabled}
       onClick={onClick}
-      className={`inline-flex items-center justify-center rounded-[var(--radius-md)] font-medium transition-colors duration-150 disabled:cursor-default ${SIZE[size]} ${VARIANT[variant]} ${className}`}
+      className={`inline-flex items-center justify-center rounded-[var(--radius-md)] py-2 text-center font-medium leading-tight transition-colors duration-150 disabled:cursor-default ${SIZE[size]} ${VARIANT[variant]} ${className}`}
     >
       {children}
     </button>
