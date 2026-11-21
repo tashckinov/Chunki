@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { Menu } from '@base-ui/react/menu';
 import { BookOpen, Ellipsis } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
@@ -47,7 +47,7 @@ function SkipToast({ onCancel, onConfirm }: { onCancel: () => void; onConfirm: (
 export function DeckScreen() {
   const s = useAppStore();
   const v = useDeckView();
-  const [translationShown, setTranslationShown] = useState(false);
+  const detailsId = useId();
   const [skipToastChunkId, setSkipToastChunkId] = useState<string | null>(null);
 
   function handleSkip() {
@@ -55,13 +55,6 @@ export function DeckScreen() {
     setSkipToastChunkId(v.cur.id);
     s.skipCard();
   }
-
-  // Resets whenever the card is unflipped (front shown again — either the
-  // same card flipped back, or the next card starting fresh), so the
-  // translation is hidden behind the button again each time.
-  useEffect(() => {
-    if (!s.flipped) setTranslationShown(false);
-  }, [s.flipped, v.cur?.id]);
 
   useEffect(() => {
     if (!s.dragging) return;
@@ -88,6 +81,8 @@ export function DeckScreen() {
     );
   }
 
+  const showTranslation = s.interfaceMode === 'ru-en' && !!v.cur.translation;
+  const hasDetails = showTranslation || !!v.cur.explanation;
   const total = s.activeDeckChunks.length;
   const current = Math.min(s.deckIndex + 1, total);
   const verdict = v.opBury > Math.max(v.opKnow, v.opDont) ? 'Не уверен' : v.opKnow > v.opDont ? 'Знаю' : 'Не знаю';
@@ -106,7 +101,6 @@ export function DeckScreen() {
             <Menu.Portal>
               <Menu.Positioner align="end" sideOffset={6} className="study-session z-40">
                 <Menu.Popup className="min-w-48 rounded-2xl border border-border bg-surface p-1.5 text-text shadow-[var(--shadow-md)]">
-                  {s.flipped && <Menu.Item className="study-card-menu-item" onClick={s.flipCard}>Скрыть оборот</Menu.Item>}
                   <Menu.Item className="study-card-menu-item" onClick={s.undoCard} disabled={!s.deckIndex || !!s.flying}>Отменить</Menu.Item>
                   <Menu.Item className="study-card-menu-item" onClick={() => s.swipe('bury')} disabled={!!s.flying}>Не уверен</Menu.Item>
                   <Menu.Item className="study-card-menu-item" onClick={handleSkip} disabled={!!s.flying}>Пропустить карточку</Menu.Item>
@@ -125,10 +119,7 @@ export function DeckScreen() {
               if (!event.isPrimary || event.button !== 0 || (event.target as Element).closest('button, [role="dialog"]')) return;
               s.onCardPointerDown(event.clientX, event.clientY);
             }}
-            onClick={(event) => {
-              if (!s.flipped && !useAppStore.getState().flying && !(event.target as Element).closest('button, [role="dialog"]')) s.flipCard();
-            }}
-            className={`study-card-motion relative flex flex-col gap-4 rounded-3xl border border-border bg-surface p-4 shadow-[var(--shadow-sm)] sm:gap-5 sm:p-6 ${s.flipped ? 'touch-pan-y' : 'touch-none'}`}
+            className="study-card-motion relative flex touch-pan-y flex-col gap-4 rounded-3xl border border-border bg-surface p-4 shadow-[var(--shadow-sm)] sm:gap-5 sm:p-6"
             style={{ transform: v.cardTransform, transition: v.cardTransition }}
           >
             <div className="pointer-events-none absolute inset-0 rounded-3xl" style={{ background: v.tintColor, opacity: v.tintOpacity }} />
@@ -140,25 +131,28 @@ export function DeckScreen() {
               <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-accent-subtle text-accent sm:size-14" aria-hidden="true"><BookOpen size={24} /></span>
               <div className="min-w-0">
                 <h1 lang="en" className="break-words text-[1.75em] leading-tight font-semibold tracking-tight">{v.cur.text}</h1>
-                {s.flipped && v.cur.explanation && <p className="mt-2 break-words leading-relaxed text-text-secondary">{v.cur.explanation}</p>}
               </div>
             </div>
-            {!s.flipped && (
-              <button type="button" onClick={s.flipCard} className="min-h-11 self-start rounded-xl bg-surface-subtle px-4 py-2 text-[0.9375em] font-medium text-accent">
-                Открыть карточку
-              </button>
-            )}
-            {s.flipped && (
-              <>
-                <StudyCardExample key={v.cur.id} sentences={v.cur.sentences} interfaceMode={s.interfaceMode} />
-                {s.interfaceMode === 'ru-en' && (
-                  translationShown
-                    ? <p className="break-words rounded-xl bg-accent-subtle px-4 py-3 font-medium text-accent">{v.cur.translation}</p>
-                    : <button type="button" onClick={() => setTranslationShown(true)} className="min-h-11 self-start rounded-xl bg-surface-subtle px-4 py-2 text-[0.9375em] font-medium text-accent">
-                      Показать перевод карточки
-                    </button>
-                )}
-              </>
+            <StudyCardExample key={v.cur.id} sentences={v.cur.sentences} interfaceMode={s.interfaceMode} />
+            {hasDetails && (
+              <div className="border-t border-border pt-2">
+                <button type="button" aria-expanded={s.flipped} aria-controls={detailsId} onClick={s.flipCard}
+                  className="flex min-h-11 items-center gap-2 rounded-lg px-2 text-left text-[0.9375em] font-medium text-accent focus-visible:outline-2 focus-visible:outline-accent">
+                  <Icon name="ChevronForward" size={16} className={s.flipped ? 'rotate-90' : ''} />
+                  {s.flipped
+                    ? (showTranslation ? 'Скрыть перевод' : 'Скрыть пояснение')
+                    : (showTranslation ? 'Показать перевод' : 'Показать пояснение')}
+                </button>
+                <div id={detailsId} inert={!s.flipped} aria-hidden={!s.flipped}
+                  className={`grid motion-safe:transition-[grid-template-rows,opacity] motion-safe:duration-200 ${s.flipped ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                  <div className="min-h-0 overflow-hidden">
+                    <div className="mt-1 flex flex-col gap-1.5 rounded-xl bg-accent-subtle px-4 py-3 break-words">
+                      {showTranslation && <p className="font-semibold text-accent">{v.cur.translation}</p>}
+                      {v.cur.explanation && <p className="leading-relaxed text-text-secondary">{v.cur.explanation}</p>}
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
           </article>
         </div>
