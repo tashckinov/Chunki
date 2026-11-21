@@ -5,7 +5,6 @@ import { consumeAuthErrorFlag, consumeAuthToken } from './lib/auth';
 import { BottomNavigation, type NavItem } from './components/ui/BottomNavigation';
 import { Icon, type IconName } from './components/ui/Icon';
 import { IconButton } from './components/ui/IconButton';
-import { SidebarMenuContext } from './components/ui/sidebarMenu';
 import { Logo } from './components/brand/Logo';
 import { AccountRow } from './components/ui/AccountRow';
 import { StudyGoalScreen } from './screens/StudyGoalScreen';
@@ -106,11 +105,12 @@ function CurrentScreen({ onOpenAdminMenu }: { onOpenAdminMenu: () => void }) {
   }
 }
 
-function SidebarNav({ value, onChange, onClose, onExpand }: {
+function SidebarNav({ value, onChange, onClose, compact = false, onToggle }: {
   value: number;
   onChange: (v: number) => void;
   onClose?: () => void;
-  onExpand?: () => void;
+  compact?: boolean;
+  onToggle?: () => void;
 }) {
   const goHome = useAppStore((s) => s.goHome);
   const screen = useAppStore((s) => s.screen);
@@ -118,7 +118,6 @@ function SidebarNav({ value, onChange, onClose, onExpand }: {
   const setAdminSection = useAppStore((s) => s.setAdminSection);
   const back = useAppStore((s) => s.back);
   const inAdmin = screen === 'admin';
-  const compact = !!onExpand;
   const items = inAdmin
     ? ADMIN_SECTIONS.map((item) => ({ ...item, active: item.section === adminSection, select: () => setAdminSection(item.section) }))
     : SIDEBAR_ITEMS.map((item, index) => ({ ...item, active: index === value, select: () => onChange(index) }));
@@ -132,16 +131,18 @@ function SidebarNav({ value, onChange, onClose, onExpand }: {
         ${compact ? 'ml-auto w-16 px-2' : 'w-full px-3'}`}
     >
       <div className={`mb-4 flex shrink-0 items-center gap-2 ${compact ? 'justify-center' : ''}`}>
-        {compact ? (
-          <IconButton icon="Menu" label="Развернуть боковое меню" onClick={onExpand} />
-        ) : (
-          <>
-            {onClose && <IconButton icon="Close" label="Свернуть меню" onClick={onClose} />}
-            <button type="button" onClick={() => { goHome(); onClose?.(); }} className="pressable flex min-w-0 items-center gap-2 text-left">
-              <Logo size={26} />
-              <span className="text-[17px] font-semibold">Chunki</span>
-            </button>
-          </>
+        {onClose && <IconButton icon="Close" label="Свернуть меню" onClick={onClose} />}
+        {!compact && (
+          <button type="button" onClick={() => { goHome(); onClose?.(); }} className="pressable flex min-w-0 items-center gap-2 text-left">
+            <Logo size={26} />
+            <span className="text-[17px] font-semibold">Chunki</span>
+          </button>
+        )}
+        {onToggle && (
+          <span className={compact ? undefined : 'ml-auto'}>
+            <IconButton icon={compact ? 'PanelLeftOpen' : 'PanelLeftClose'}
+              label={compact ? 'Развернуть боковое меню' : 'Свернуть боковое меню'} onClick={onToggle} />
+          </span>
         )}
       </div>
       {items.map((item) => (
@@ -277,13 +278,12 @@ export default function App() {
         <div className={`h-dvh w-full flex justify-center bg-bg overflow-hidden ${studying ? 'study-session text-text' : ''}`}>
           {!loggedOut && (
             <div className="hidden w-[248px] flex-none min-[1200px]:block">
-              <SidebarNav value={navTab} onChange={setNavTab} onExpand={sidebarCollapsed ? () => setSidebarCollapsed(false) : undefined} />
+              <SidebarNav value={navTab} onChange={setNavTab} compact={sidebarCollapsed}
+                onToggle={() => setSidebarCollapsed((value) => !value)} />
             </div>
           )}
           <div className={`w-full min-[768px]:max-w-[720px] ${loggedOut ? 'min-[1200px]:max-w-[1040px]' : 'min-[1200px]:max-w-[860px]'} h-dvh overflow-hidden flex flex-col`}>
-            <SidebarMenuContext.Provider value={user ? { collapsed: sidebarCollapsed, toggle: () => setSidebarCollapsed((value) => !value) } : null}>
-              <CurrentScreen onOpenAdminMenu={openSidebar} />
-            </SidebarMenuContext.Provider>
+            <CurrentScreen onOpenAdminMenu={openSidebar} />
             {screen !== 'admin' && !loggedOut && !studying && (
               <div className="flex-none min-[1200px]:hidden">
                 <BottomNavigation items={MOBILE_NAV_ITEMS} value={navTab} onChange={setNavTab} />

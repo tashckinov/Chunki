@@ -1,12 +1,10 @@
-import { useContext, type ReactNode } from 'react';
-import { SidebarMenuContext } from './sidebarMenu';
+import type { ReactNode } from 'react';
 import { IconButton } from './IconButton';
 
 /**
  * Top navigation bar. "small"/"center" put the title inline with the back
  * button (center = centered title, used on flows like the test); "large"
- * shows a larger heading for section roots. The desktop sidebar toggle sits
- * next to the title.
+ * shows a larger heading for section roots.
  */
 export function NavigationBar({
   title,
@@ -29,12 +27,6 @@ export function NavigationBar({
   /** Right-aligned action (e.g. a bold "Сохранить" button), small/center only. */
   trailing?: ReactNode;
 }) {
-  const sidebar = useContext(SidebarMenuContext);
-  const sidebarButton = sidebar && (
-    <span className="hidden shrink-0 min-[1200px]:inline-flex">
-      <IconButton icon="Menu" label={sidebar.collapsed ? 'Открыть меню' : 'Свернуть меню'} onClick={sidebar.toggle} />
-    </span>
-  );
   const backSlotClass = hideBackOnDesktop ? 'min-[1200px]:hidden' : '';
   const back = onBack ? (
     <IconButton icon="ArrowBack" label="Назад" onClick={onBack} />
@@ -46,10 +38,7 @@ export function NavigationBar({
     return (
       <div className="flex-none px-5 pt-2 pb-3">
         {back && <div className={`flex items-center ${backSlotClass}`}>{back}</div>}
-        <div className="mt-1 flex items-center gap-2">
-          {sidebarButton}
-          <div className="text-page-title min-w-0">{title}</div>
-        </div>
+        <div className="text-page-title mt-1">{title}</div>
       </div>
     );
   }
@@ -57,7 +46,6 @@ export function NavigationBar({
   return (
     <div className="flex-none h-14 px-2 flex items-center gap-1">
       {back && <span className={backSlotClass}>{back}</span>}
-      {sidebarButton}
       {!back && size === 'center' && <span className="w-11 h-11 flex-none min-[1200px]:hidden" />}
       <div className={`flex-1 text-[17px] font-semibold truncate ${size === 'center' ? 'text-center' : 'px-1'}`}>{title}</div>
       {trailing ?? (size === 'center' ? <span className={`w-11 h-11 flex-none ${backSlotClass}`} /> : null)}
