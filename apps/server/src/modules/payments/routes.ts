@@ -3,6 +3,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
 import { z } from 'zod';
 import { loadEnv } from '../../config/env.js';
+import { redeemTimecode } from '../timecodes/service.js';
 import { requireAuthenticatedSession } from '../auth/requireAuth.js';
 import { createCheckoutForUser, getAccountPaymentStatus, handleLavaTopWebhook } from './service.js';
 import { listPublicTariffs } from '../subscriptionTariffs/service.js';
@@ -75,6 +76,19 @@ export const paymentsRoutes: FastifyPluginAsync = async (app) => {
       return { paymentUrl: result.paymentUrl };
     },
   );
+
+  app.post('/redeem-timecode', {
+    preHandler: [
+      requireAuthenticatedSession,
+      app.rateLimit({ max: 10, timeWindow: '10 minutes', keyGenerator: (request) => request.session!.userId }),
+    ],
+  }, async (request, reply) => {
+    const parsed = z.object({ code: z.string().trim().min(1).max(64) }).safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid_code' });
+    const result = await redeemTimecode(request.session!.userId, parsed.data.code);
+    if (result.kind !== 'ok') return reply.code(result.kind === 'invalid_code' ? 404 : 409).send({ error: result.kind });
+    return { premiumUntil: result.premiumUntil, isPremium: result.isPremium };
+  });
 
   app.get('/status', { preHandler: requireAuthenticatedSession }, async (request) => {
     return getAccountPaymentStatus(request.session!.userId);

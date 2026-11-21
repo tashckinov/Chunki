@@ -4,6 +4,7 @@ import { UsersSection } from './UsersSection';
 import { ContentSection } from './ContentSection';
 import { CharactersSection } from './CharactersSection';
 import { AiLogsSection } from './AiLogsSection';
+import { TimecodesSection } from './TimecodesSection';
 import { PaymentsSection } from './PaymentsSection';
 import { ProgramSection } from './ProgramSection';
 import { ChunkGroupsSection } from './ChunkGroupsSection';
@@ -31,6 +32,8 @@ export function AdminScreen({ onOpenMenu }: { onOpenMenu: () => void }) {
         <ProgramSection onOpenMenu={onOpenMenu} />
       ) : adminSection === 'payments' ? (
         <PaymentsSection onOpenMenu={onOpenMenu} />
+      ) : adminSection === 'timecodes' ? (
+        <TimecodesSection onOpenMenu={onOpenMenu} />
       ) : adminSection === 'chunkGroups' ? (
         <ChunkGroupsSection onOpenMenu={onOpenMenu} />
       ) : (
