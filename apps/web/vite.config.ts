@@ -23,7 +23,12 @@ function commitSha() {
   }
 }
 
-const appVersion = `${process.env.npm_package_version || '0.0.0'}+${commitSha()}`;
+const buildNumber = process.env.GITHUB_RUN_NUMBER;
+const buildAttempt = process.env.GITHUB_RUN_ATTEMPT;
+const revision = commitSha();
+const appVersion = buildNumber
+  ? `${buildNumber}${buildAttempt && buildAttempt !== '1' ? `.${buildAttempt}` : ''} · ${revision}`
+  : revision;
 
 export default defineConfig({
   base,

@@ -382,7 +382,7 @@ export const useAppStore = create<AppState>()(
       back: () => set((s) => ({ screen: BACK_MAP[s.screen] ?? 'cardslib' })),
       signIn: () => startGoogleLogin(),
       signOut: async () => {
-        set({ user: null, collections: [], collectionDetails: {}, collectionsStatus: 'idle', collectionsError: null });
+        set({ user: null, isPremium: false, premiumUntil: null, collections: [], collectionDetails: {}, collectionsStatus: 'idle', collectionsError: null });
         await logout().catch(() => {});
         void get().loadCollections();
       },
@@ -398,9 +398,11 @@ export const useAppStore = create<AppState>()(
         }
       },
       refreshPaymentStatus: async () => {
+        const user = get().user;
+        if (!user) return;
         try {
           const { premiumUntil, isPremium } = await fetchPaymentStatus();
-          set({ premiumUntil, isPremium });
+          if (get().user?.id === user.id) set({ premiumUntil, isPremium });
         } catch {
           // Best-effort — a failed refresh just leaves the last-known status in place.
         }
@@ -411,6 +413,7 @@ export const useAppStore = create<AppState>()(
         try {
           const user = await signInWithPasskeyCeremony();
           set({ user, passkeyBusy: false });
+          void get().refreshPaymentStatus();
           if (get().collectionsError === 'unauthorized') void get().loadCollections();
         } catch {
           set({ passkeyBusy: false, passkeyError: 'Не получилось войти через Passkey. Попробуйте ещё раз.' });
