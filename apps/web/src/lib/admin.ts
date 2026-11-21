@@ -1,4 +1,4 @@
-import type { TopicIdentity, TopicStudyContent } from '@app/shared';
+import type { CurriculumTopic, TopicIdentity, TopicStudyContent } from '@app/shared';
 import { getJson, postJson, patchJson, deleteJson, postFormData, type ChunkSentence, type SituationPrompt } from './collections';
 
 export interface AdminUser {
@@ -244,6 +244,8 @@ export async function fetchProductionModelStats(): Promise<ProductionModelStats[
 export interface AdminCatalogTopic extends TopicIdentity {
   aliases: string[];
   study: TopicStudyContent | null;
+  curriculumId: string | null;
+  curriculumSlot: boolean;
 }
 
 export function fetchAdminTopicCatalog(q: string, offset: number) {
@@ -257,4 +259,16 @@ export async function fetchAdminCatalogTopic(key: string) {
 
 export async function saveAdminCatalogTopic({ key, title, level, category }: TopicIdentity) {
   return (await patchJson<{ topic: AdminCatalogTopic }>(`/api/admin/topic-catalog/${encodeURIComponent(key)}`, { title, level, category })).topic;
+}
+
+export async function fetchCurriculumTopics() {
+  return (await getJson<{ topics: CurriculumTopic[] }>('/api/admin/curriculum-topics')).topics;
+}
+
+export async function addCurriculumTopic(topic: CurriculumTopic) {
+  return (await postJson<{ topic: CurriculumTopic }>('/api/admin/curriculum-topics', topic)).topic;
+}
+
+export function setTopicCurriculumLink(key: string, curriculumId: string | null) {
+  return patchJson<{ ok: true }>(`/api/admin/topic-catalog/${encodeURIComponent(key)}/curriculum`, { curriculumId });
 }

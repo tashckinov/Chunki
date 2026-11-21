@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import { MockGradingProvider, type PlacementTestSubmission, type TopicSuggestion } from '@app/shared';
+import { MockGradingProvider, type PlacementTestSubmission, type CurriculumTopic } from '@app/shared';
 import { afterAll, expect, it, vi } from 'vitest';
 import { pool } from '../db/pool.js';
+import { createCurriculumTopic, linkCurriculumTopic } from '../modules/program/topicCatalog.js';
 import { getGradingProvider } from '../grading/index.js';
 import { getPlacementResult, getProgramForUser, getTopicStudy, startTopicAttempt, submitPlacementTest, submitTopicAttempt } from '../modules/program/service.js';
 
@@ -76,23 +77,31 @@ it('counts successful tests once, serializes concurrent checks and keeps results
   }
 });
 
-it('reuses canonical topics and lessons, filters levels and never assigns a mastered topic twice', async () => {
+it('assigns only fixed curriculum IDs, preserves legacy progress, and generates scoped lessons', async () => {
   const { rows: [learner, other] } = await pool.query<{ id: string }>(
     'INSERT INTO users (is_admin) VALUES (true), (true) RETURNING id',
   );
   const suffix = randomUUID();
-  const topic = (key: string, title: string, level: TopicSuggestion['level']): TopicSuggestion =>
-    ({ key, title, level, category: 'Грамматика', rationale: 'Личное пояснение ученика' });
-  const articles = topic('articles-a-an-the', 'Артикли: a, an, the', 'A2');
-  const extension = topic(`requests-${suffix}`, `Вежливые просьбы ${suffix}`, 'B1');
-  const candidates = [
-    articles,
-    topic('english-articles', 'Артикли', 'B1'),
-    topic('inversion-after-negative-adverbials', 'Инверсия', 'B1'),
-    topic(`advanced-${suffix}`, 'Новая тема C1', 'C1'),
-    topic('to-be', 'Глагол to be', 'A1'),
-    extension,
-  ];
+  const legacyKey = `old-${suffix}`;
+  const extension: CurriculumTopic = {
+    id: `requests-${suffix}`, title: `Вежливые просьбы ${suffix}`, level: 'B1', category: 'Functions',
+    objective: 'Попросить коллегу перенести встречу.', subtopics: ['Просьба', 'Ответ'],
+  };
+  expect(await createCurriculumTopic(extension)).toBe(true);
+  const study = { explanation: 'Существующий урок', keyPoints: [], contrastExamples: [], exampleChunks: [] };
+  await pool.query(
+    "INSERT INTO program_topics (key, title, category, level, study_content) VALUES ($1, $2, 'Грамматика', 'A2', $3)",
+    [legacyKey, `Старые артикли ${suffix}`, study],
+  );
+  const { rows: [legacy] } = await pool.query<{ id: string }>(
+    `INSERT INTO user_topics (user_id, catalog_key, key, title, category, rationale, source, status)
+     VALUES ($1, $2, $2, 'Старые артикли', 'Грамматика', 'Старое пояснение', 'placement', 'mastered') RETURNING id`,
+    [learner.id, legacyKey],
+  );
+  expect(await linkCurriculumTopic(legacyKey, 'a2-articles')).toBe(true);
+
+  const candidates = ['a2-articles', 'c1-negative-inversion', 'a1-verb-to-be', 'invented-topic', extension.id, extension.id]
+    .map((key) => ({ key, rationale: 'Проверяемая рекомендация' }));
   const input: PlacementTestSubmission = { fromLevel: 'A2', toLevel: 'B1', purpose: [], mcqAnswers: {}, open9: '', open10: '', essay: '' };
   const provider = getGradingProvider();
   const grade = await provider.gradePlacementTest(input);
@@ -102,55 +111,42 @@ it('reuses canonical topics and lessons, filters levels and never assigns a mast
     discoveredTopics: candidates, nextReviewInDays: 0,
   });
   const lesson = vi.spyOn(provider, 'generateTopicStudy');
+  const exercises = vi.spyOn(provider, 'generateTopicExercises');
 
   try {
     const first = await submitPlacementTest(learner.id, input);
     if (first.kind !== 'ok') throw new Error(first.kind);
-    expect(first.topics.map(({ key, level }) => [key, level]).sort()).toEqual([['articles', 'A2'], [extension.key, 'B1']]);
-    expect(placement.mock.lastCall?.[2]?.catalog.some(({ key }) => key === 'articles')).toBe(true);
-    const assignedArticles = first.topics.find(({ key }) => key === 'articles');
-    if (!assignedArticles) throw new Error('Missing articles topic');
-    expect(assignedArticles.title).toBe('Артикли: a, an, the');
-    const { id } = assignedArticles;
+    expect(first.topics).toHaveLength(2);
+    expect(first.topics).toContainEqual(expect.objectContaining({ id: legacy.id, key: legacyKey, status: 'mastered', curriculumId: 'a2-articles' }));
+    expect(first.result.topics).toEqual([expect.objectContaining({ title: extension.title, level: 'B1', category: 'Использование языка' })]);
+    expect(placement.mock.lastCall?.[2]?.catalog).toContainEqual(expect.objectContaining({ id: extension.id, objective: extension.objective }));
+    expect(placement.mock.lastCall?.[2]?.assignedKeys).toContain('a2-articles');
+    expect(await getTopicStudy(learner.id, legacy.id)).toEqual({ kind: 'ok', study });
+    expect(lesson).not.toHaveBeenCalled();
 
-    for (let i = 0; i < 2; i += 1) {
-      const attempt = await startTopicAttempt(learner.id, id);
-      if (attempt.kind !== 'ok') throw new Error(attempt.kind);
-      await expect(submitTopicAttempt(learner.id, id, attempt.attemptId, {})).resolves.toMatchObject({ kind: 'ok', newTopicsAdded: 0 });
-    }
-
-    placement.mockResolvedValueOnce({ ...grade, overallLevel: 'A2', topics: [
-      { ...articles, key: 'unused-slug', title: 'Артикли', level: 'B1' },
-      { ...extension, key: `renamed-${suffix}`, title: `Вежливые просьбы: ${suffix}` },
-    ] });
-    const retest = await submitPlacementTest(learner.id, input);
-    if (retest.kind !== 'ok') throw new Error(retest.kind);
-    expect(retest.result.topics).toEqual([]);
-    expect(retest.topics).toHaveLength(2);
-    expect(retest.topics).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id, key: 'articles', status: 'mastered' }),
-      expect.objectContaining({ key: extension.key, level: 'B1' }),
-    ]));
-    expect(placement.mock.lastCall?.[2]?.assignedKeys).toContain('articles');
+    const assigned = first.topics.find(({ curriculumId }) => curriculumId === extension.id)!;
+    const attempt = await startTopicAttempt(learner.id, assigned.id);
+    if (attempt.kind !== 'ok') throw new Error(attempt.kind);
+    expect(exercises.mock.lastCall?.[1]).toMatchObject({ id: extension.id, objective: extension.objective, subtopics: extension.subtopics });
+    await expect(submitTopicAttempt(learner.id, assigned.id, attempt.attemptId, {})).resolves.toMatchObject({ kind: 'ok', newTopicsAdded: 0 });
+    expect(await submitPlacementTest(learner.id, input)).toMatchObject({ kind: 'ok', result: { topics: [] } });
 
     const second = await submitPlacementTest(other.id, input);
     if (second.kind !== 'ok') throw new Error(second.kind);
-    expect(placement.mock.lastCall?.[2]?.catalog).toContainEqual(expect.objectContaining({ key: extension.key, level: 'B1' }));
-    const sharedArticles = second.topics.find(({ key }) => key === 'articles');
-    if (!sharedArticles) throw new Error('Missing shared articles topic');
-    expect(sharedArticles.status).toBe('assigned');
-    expect(sharedArticles.id).not.toBe(id);
-    const ownExtension = first.topics.find(({ key }) => key === extension.key);
-    const sharedExtension = second.topics.find(({ key }) => key === extension.key);
-    if (!ownExtension || !sharedExtension) throw new Error('Missing shared extension');
-    expect(await getTopicStudy(learner.id, ownExtension.id)).toEqual(await getTopicStudy(other.id, sharedExtension.id));
+    const shared = second.topics.find(({ curriculumId }) => curriculumId === extension.id)!;
+    expect(shared.id).not.toBe(assigned.id);
+    expect(shared.key).toBe(assigned.key);
+    expect(await getTopicStudy(learner.id, assigned.id)).toEqual(await getTopicStudy(other.id, shared.id));
     expect(lesson).toHaveBeenCalledTimes(1);
-    expect(lesson.mock.lastCall?.[0]).not.toHaveProperty('rationale');
+    expect(lesson.mock.lastCall?.[1]).toMatchObject({ id: extension.id, objective: extension.objective });
+    expect((await pool.query("SELECT key FROM program_topics WHERE key = 'invented-topic'")).rowCount).toBe(0);
   } finally {
+    exercises.mockRestore();
     lesson.mockRestore();
     grades.mockRestore();
     placement.mockRestore();
     await pool.query('DELETE FROM users WHERE id = ANY($1::uuid[])', [[learner.id, other.id]]);
-    await pool.query('DELETE FROM program_topics WHERE key = ANY($1::text[])', [[extension.key, `advanced-${suffix}`, `renamed-${suffix}`]]);
+    await pool.query('DELETE FROM program_topics WHERE key = $1 OR curriculum_id = $2', [legacyKey, extension.id]);
+    await pool.query('DELETE FROM curriculum_topics WHERE id = $1', [extension.id]);
   }
 });

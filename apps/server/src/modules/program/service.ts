@@ -24,13 +24,14 @@ import {
   type UserTopicStatus,
 } from './repository.js';
 import { buildPlacementReview } from './placementReview.js';
-import { listTopicCatalog, saveCatalogStudy, topicLevels } from './topicCatalog.js';
+import { listCurriculumTopics, saveCatalogStudy, topicLevels } from './topicCatalog.js';
 
 export interface UserTopicSummary {
   id: string;
   key: string;
   title: string;
   category: string;
+  curriculumId: string | null;
   level: CEFRLevel | null;
   rationale: string;
   source: UserTopicSource;
@@ -43,6 +44,7 @@ function toSummary(row: UserTopicRow): UserTopicSummary {
   return {
     id: row.id,
     ...toTopicIdentity(row),
+    curriculumId: row.curriculum?.id ?? null,
     rationale: row.rationale,
     source: row.source,
     status: row.status,
@@ -63,7 +65,7 @@ function visibleTopics(topics: UserTopicRow[], current: CEFRLevel | null, target
 }
 
 async function topicPlan(userId: string, currentLevel: CEFRLevel | null, targetLevel: CEFRLevel): Promise<TopicPlanContext> {
-  const [catalog, assignedKeys] = await Promise.all([listTopicCatalog(targetLevel), listAssignedTopicKeys(userId)]);
+  const [catalog, assignedKeys] = await Promise.all([listCurriculumTopics(targetLevel), listAssignedTopicKeys(userId)]);
   return { catalog, assignedKeys, currentLevel, targetLevel };
 }
 
@@ -158,23 +160,21 @@ export async function submitPlacementTest(userId: string, input: PlacementTestSu
     const plan = await topicPlan(userId, input.fromLevel, input.toLevel);
     const provider = getGradingProvider();
     const grade = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: provider.model ?? null, request: input }, () => provider.gradePlacementTest(input, definition, plan));
-    const result = { ...grade, review: buildPlacementReview(definition, input, grade) };
-
-    result.topics = await savePlacementTest({
+    const assigned = await savePlacementTest({
       ...input,
       userId,
       variantId: input.variantId === 'builtin' ? undefined : input.variantId,
-      overallLevel: result.overallLevel,
-      skills: result.skills,
-      aboveLevel: result.aboveLevel,
-      belowLevel: result.belowLevel,
-      mcqScore: result.mcqScore,
-      openGrades: result.openGrades,
-      essayGrade: result.essayGrade,
+      overallLevel: grade.overallLevel,
+      skills: grade.skills,
+      aboveLevel: grade.aboveLevel,
+      belowLevel: grade.belowLevel,
+      mcqScore: grade.mcqScore,
+      openGrades: grade.openGrades,
+      essayGrade: grade.essayGrade,
     }, grade.topics, topicLevels(grade.overallLevel, input.toLevel), token);
 
     const topics = visibleTopics(await findUserTopics(userId), grade.overallLevel, input.toLevel);
-    return { kind: 'ok', result, topics };
+    return { kind: 'ok', result: { ...grade, topics: assigned, review: buildPlacementReview(definition, input, grade) }, topics };
   } finally {
     // A stale lock expires even if the database is unavailable during cleanup.
     await releasePlacementCheck(userId, token).catch(() => {});
@@ -194,9 +194,9 @@ export async function getTopicStudy(userId: string, userTopicId: string): Promis
 
   const provider = getGradingProvider();
   const topic = toTopicIdentity(row);
-  const study = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: provider.model ?? null, request: topic }, () => provider.generateTopicStudy(topic));
+  const study = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: provider.model ?? null, request: row.curriculum ?? topic }, () => provider.generateTopicStudy(topic, row.curriculum ?? undefined));
 
-  return { kind: 'ok', study: await saveCatalogStudy(topic, study) };
+  return { kind: 'ok', study: await saveCatalogStudy(topic, study, row.curriculum?.id ?? null) };
 }
 
 export type RedactedExerciseItem = { type: 'choice'; q: string; options: string[] } | { type: 'write'; q: string; rows: number; placeholder: string };
@@ -227,7 +227,7 @@ export async function startTopicAttempt(userId: string, userTopicId: string): Pr
 
   const provider = getGradingProvider();
   const topic = { ...toTopicIdentity(row), rationale: row.rationale };
-  const items = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: provider.model ?? null, request: topic }, () => provider.generateTopicExercises(topic));
+  const items = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: provider.model ?? null, request: row.curriculum ?? topic }, () => provider.generateTopicExercises(topic, row.curriculum ?? undefined));
 
   const attempt = await createAttempt(row.id, attemptKind, items);
   return { kind: 'ok', attemptId: attempt.id, attemptKind, items: redact(items) };
