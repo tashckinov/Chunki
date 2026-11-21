@@ -1,5 +1,6 @@
 import { useAppStore } from '../store/appStore';
 import { daysUntil } from '../lib/schedule';
+import { ChatMD } from '../components/chatmd/ChatMD';
 import { NavigationBar } from '../components/ui/NavigationBar';
 import { Button } from '../components/ui/Button';
 
@@ -43,7 +44,7 @@ export function TopicScreen() {
 
         {study && (
           <>
-            <p className="text-[17px] leading-[27px]">{study.explanation}</p>
+            <ChatMD key={topic.id} source={study.explanation} />
 
             {study.keyPoints.length > 0 && (
               <div>

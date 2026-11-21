@@ -23,9 +23,9 @@ const complete = {
   topics: Array.from({ length: 8 }, (_, i) => ({ key: `topic-${i}`, title: 'Артикли', category: 'Грамматика', rationale: 'Нужно повторить основы.' })),
 };
 
-function completion(output: unknown, reason = 'tool_calls') {
+function completion(output: unknown, reason = 'tool_calls', name = 'submit_placement_grade') {
   return { choices: [{ finish_reason: reason, message: { tool_calls: [
-    { type: 'function', function: { name: 'submit_placement_grade', arguments: JSON.stringify(output) } },
+    { type: 'function', function: { name, arguments: JSON.stringify(output) } },
   ] } }] };
 }
 
@@ -66,5 +66,19 @@ describe('OpenRouter grammar grading', () => {
 
     await expect(grader.gradePlacementTest(submission)).rejects.toThrow('finish_reason=length');
     await expect(grader.gradePlacementTest(submission)).rejects.toThrow('failed validation');
+  });
+
+  it('requests ChatMD in topic explanations and accepts empty supplementary fields', async () => {
+    const explanation = ':::question\nI bought ___ book.\n+ a | Впервые.\n- the | Книга уже известна.\n:::';
+    const study = { explanation, keyPoints: [], contrastExamples: [], exampleChunks: [] };
+    create.mockResolvedValue(completion(study, 'tool_calls', 'submit_topic_study'));
+
+    const result = await grader.generateTopicStudy({ key: 'articles', title: 'Артикли', category: 'Грамматика', rationale: 'Первое упоминание.' });
+
+    expect(result).toEqual(study);
+    const instruction = create.mock.calls[0][0].messages[1].content;
+    expect(instruction).toContain(':::question');
+    expect(instruction).toContain('+ a |');
+    expect(instruction).toContain('1–2 questions near the relevant rule');
   });
 });
