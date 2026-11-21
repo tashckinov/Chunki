@@ -90,7 +90,8 @@ export const paymentsRoutes: FastifyPluginAsync = async (app) => {
     return { premiumUntil: result.premiumUntil, isPremium: result.isPremium };
   });
 
-  app.get('/status', { preHandler: requireAuthenticatedSession }, async (request) => {
+  app.get('/status', { preHandler: requireAuthenticatedSession }, async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
     return getAccountPaymentStatus(request.session!.userId);
   });
 
