@@ -1,5 +1,5 @@
 import type { FastifyBaseLogger } from 'fastify';
-import webPush from 'web-push';
+import { sendNotification } from 'web-push';
 import { pool } from '../../db/pool.js';
 
 export function startReminderDispatcher(log: FastifyBaseLogger, vapid: { subject: string; publicKey: string; privateKey: string }) {
@@ -26,7 +26,7 @@ export function startReminderDispatcher(log: FastifyBaseLogger, vapid: { subject
       `);
       await Promise.all(rows.map(async ({ endpoint, p256dh, auth }) => {
         try {
-          await webPush.sendNotification({ endpoint, keys: { p256dh, auth } }, '{}',
+          await sendNotification({ endpoint, keys: { p256dh, auth } }, '{}',
             { TTL: 300, timeout: 10_000, vapidDetails: vapid });
         } catch (error) {
           const status = (error as { statusCode?: number }).statusCode;
