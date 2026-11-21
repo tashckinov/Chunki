@@ -10,6 +10,7 @@ import { waitForDatabase } from './db/pool.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { collectionsRoutes } from './modules/collections/routes.js';
 import { chunksRoutes } from './modules/chunks/routes.js';
+import { loadReminderVapid } from './modules/reminders/vapid.js';
 import { reminderRoutes } from './modules/reminders/routes.js';
 import { startReminderDispatcher } from './modules/reminders/dispatcher.js';
 import { progressRoutes } from './modules/progress/routes.js';
@@ -44,11 +45,13 @@ async function main() {
   await app.register(authRoutes, { prefix: '/api/auth' });
   await app.register(collectionsRoutes, { prefix: '/api/collections' });
   await app.register(chunksRoutes, { prefix: '/api/chunks' });
-  const vapid = env.WEB_PUSH_PUBLIC_KEY && env.WEB_PUSH_PRIVATE_KEY && env.WEB_PUSH_SUBJECT
-    ? { publicKey: env.WEB_PUSH_PUBLIC_KEY, privateKey: env.WEB_PUSH_PRIVATE_KEY, subject: env.WEB_PUSH_SUBJECT }
-    : null;
+  const vapid = await loadReminderVapid(env).catch(() => {
+    app.log.error('Study reminders unavailable: could not load Web Push keys');
+    return null;
+  });
   await app.register(reminderRoutes, { prefix: '/api/reminders', publicKey: vapid?.publicKey });
   if (vapid) {
+    app.log.info('Study reminders enabled');
     const stop = startReminderDispatcher(app.log, vapid);
     app.addHook('onClose', async () => stop());
   }

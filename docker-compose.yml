@@ -28,6 +28,7 @@ services:
         condition: service_healthy
     volumes:
       - uploads_data:/app/uploads
+      - push_keys:/var/lib/chunki/push
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       PORT: 8787
@@ -42,6 +43,7 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
       PRODUCTION_JUDGE_PROVIDER: ${PRODUCTION_JUDGE_PROVIDER:-}
+      WEB_PUSH_KEY_DIR: /var/lib/chunki/push
       WEB_PUSH_PUBLIC_KEY: ${WEB_PUSH_PUBLIC_KEY:-}
       WEB_PUSH_PRIVATE_KEY: ${WEB_PUSH_PRIVATE_KEY:-}
       WEB_PUSH_SUBJECT: ${WEB_PUSH_SUBJECT:-}
@@ -65,3 +67,4 @@ services:
 volumes:
   postgres_data:
   uploads_data:
+  push_keys:
