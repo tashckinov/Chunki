@@ -1,6 +1,8 @@
 import type { FastifyPluginAsync } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
 import { z } from 'zod';
+import { chooseGrammarTest } from '../grammarTests/repository.js';
+import { grammarTestIdSchema } from '../grammarTests/schema.js';
 import { requireAuthenticatedSession } from '../auth/requireAuth.js';
 import { getProgramForUser, getTopicStudy, startTopicAttempt, submitPlacementTest, submitTopicAttempt } from './service.js';
 
@@ -16,6 +18,7 @@ const boundedRecord = (maxEntries: number, maxValueLength: number) =>
     .refine((obj) => Object.keys(obj).length <= maxEntries, { message: `at most ${maxEntries} entries allowed` });
 
 const placementTestBodySchema = z.object({
+  variantId: grammarTestIdSchema.optional(),
   fromLevel: z.enum(CEFR_LEVELS).nullable(),
   toLevel: z.enum(CEFR_LEVELS),
   purpose: z.array(z.string().max(100)).max(10),
@@ -65,6 +68,13 @@ export const programRoutes: FastifyPluginAsync = async (app) => {
   // applied to the whole plugin (mirrors progress/routes.ts's production-check route).
   await app.register(rateLimit, { global: false });
 
+  app.get('/placement-variant', { preHandler: requireAuthenticatedSession }, async (request, reply) => {
+    const query = z.object({ previous: grammarTestIdSchema.optional() }).safeParse(request.query);
+    if (!query.success) return reply.code(400).send({ error: 'invalid_request' });
+    const previous = query.data.previous === 'builtin' ? undefined : query.data.previous;
+    return chooseGrammarTest(previous);
+  });
+
   app.post(
     '/placement-test',
     {
@@ -85,6 +95,7 @@ export const programRoutes: FastifyPluginAsync = async (app) => {
         reply.code(502);
         return { error: 'grading_failed' };
       }
+      if (result.kind === 'variant_not_found') return reply.code(404).send({ error: 'variant_not_found' });
       if (result.kind === 'not_allowed') {
         reply.code(403);
         return { error: 'not_allowed', upsellTariffs: result.upsellTariffs };

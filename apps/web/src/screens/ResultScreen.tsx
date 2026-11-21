@@ -2,15 +2,15 @@ import { useAppStore } from '../store/appStore';
 import { Button } from '../components/ui/Button';
 
 export function ResultScreen() {
-  const { placementResult, gradingError, to, goSchedule, startTest } = useAppStore();
+  const { placementResult, gradingError, to, goSchedule, go } = useAppStore();
 
   if (!placementResult) {
     return (
       <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-4 p-8 text-center">
         <div className="text-[19px] font-medium">Не получилось проверить тест</div>
         <div className="text-body-secondary">{gradingError || 'Попробуйте ещё раз.'}</div>
-        <Button size="sm" onClick={startTest}>
-          Пройти тест заново
+        <Button size="sm" onClick={() => go('goals')}>
+          К настройкам теста
         </Button>
       </div>
     );

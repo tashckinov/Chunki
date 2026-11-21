@@ -10,10 +10,11 @@ import type {
   GradingProvider,
   PlacementGradeResult,
   PlacementTestSubmission,
+  PlacementTestDefinition,
   TopicStudyContent,
   TopicSuggestion,
 } from '@app/shared';
-import { READING_PASSAGE, READING_QUESTIONS } from '@app/shared';
+import { BUILTIN_PLACEMENT_TEST } from '@app/shared';
 
 const TOPIC_CATEGORY_ENUM = ['Грамматика', 'Лексика', 'Использование языка', 'Понимание', 'Письмо'];
 
@@ -123,8 +124,48 @@ export class OpenRouterGradingProvider implements GradingProvider {
     return output as T;
   }
 
-  async gradePlacementTest(input: PlacementTestSubmission): Promise<PlacementGradeResult> {
-    const mcqScore = scoreMcq(input.mcqAnswers);
+  async generatePlacementTest(focus: string, existingQuestions: string[]): Promise<PlacementTestDefinition> {
+    const text = { type: 'string', minLength: 1, maxLength: 700 };
+    const schema = {
+      type: 'object',
+      properties: {
+        mcq: { type: 'array', minItems: 8, maxItems: 8, items: {
+          type: 'object',
+          properties: {
+            q: text,
+            options: { type: 'array', minItems: 4, maxItems: 4, uniqueItems: true, items: text },
+            correct: { type: 'string', enum: ['A', 'B', 'C', 'D'] },
+          },
+          required: ['q', 'options', 'correct'],
+        } },
+        readingPassage: { type: 'string', minLength: 1, maxLength: 4000 },
+        readingQuestions: { type: 'array', minItems: 2, maxItems: 2, items: text },
+        essayPrompt: text,
+      },
+      required: ['mcq', 'readingPassage', 'readingQuestions', 'essayPrompt'],
+    };
+    const draft = await this.#callTool<Omit<PlacementTestDefinition, 'readingQuestions'> & { readingQuestions: string[] }>({
+      system: 'You design English CEFR placement tests. Write all test content in English and return only the requested tool call.',
+      user: [
+        'Create eight multiple-choice questions with progressively increasing difficulty from A1 to C1. Cover varied grammar and some vocabulary; each question must have exactly one unambiguous correct option. The A–D key corresponds to the four options in order.',
+        'Write a short original reading passage and two questions answered from that passage. Write one original essay prompt suitable for a response of 5–8 sentences.',
+        `Optional topic emphasis: ${focus || 'general English'}. Keep the full difficulty range.`,
+        `Avoid repeating these existing questions: ${JSON.stringify(existingQuestions)}`,
+      ].join('\n'),
+      toolName: 'submit_placement_variant',
+      toolDescription: 'Return a new placement test for an administrator to review.',
+      maxTokens: 4096,
+      schema,
+    });
+    return {
+      ...draft,
+      mcq: draft.mcq.map((item, index) => ({ ...item, n: index + 1 })),
+      readingQuestions: draft.readingQuestions.map((q, index) => ({ n: index + 9, q })),
+    };
+  }
+
+  async gradePlacementTest(input: PlacementTestSubmission, definition = BUILTIN_PLACEMENT_TEST): Promise<PlacementGradeResult> {
+    const mcqScore = scoreMcq(input.mcqAnswers, definition.mcq);
 
     type ToolOutput = {
       openGrades: (GradeDetail & { n: number })[];
@@ -141,11 +182,11 @@ export class OpenRouterGradingProvider implements GradingProvider {
       properties: {
         openGrades: {
           type: 'array',
-          minItems: READING_QUESTIONS.length,
-          maxItems: READING_QUESTIONS.length,
+          minItems: definition.readingQuestions.length,
+          maxItems: definition.readingQuestions.length,
           items: {
             type: 'object',
-            properties: { n: { type: 'integer', enum: READING_QUESTIONS.map(({ n }) => n) }, ...GRADE_DETAIL_SCHEMA.properties },
+            properties: { n: { type: 'integer', enum: definition.readingQuestions.map(({ n }) => n) }, ...GRADE_DETAIL_SCHEMA.properties },
             required: ['n', ...GRADE_DETAIL_SCHEMA.required],
           },
         },
@@ -174,12 +215,12 @@ export class OpenRouterGradingProvider implements GradingProvider {
       `Grade a CEFR English placement test for a Russian-speaking learner ${input.fromLevel ? `who estimates their current level at ${input.fromLevel}` : 'who does not know their current level'}, aiming for ${input.toLevel}, learning English for: ${input.purpose.join(', ') || '(not specified)'}.`,
       `The learner answered ${mcqScore.correct}/${mcqScore.total} multiple-choice grammar/vocabulary questions correctly (already scored, do not re-grade those).`,
       '',
-      `Reading passage:\n"""${READING_PASSAGE}"""`,
+      `Reading passage:\n"""${definition.readingPassage}"""`,
       '',
-      `Q${READING_QUESTIONS[0].n}. ${READING_QUESTIONS[0].q}\nAnswer: """${input.open9 || '(no answer)'}"""`,
-      `Q${READING_QUESTIONS[1].n}. ${READING_QUESTIONS[1].q}\nAnswer: """${input.open10 || '(no answer)'}"""`,
+      `Q${definition.readingQuestions[0].n}. ${definition.readingQuestions[0].q}\nAnswer: """${input.open9 || '(no answer)'}"""`,
+      `Q${definition.readingQuestions[1].n}. ${definition.readingQuestions[1].q}\nAnswer: """${input.open10 || '(no answer)'}"""`,
       '',
-      `Free writing prompt: "If you could move to another country next year, where would you go and why? What problems do you think you might face?"`,
+      `Free writing prompt: "${definition.essayPrompt}"`,
       `Essay: """${input.essay || '(no answer)'}"""`,
       '',
       'Grade each open reading answer for comprehension correctness (not grammar — they answered in English but the point is whether they understood the passage). Grade the essay for grammar, natural phrasing, and range of constructions used at CEFR level. Use the multiple-choice score as strong signal for the "Грамматика" skill bar. Produce an overall CEFR level, four skill bars (Грамматика, Чтение и понимание, Лексика и чанки, Письмо), one sentence on what is above the overall level, one sentence on what pulls it down, and a personalized study plan of around 10 concrete topics (grammar points, lexical chunks, skills) worth studying next given this learner\'s level, goal, and purpose — each with a short kebab-case key, a Russian title, a category, and a one-sentence rationale grounded in something specific from this test. All prose fields must be in Russian except suggestedAnswer/chunkUsage which are English.',
@@ -200,7 +241,7 @@ export class OpenRouterGradingProvider implements GradingProvider {
       openGrades[n] = rest;
     }
 
-    if (Object.keys(openGrades).length !== READING_QUESTIONS.length) {
+    if (Object.keys(openGrades).length !== definition.readingQuestions.length) {
       throw new Error('OpenRouter grammar assessment returned duplicate reading grades.');
     }
 

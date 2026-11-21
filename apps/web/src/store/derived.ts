@@ -1,10 +1,4 @@
-import { MCQ, READING_QUESTIONS } from '@app/shared';
-import type { CEFRLevel } from '@app/shared';
-
-// Part 1 (MCQ) + part 2 (2 reading questions) + part 3 (1 essay) — the
-// denominator for the test's overall progress bar, derived from the actual
-// question set instead of a hardcoded count that could silently drift from it.
-const TOTAL_TEST_STEPS = MCQ.length + READING_QUESTIONS.length + 1;
+import { BUILTIN_PLACEMENT_TEST, type CEFRLevel } from '@app/shared';
 import { useAppStore } from './appStore';
 import { plural } from '../lib/plural';
 import { DAY_LABELS } from '../lib/schedule';
@@ -24,7 +18,10 @@ export function useGoalsView() {
 
 export function useTestView() {
   const s = useAppStore();
-  const mq = MCQ[Math.min(s.qi, MCQ.length - 1)];
+  const definition = s.testVariant?.definition ?? BUILTIN_PLACEMENT_TEST;
+  const { mcq: questions, readingQuestions } = definition;
+  const totalSteps = questions.length + readingQuestions.length + 1;
+  const mq = questions[Math.min(s.qi, questions.length - 1)];
   const picked = s.mcqAnswers[mq.n];
   const letters = ['A', 'B', 'C', 'D'];
   const mqOptions = mq.options.map((label, i) => ({
@@ -35,14 +32,15 @@ export function useTestView() {
   }));
   const unknown = picked === '—';
   return {
+    definition,
     mq,
     mqOptions,
-    mqCounter: `${Math.min(s.qi + 1, MCQ.length)} / ${MCQ.length}`,
+    mqCounter: `${Math.min(s.qi + 1, questions.length)} / ${questions.length}`,
     unknown,
     mqUnanswered: !picked,
     atFirstQ: s.qi === 0,
-    nextQLabel: s.qi >= MCQ.length - 1 ? 'Часть 2' : 'Дальше',
-    testValue: s.testPart === 1 ? s.qi / TOTAL_TEST_STEPS : s.testPart === 2 ? MCQ.length / TOTAL_TEST_STEPS : (MCQ.length + READING_QUESTIONS.length) / TOTAL_TEST_STEPS,
+    nextQLabel: s.qi >= questions.length - 1 ? 'Часть 2' : 'Дальше',
+    testValue: s.testPart === 1 ? s.qi / totalSteps : s.testPart === 2 ? questions.length / totalSteps : (questions.length + readingQuestions.length) / totalSteps,
     testTitle: s.testPart === 1 ? 'Часть 1 из 3' : s.testPart === 2 ? 'Часть 2 из 3' : 'Часть 3 из 3',
     essayWords: s.essay.trim() ? s.essay.trim().split(/\s+/).length : 0,
   };
