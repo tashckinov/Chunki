@@ -1,6 +1,7 @@
 import { ArrowRight, Clock, Layers3 } from 'lucide-react';
 import { DAILY_CARD_GOALS, type DailyCardGoal } from '@app/shared';
 import { Logo } from '../components/brand/Logo';
+import { StudyReminderSetting } from '../components/ui/StudyReminderSetting';
 import { Button } from '../components/ui/Button';
 import { useStudyGoalForm } from '../components/ui/StudyGoalForm';
 
@@ -91,6 +92,7 @@ export function StudyGoalScreen() {
             <WeekPreview goal={goal ?? DAILY_CARD_GOALS[0]} />
           </div>
           <div className="flex flex-col gap-3 lg:col-start-1 lg:row-start-2 lg:self-start">
+            <StudyReminderSetting />
             {error && <p role="alert" className="text-negative">Не удалось сохранить цель. Попробуйте ещё раз.</p>}
             <Button type="submit" size="lg" disabled={saving} className="w-full">
               {saving ? 'Сохраняем…' : 'Сохранить цель'}

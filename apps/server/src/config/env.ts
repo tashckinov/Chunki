@@ -12,6 +12,9 @@ const emptyToUndefined = (val: unknown) => (val === '' ? undefined : val);
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(8787),
+  WEB_PUSH_PUBLIC_KEY: z.preprocess(emptyToUndefined, z.string().optional()),
+  WEB_PUSH_PRIVATE_KEY: z.preprocess(emptyToUndefined, z.string().optional()),
+  WEB_PUSH_SUBJECT: z.preprocess(emptyToUndefined, z.string().optional()),
   CORS_ORIGIN: z.string().min(1).default('http://localhost:5173'),
 
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
