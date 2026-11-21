@@ -114,7 +114,10 @@ export interface ProductionCheckCandidateChunk {
   text: string;
 }
 
+export type ProductionFeedbackLanguage = 'ru' | 'en';
+
 export interface ProductionCheckInput {
+  feedbackLanguage?: ProductionFeedbackLanguage;
   situationPrompt: string;
   userAnswer: string;
   /** Always at least one entry (the original target chunk) — never empty. */

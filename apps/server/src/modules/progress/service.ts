@@ -1,4 +1,4 @@
-import type { ProductionCheckCandidateChunk } from '@app/shared';
+import type { ProductionCheckCandidateChunk, ProductionFeedbackLanguage } from '@app/shared';
 import { getProductionJudgeProvider } from '../../openrouter/index.js';
 import { withAiCallLogging } from '../aiLogs/service.js';
 import { findAccountStatus, bumpDailyChecksUsed } from '../users/repository.js';
@@ -239,7 +239,24 @@ async function buildCandidateChunks(chunkId: string, chunkText: string, expected
   return candidates;
 }
 
-export async function submitProductionAnswer(userId: string, chunkId: string, answer: string): Promise<ProductionSubmitResult> {
+function localizedFeedback(feedback: string, language: ProductionFeedbackLanguage, appropriate: boolean, usedChunk: boolean): string {
+  // Example phrases can stay in English even in otherwise Russian feedback.
+  const prose = feedback.replace(/«[^»]*»|“[^”]*”|"[^"]*"|`[^`]*`/g, '');
+  const cyrillic = (prose.match(/[А-Яа-яЁё]/g) ?? []).length;
+  const latin = (prose.match(/[A-Za-z]/g) ?? []).length;
+  if (language === 'ru' && cyrillic > 0 && cyrillic >= latin) return feedback.trim();
+  if (language === 'en' && latin > cyrillic) return feedback.trim();
+
+  // Preserve the valid verdict without paying for a second model call.
+  if (language === 'ru') {
+    if (!appropriate) return 'Ответ не подходит к ситуации. Попробуйте ответить на вопрос собеседника.';
+    return usedChunk ? 'Ответ подходит к ситуации, и вы использовали знакомую фразу.' : 'Ответ подходит к ситуации. Попробуйте также использовать знакомую фразу.';
+  }
+  if (!appropriate) return 'The reply doesn’t fit the situation. Try answering the other speaker’s question.';
+  return usedChunk ? 'Your reply fits the situation and uses a familiar phrase.' : 'Your reply fits the situation. Try using a familiar phrase as well.';
+}
+
+export async function submitProductionAnswer(userId: string, chunkId: string, answer: string, feedbackLanguage: ProductionFeedbackLanguage = 'ru'): Promise<ProductionSubmitResult> {
   const chunk = await findChunkWithSituationPrompts(chunkId);
   if (!chunk) return { kind: 'not_found' };
 
@@ -275,7 +292,7 @@ export async function submitProductionAnswer(userId: string, chunkId: string, an
   const candidateChunks = await buildCandidateChunks(chunkId, chunk.text, expectedGroupId);
 
   const judge = getProductionJudgeProvider();
-  const judgeInput = { situationPrompt: situationPromptText, userAnswer: answer, candidateChunks };
+  const judgeInput = { situationPrompt: situationPromptText, userAnswer: answer, candidateChunks, feedbackLanguage };
   let checkId: string | undefined;
   let result;
   let lastError: unknown;
@@ -344,7 +361,7 @@ export async function submitProductionAnswer(userId: string, chunkId: string, an
     isAppropriate: result.isAppropriate,
     usedChunkId: creditedChunkId,
     usedChunkText,
-    feedback: result.feedback,
+    feedback: localizedFeedback(result.feedback, feedbackLanguage, result.isAppropriate, !!creditedChunkId),
     progress: toSummary(progressRow),
     modelAnswer: situationDialogue?.modelAnswer,
     checkId,

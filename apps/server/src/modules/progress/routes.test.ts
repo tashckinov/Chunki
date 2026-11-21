@@ -217,7 +217,7 @@ describe('GET /api/progress/production-check/:chunkId', () => {
 });
 
 describe('POST /api/progress/production-check/:chunkId', () => {
-  it('returns the judged verdict on success', async () => {
+  it.each([undefined, 'en'] as const)('returns a verdict for feedbackLanguage %s', async (feedbackLanguage) => {
     vi.mocked(session.getSession).mockResolvedValue(authenticatedSession);
     const progress = { chunkId: validChunkId, state: 'active', timesReviewed: 1, timesProductionAttempted: 1, timesProductionPassed: 1 };
     vi.mocked(service.submitProductionAnswer).mockResolvedValue({
@@ -233,10 +233,11 @@ describe('POST /api/progress/production-check/:chunkId', () => {
       method: 'POST',
       url: `/api/progress/production-check/${validChunkId}`,
       cookies: authCookie,
-      payload: { answer: 'Sounds good to me.' },
+      payload: { answer: 'Sounds good to me.', feedbackLanguage },
     });
 
     expect(res.statusCode).toBe(200);
+    expect(service.submitProductionAnswer).toHaveBeenCalledWith('user-1', validChunkId, 'Sounds good to me.', feedbackLanguage ?? 'ru');
     expect(res.json()).toEqual({ isAppropriate: true, usedChunkId: validChunkId, usedChunkText: 'sounds good', feedback: 'Отлично!', progress });
   });
 
