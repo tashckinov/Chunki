@@ -54,7 +54,7 @@ function CheckingScreenForContext() {
   return <CheckingScreen title={title} />;
 }
 
-function CurrentScreen() {
+function CurrentScreen({ onOpenAdminMenu }: { onOpenAdminMenu: () => void }) {
   const screen = useAppStore((s) => s.screen);
   const authChecked = useAppStore((s) => s.authChecked);
   const user = useAppStore((s) => s.user);
@@ -100,7 +100,7 @@ function CurrentScreen() {
     case 'dialogue':
       return <DialogueScreen />;
     case 'admin':
-      return <AdminScreen />;
+      return <AdminScreen onOpenMenu={onOpenAdminMenu} />;
     default:
       return <CardsScreen />;
   }
@@ -165,7 +165,7 @@ function SidebarNav({ value, onChange, onClose, overlay = false }: {
       {inAdmin && (
         <button type="button" onClick={() => { back(); onClose?.(); }} className="pressable flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2.5 text-[14.5px] font-medium text-left text-text-secondary">
           <Icon name="ArrowBack" size={19} />
-          Назад
+          Назад к приложению
         </button>
       )}
       <div className="border-t border-border pt-3">
@@ -239,6 +239,7 @@ export default function App() {
   // visitor (nowhere real for it to lead), but never during the brief
   // window before the initial checkAuth() resolves.
   const loggedOut = authChecked && !user;
+  const inAdmin = screen === 'admin' && user?.isAdmin;
   const studyGoal = useAppStore((s) => s.studyGoal);
   const completedIntroOwner = useAppStore((s) => s.completedIntroOwner);
   const showStudyGoal = user && screen !== 'deckdone' && !studyGoal?.dailyCardGoal
@@ -259,8 +260,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!user || showStudyGoal) setSidebarOpen(false);
-  }, [user, showStudyGoal]);
+    if (!inAdmin || showStudyGoal) setSidebarOpen(false);
+  }, [inAdmin, showStudyGoal]);
 
   const openSidebar = () => setSidebarOpen(true);
 
@@ -275,7 +276,7 @@ export default function App() {
           )}
           <div className={`w-full min-[768px]:max-w-[720px] ${loggedOut ? 'min-[1200px]:max-w-[1040px]' : 'min-[1200px]:max-w-[860px]'} h-dvh overflow-hidden flex flex-col`}>
             <SidebarMenuContext.Provider value={user ? { collapsed: sidebarCollapsed, toggle: () => setSidebarCollapsed((value) => !value) } : null}>
-              <CurrentScreen />
+              <CurrentScreen onOpenAdminMenu={openSidebar} />
             </SidebarMenuContext.Provider>
             {screen !== 'admin' && !loggedOut && (
               <div className="flex-none min-[1200px]:hidden">
@@ -283,8 +284,8 @@ export default function App() {
               </div>
             )}
           </div>
-          {user && !sidebarOpen && <SidebarGesture onSwipe={openSidebar} />}
-          {user && (
+          {inAdmin && !sidebarOpen && <SidebarGesture onSwipe={openSidebar} />}
+          {inAdmin && (
             <Dialog.Root open={sidebarOpen} onOpenChange={setSidebarOpen}>
               <Dialog.Portal>
                 <Dialog.Backdrop className="fixed inset-0 z-20 bg-[color:var(--tok-scrim)]" />
@@ -303,7 +304,7 @@ export default function App() {
                     if (distance >= 48 && distance > Math.abs(start.y - event.clientY) * 1.5) setSidebarOpen(false);
                   }}
                 >
-                  <Dialog.Title className="sr-only">Меню Chunki</Dialog.Title>
+                  <Dialog.Title className="sr-only">Меню админки</Dialog.Title>
                   <SidebarNav value={navTab} onChange={setNavTab} onClose={() => setSidebarOpen(false)} overlay />
                 </Dialog.Popup>
               </Dialog.Portal>
