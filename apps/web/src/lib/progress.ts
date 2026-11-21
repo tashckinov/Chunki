@@ -1,4 +1,4 @@
-import { getJson, postJson } from './collections';
+import { ApiError, getJson, postJson } from './collections';
 import type { Tariff } from './payments';
 
 export type SortVerdict = 'know' | 'dont' | 'bury';
@@ -56,6 +56,7 @@ export interface ProductionCheckResult {
   progress: ProgressSummary;
   /** The "Ситуация" comic's hidden line, revealed once the learner has answered — absent for the free-text situation-prompt flow. */
   modelAnswer?: string;
+  checkId?: string;
 }
 
 export async function postSort(chunkId: string, verdict: SortVerdict): Promise<ProgressSummary> {
@@ -80,7 +81,20 @@ export async function getProductionCheck(chunkId: string): Promise<ProductionChe
 }
 
 export async function postProductionCheck(chunkId: string, answer: string): Promise<ProductionCheckResult> {
-  return postJson(`/api/progress/production-check/${chunkId}`, { answer });
+  try {
+    return await postJson(`/api/progress/production-check/${chunkId}`, { answer });
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 502) {
+      throw new Error('Извините, не смогли проверить ваш ответ.');
+    }
+    throw err;
+  }
+}
+
+export type ProductionRating = 'up' | 'down';
+
+export function postProductionRating(checkId: string, rating: ProductionRating): Promise<{ ok: true }> {
+  return postJson('/api/progress/production-rating', { checkId, rating });
 }
 
 export async function getProgressForChunks(chunkIds: string[]): Promise<Record<string, ProgressSummary>> {

@@ -1,6 +1,5 @@
 import OpenAI from 'openai';
 import type { ProductionCheckInput, ProductionCheckResult, ProductionJudgeProvider } from '@app/shared';
-import type { Env } from '../config/env.js';
 
 /**
  * OpenRouter's API is OpenAI-chat-completions-compatible — the official
@@ -10,20 +9,12 @@ import type { Env } from '../config/env.js';
 export class OpenRouterProductionJudgeProvider implements ProductionJudgeProvider {
   name = 'openrouter';
 
-  #env: Pick<Env, 'OPENROUTER_API_KEY' | 'OPENROUTER_MODEL'>;
-
-  constructor(env: Pick<Env, 'OPENROUTER_API_KEY' | 'OPENROUTER_MODEL'>) {
-    this.#env = env;
-  }
+  constructor(private readonly apiKey: string | undefined, readonly model: string) {}
 
   #client(): OpenAI {
-    const apiKey = this.#env.OPENROUTER_API_KEY;
+    const apiKey = this.apiKey;
     if (!apiKey) throw new Error('OPENROUTER_API_KEY is not set — required for the openrouter production-judge provider.');
-    return new OpenAI({ apiKey, baseURL: 'https://openrouter.ai/api/v1' });
-  }
-
-  get model(): string {
-    return this.#env.OPENROUTER_MODEL;
+    return new OpenAI({ apiKey, baseURL: 'https://openrouter.ai/api/v1', maxRetries: 0, timeout: 13_000 });
   }
 
   async judgeProduction(input: ProductionCheckInput): Promise<ProductionCheckResult> {
@@ -47,7 +38,8 @@ export class OpenRouterProductionJudgeProvider implements ProductionJudgeProvide
     // caller (progress/service.ts) as defense in depth.
     const usedChunkIdEnum: (string | null)[] = [...input.candidateChunks.map((c) => c.id), null];
 
-    const response = await client.chat.completions.create({
+    const options: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming & { reasoning?: { effort: 'minimal' } } = {
+      ...(this.model === 'openai/gpt-5-nano' ? { reasoning: { effort: 'minimal' as const } } : {}),
       model: this.model,
       // Generous headroom: reasoning-capable models (e.g. the gpt-5 family)
       // spend part of this budget on internal reasoning tokens before ever
@@ -85,10 +77,11 @@ export class OpenRouterProductionJudgeProvider implements ProductionJudgeProvide
         },
       ],
       tool_choice: { type: 'function', function: { name: 'submit_production_verdict' } },
-    });
+    };
+    const response = await client.chat.completions.create(options);
 
     const toolCall = response.choices[0]?.message.tool_calls?.[0];
-    if (!toolCall || toolCall.type !== 'function') {
+    if (response.choices[0]?.finish_reason === 'length' || !toolCall || toolCall.type !== 'function' || toolCall.function.name !== 'submit_production_verdict') {
       const choice = response.choices[0];
       throw new Error(
         `OpenRouter response did not include the expected tool call ` +
@@ -104,8 +97,9 @@ export class OpenRouterProductionJudgeProvider implements ProductionJudgeProvide
       throw new Error(`OpenRouter tool call arguments were not valid JSON. Raw: ${toolCall.function.arguments.slice(0, 2000)}`);
     }
 
+    if (!parsed || typeof parsed !== 'object') throw new Error('Invalid production verdict.');
     const { isAppropriate, usedChunkId, feedback } = parsed as { isAppropriate?: unknown; usedChunkId?: unknown; feedback?: unknown };
-    if (typeof isAppropriate !== 'boolean' || (typeof usedChunkId !== 'string' && usedChunkId !== null) || typeof feedback !== 'string') {
+    if (typeof isAppropriate !== 'boolean' || (typeof usedChunkId !== 'string' && usedChunkId !== null) || typeof feedback !== 'string' || !feedback.trim() || !usedChunkIdEnum.includes(usedChunkId)) {
       throw new Error(`OpenRouter tool call returned an unexpected shape. Parsed: ${JSON.stringify(parsed).slice(0, 2000)}`);
     }
 

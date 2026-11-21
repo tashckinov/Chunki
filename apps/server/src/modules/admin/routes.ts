@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyPluginAsync } from 'fastify';
 import multipart from '@fastify/multipart';
 import { z } from 'zod';
+import { listProductionModelStats } from '../aiLogs/repository.js';
 import { requireAdmin } from '../auth/requireAuth.js';
 import { MAX_UPLOAD_BYTES, UPLOADS_DIR, resizeImage } from '../../config/uploads.js';
 import {
@@ -336,6 +337,8 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     }
     return { ok: true };
   });
+
+  app.get('/production-model-stats', async () => ({ models: await listProductionModelStats() }));
 
   app.get('/ai-logs', async (request, reply) => {
     const parsed = aiLogsQuerySchema.safeParse(request.query);

@@ -11,12 +11,13 @@ export interface NewAiCallLog {
   durationMs: number;
 }
 
-export async function recordAiCallLog(log: NewAiCallLog): Promise<void> {
-  await pool.query(
+export async function recordAiCallLog(log: NewAiCallLog): Promise<string> {
+  const { rows } = await pool.query<{ id: string }>(
     `INSERT INTO ai_call_logs (user_id, chunk_id, provider, model, request, response, error, duration_ms)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
     [log.userId, log.chunkId, log.provider, log.model, JSON.stringify(log.request), log.response === null ? null : JSON.stringify(log.response), log.error, log.durationMs],
   );
+  return rows[0].id;
 }
 
 export interface AiCallLogRow {
@@ -44,6 +45,30 @@ export async function listAiCallLogs(limit: number): Promise<AiCallLogRow[]> {
      ORDER BY l.created_at DESC
      LIMIT $1`,
     [limit],
+  );
+  return rows;
+}
+
+export async function rateProductionCheck(userId: string, id: string, rating: 'up' | 'down'): Promise<boolean> {
+  const result = await pool.query(
+    `UPDATE ai_call_logs SET rating = $3
+     WHERE id = $1 AND user_id = $2 AND provider = 'openrouter'
+       AND error IS NULL AND response IS NOT NULL AND request ? 'candidateChunks'`,
+    [id, userId, rating],
+  );
+  return result.rowCount === 1;
+}
+
+export async function listProductionModelStats() {
+  const { rows } = await pool.query<{ model: string; calls: number; errors: number; up: number; down: number }>(
+    `SELECT model, count(*)::int AS calls,
+            count(*) FILTER (WHERE error IS NOT NULL)::int AS errors,
+            count(*) FILTER (WHERE rating = 'up')::int AS up,
+            count(*) FILTER (WHERE rating = 'down')::int AS down
+     FROM ai_call_logs
+     WHERE provider = 'openrouter' AND model IS NOT NULL AND request ? 'candidateChunks'
+     GROUP BY model
+     ORDER BY model`,
   );
   return rows;
 }

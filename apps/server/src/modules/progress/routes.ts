@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
 import { z } from 'zod';
 import { PRODUCTION_ANSWER_MAX_LENGTH } from '@app/shared';
+import { rateProductionCheck } from '../aiLogs/repository.js';
 import { requireAuthenticatedSession } from '../auth/requireAuth.js';
 import {
   recordSort,
@@ -173,9 +174,20 @@ export const progressRoutes: FastifyPluginAsync = async (app) => {
         feedback: result.feedback,
         progress: result.progress,
         modelAnswer: result.modelAnswer,
+        checkId: result.checkId,
       };
     },
   );
+
+  app.post('/production-rating', { preHandler: requireAuthenticatedSession }, async (request, reply) => {
+    const body = z.object({ checkId: z.string().uuid(), rating: z.enum(['up', 'down']) }).safeParse(request.body);
+    if (!body.success) return reply.code(400).send({ error: 'invalid_request' });
+    const { checkId, rating } = body.data;
+    if (!await rateProductionCheck(request.session!.userId, checkId, rating)) {
+      return reply.code(404).send({ error: 'not_found' });
+    }
+    return { ok: true };
+  });
 
   app.get('/', { preHandler: requireAuthenticatedSession }, async (request, reply) => {
     const parsed = listQuerySchema.safeParse(request.query);

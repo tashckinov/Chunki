@@ -373,6 +373,40 @@ describe('submitProductionAnswer — tariff gating', () => {
     expect(users.bumpDailyChecksUsed).toHaveBeenCalledWith(userId);
   });
 
+  it('logs failed attempts and returns only the successful model’s rating ID', async () => {
+    const down = { ...fakeJudge, name: 'openrouter', model: 'first', judgeProduction: vi.fn().mockRejectedValue(new Error('length')) };
+    const winner = {
+      ...down,
+      model: 'second',
+      judgeProduction: vi.fn().mockResolvedValue({ isAppropriate: true, usedChunkId: chunkId, feedback: 'Отлично!' }),
+    };
+    const unused = { ...down, model: 'third', judgeProduction: vi.fn() };
+    vi.mocked(openrouter.getProductionJudgeProvider).mockReturnValue({ ...down, nextAttempts: () => [down, winner, unused] });
+    vi.mocked(aiLogs.recordAiCallLog).mockResolvedValueOnce('failed-id').mockResolvedValueOnce('winner-id');
+
+    await expect(submitProductionAnswer(userId, chunkId, 'Sounds good to me.'))
+      .resolves.toMatchObject({ kind: 'ok', checkId: 'winner-id' });
+    expect(aiLogs.recordAiCallLog).toHaveBeenNthCalledWith(1, expect.objectContaining({ model: 'first', error: 'length' }));
+    expect(aiLogs.recordAiCallLog).toHaveBeenNthCalledWith(2, expect.objectContaining({ model: 'second', error: null }));
+    expect(unused.judgeProduction).not.toHaveBeenCalled();
+    expect(users.bumpDailyChecksUsed).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops after all four models fail without charging the daily allowance', async () => {
+    const attempts = ['first', 'second', 'third', 'fourth'].map((model) => ({
+      ...fakeJudge,
+      model,
+      judgeProduction: vi.fn().mockRejectedValue(new Error(model)),
+    }));
+    vi.mocked(openrouter.getProductionJudgeProvider).mockReturnValue({ ...fakeJudge, nextAttempts: () => attempts });
+
+    await expect(submitProductionAnswer(userId, chunkId, 'Sounds good to me.')).rejects.toThrow('fourth');
+
+    for (const attempt of attempts) expect(attempt.judgeProduction).toHaveBeenCalledTimes(1);
+    expect(users.bumpDailyChecksUsed).not.toHaveBeenCalled();
+    expect(repo.upsertProgress).not.toHaveBeenCalled();
+  });
+
   it('does not bump the counter when the judge call throws', async () => {
     vi.mocked(tariffs.resolveEffectiveTariff).mockResolvedValue(fakeTariff({ dailyCheckLimit: 3 }));
     fakeJudge.judgeProduction.mockRejectedValue(new Error('judge down'));

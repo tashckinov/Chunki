@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavigationBar } from '../../components/ui/NavigationBar';
 import { IconButton } from '../../components/ui/IconButton';
-import { fetchAdminAiLogs, type AdminAiLog } from '../../lib/admin';
+import { fetchAdminAiLogs, fetchProductionModelStats, type AdminAiLog, type ProductionModelStats } from '../../lib/admin';
 
 interface ProductionJudgeRequest {
   chunkText?: string;
@@ -18,7 +18,12 @@ export function AiLogsSection({ onOpenMenu }: { onOpenMenu: () => void }) {
   const [logs, setLogs] = useState<AdminAiLog[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [models, setModels] = useState<ProductionModelStats[] | null>(null);
+  const [statsError, setStatsError] = useState(false);
+  const percent = new Intl.NumberFormat('ru-RU', { style: 'percent', maximumFractionDigits: 1 });
+
   useEffect(() => {
+    fetchProductionModelStats().then(setModels).catch(() => setStatsError(true));
     fetchAdminAiLogs()
       .then(setLogs)
       .catch(() => setError('Не удалось загрузить логи.'));
@@ -28,6 +33,32 @@ export function AiLogsSection({ onOpenMenu }: { onOpenMenu: () => void }) {
     <div className="flex-1 min-h-0 flex flex-col">
       <NavigationBar title="AI-логи" leading={<IconButton icon="Menu" label="Меню" onClick={onOpenMenu} />} />
       <div className="scroll-clean flex-1 min-h-0">
+        <section className="px-5 pt-4">
+          <h2 className="font-semibold">Статистика моделей</h2>
+          {statsError && <p className="text-negative">Не удалось загрузить статистику.</p>}
+          {!statsError && !models && <p className="text-body-secondary">Загрузка…</p>}
+          {models?.length === 0 && <p className="text-body-secondary">Пока нет проверок.</p>}
+          {!!models?.length && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-[13px]">
+                <thead><tr>
+                  <th className="p-2">Модель</th><th className="p-2">Вызовы</th><th className="p-2">Ошибки</th>
+                  <th className="p-2">👍</th><th className="p-2">👎</th><th className="p-2">Доля 👍</th>
+                </tr></thead>
+                <tbody>
+                  {models.map(({ model, calls, errors, up, down }) => (
+                    <tr key={model} className="border-t border-border">
+                      <td className="p-2">{model}</td><td className="p-2">{calls}</td>
+                      <td className="p-2">{errors} ({percent.format(errors / calls)})</td>
+                      <td className="p-2">{up}</td><td className="p-2">{down}</td>
+                      <td className="p-2">{up + down > 0 ? percent.format(up / (up + down)) : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
         {error && <div className="px-5 py-4 text-negative">{error}</div>}
         {!error && !logs && <div className="px-5 py-4 text-body-secondary">Загрузка…</div>}
         {!error && logs && (
