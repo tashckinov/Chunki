@@ -250,7 +250,7 @@ export interface AdminCatalogTopic extends TopicIdentity {
 
 export function fetchAdminTopicCatalog(q: string, offset: number) {
   const query = new URLSearchParams({ q, offset: String(offset) });
-  return getJson<{ topics: TopicIdentity[]; nextOffset: number | null }>(`/api/admin/topic-catalog?${query}`);
+  return getJson<{ topics: (TopicIdentity & { topicNumber?: number | null })[]; nextOffset: number | null }>(`/api/admin/topic-catalog?${query}`);
 }
 
 export async function fetchAdminCatalogTopic(key: string) {

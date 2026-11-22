@@ -4,7 +4,7 @@ import { afterAll, expect, it, vi } from 'vitest';
 import { pool } from '../db/pool.js';
 import { createCurriculumTopic, linkCurriculumTopic } from '../modules/program/topicCatalog.js';
 import { getGradingProvider } from '../grading/index.js';
-import { getPlacementResult, getProgramForUser, getTopicStudy, startTopicAttempt, submitPlacementTest, submitTopicAttempt } from '../modules/program/service.js';
+import { getPlacementResult, getProgramForUser, getTopicStudy, rebuildProgramFromLastTest, startTopicAttempt, submitPlacementTest, submitTopicAttempt } from '../modules/program/service.js';
 
 vi.mock('../grading/index.js', () => {
   const provider = new MockGradingProvider();
@@ -87,7 +87,7 @@ it('assigns only fixed curriculum IDs, preserves legacy progress, and generates 
     id: `requests-${suffix}`, title: `Вежливые просьбы ${suffix}`, level: 'B1', category: 'Functions',
     objective: 'Попросить коллегу перенести встречу.', subtopics: ['Просьба', 'Ответ'],
   };
-  expect(await createCurriculumTopic(extension)).toBe(true);
+  expect(await createCurriculumTopic(extension)).toMatchObject({ id: extension.id, topic_number: expect.any(Number) });
   const study = { explanation: 'Существующий урок', keyPoints: [], contrastExamples: [], exampleChunks: [] };
   await pool.query(
     "INSERT INTO program_topics (key, title, category, level, study_content) VALUES ($1, $2, 'Грамматика', 'A2', $3)",
@@ -136,6 +136,7 @@ it('assigns only fixed curriculum IDs, preserves legacy progress, and generates 
     const shared = second.topics.find(({ curriculumId }) => curriculumId === extension.id)!;
     expect(shared.id).not.toBe(assigned.id);
     expect(shared.key).toBe(assigned.key);
+    expect(shared.topicNumber).toBe(assigned.topicNumber);
     expect(await getTopicStudy(learner.id, assigned.id)).toEqual(await getTopicStudy(other.id, shared.id));
     expect(lesson).toHaveBeenCalledTimes(1);
     expect(lesson.mock.lastCall?.[1]).toMatchObject({ id: extension.id, objective: extension.objective });
@@ -148,5 +149,65 @@ it('assigns only fixed curriculum IDs, preserves legacy progress, and generates 
     await pool.query('DELETE FROM users WHERE id = ANY($1::uuid[])', [[learner.id, other.id]]);
     await pool.query('DELETE FROM program_topics WHERE key = $1 OR curriculum_id = $2', [legacyKey, extension.id]);
     await pool.query('DELETE FROM curriculum_topics WHERE id = $1', [extension.id]);
+  }
+});
+
+it('rebuilds an empty program from saved evidence once, without regrading or using quota', async () => {
+  const { rows: [learner] } = await pool.query<{ id: string }>('INSERT INTO users DEFAULT VALUES RETURNING id');
+  const userId = learner.id;
+  const submissionId = randomUUID();
+  const input: PlacementTestSubmission = {
+    submissionId, fromLevel: 'A2', toLevel: 'B1', purpose: [], mcqAnswers: {}, open9: '', open10: '', essay: '',
+  };
+  const provider = getGradingProvider();
+  const assessment = await provider.gradePlacementTest(input);
+  const grade = vi.spyOn(provider, 'gradePlacementTest').mockResolvedValue({ ...assessment, overallLevel: 'A2', topics: [] });
+  const recommend = vi.spyOn(provider, 'recommendProgramTopics');
+  try {
+    expect(await submitPlacementTest(userId, input)).toMatchObject({ kind: 'ok' });
+    const saved = await getPlacementResult(userId, submissionId);
+    const before = await getProgramForUser(userId);
+    expect(before).toMatchObject({ needsProgramBuild: true, topics: [], placement: { quota: { used: 1 } } });
+
+    recommend.mockRejectedValueOnce(new Error('Provider unavailable'));
+    await expect(rebuildProgramFromLastTest(userId)).rejects.toThrow('Provider unavailable');
+    expect(await getProgramForUser(userId)).toMatchObject({ needsProgramBuild: true, topics: [] });
+
+    let notifyStarted!: () => void;
+    let finish!: () => void;
+    const started = new Promise<void>((resolve) => { notifyStarted = resolve; });
+    const canFinish = new Promise<void>((resolve) => { finish = resolve; });
+    recommend.mockImplementationOnce(async () => {
+      notifyStarted();
+      await canFinish;
+      return [
+        { key: 'a2-articles', rationale: 'Артикли' },
+        { key: 'c1-negative-inversion', rationale: 'Уровень выше цели' },
+        { key: 'invented-id', rationale: 'Такой цели нет' },
+      ];
+    });
+    const build = rebuildProgramFromLastTest(userId);
+    try {
+      await Promise.race([started, build]);
+      expect(await rebuildProgramFromLastTest(userId)).toBe('building');
+    } finally {
+      finish();
+      await build;
+    }
+    expect(await build).toBe('ready');
+    expect(await rebuildProgramFromLastTest(userId)).toBe('ready');
+    expect(grade).toHaveBeenCalledTimes(1);
+    expect(recommend).toHaveBeenCalledTimes(2);
+    expect(await getPlacementResult(userId, submissionId)).toEqual(saved);
+    const after = await getProgramForUser(userId);
+    expect(after).toMatchObject({
+      needsProgramBuild: false,
+      placement: before.placement,
+      topics: [{ curriculumId: 'a2-articles', topicNumber: expect.any(Number), status: 'assigned' }],
+    });
+  } finally {
+    grade.mockRestore();
+    recommend.mockRestore();
+    await pool.query('DELETE FROM users WHERE id = $1', [userId]);
   }
 });

@@ -16,6 +16,7 @@ import type {
   ExercisesAssessment,
   TopicIdentity,
   TopicPlanContext,
+  ProgramBuildEvidence,
 } from '@app/shared';
 import { BUILTIN_PLACEMENT_TEST } from '@app/shared';
 
@@ -244,6 +245,24 @@ export class OpenRouterGradingProvider implements GradingProvider {
       essayGrade: out.essayGrade,
       topics: out.topics,
     };
+  }
+
+  async recommendProgramTopics(evidence: ProgramBuildEvidence, plan: TopicPlanContext): Promise<TopicRecommendation[]> {
+    const { topics } = await this.#callTool<{ topics: TopicRecommendation[] }>({
+      system: 'You are an English curriculum tutor. Use only the saved assessment evidence and supplied curriculum. Do not grade the test again. Respond only via the provided tool.',
+      user: [
+        `Saved assessment evidence: ${JSON.stringify(evidence)}`,
+        topicPlanInstructions(plan, plan.currentLevel ?? 'the saved level'),
+      ].join('\n'),
+      toolName: 'recommend_program_topics',
+      toolDescription: 'Pick up to eight appropriate curriculum topics based on the existing assessment.',
+      schema: {
+        type: 'object',
+        properties: { topics: { type: 'array', items: TOPIC_SCHEMA, maxItems: 8 } },
+        required: ['topics'],
+      },
+    });
+    return topics;
   }
 
   async gradeExercises(input: ExercisesSubmission, plan?: TopicPlanContext): Promise<ExercisesAssessment> {

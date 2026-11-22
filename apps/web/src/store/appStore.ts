@@ -278,7 +278,7 @@ interface AppState {
   goDeck: (chunks?: ChunkSummary[], collectionSlug?: string) => Promise<void>;
   loadCollections: () => Promise<void>;
   /** Refetches the program (topic list + statuses) — called by checkAuth() and after grading a topic test. */
-  loadProgram: () => Promise<void>;
+  loadProgram: () => Promise<ProgramState | undefined>;
   openPlacementResult: (id: string) => Promise<void>;
   openTopic: (userTopicId: string) => Promise<void>;
   setNavTab: (v: number) => void;
@@ -315,6 +315,9 @@ interface AppState {
 }
 
 let dragStart: { x: number; y: number } | null = null;
+
+let programRequest = 0;
+let latestAppliedProgramRequest = 0;
 
 export const useAppStore = create<AppState>()(
   persist(
@@ -673,10 +676,19 @@ export const useAppStore = create<AppState>()(
       loadProgram: async () => {
         const userId = get().user?.id;
         if (!userId) return;
+        const request = ++programRequest;
         try {
           const program: ProgramState = await fetchProgram();
           if (get().user?.id !== userId) return;
-          set({ programTopics: program.status === 'active' ? program.topics : [], placementOverview: program.placement ?? null });
+          if (request < latestAppliedProgramRequest) return program;
+          latestAppliedProgramRequest = request;
+          const resetCurrentTopic = program.needsProgramBuild && ['topic', 'exercises', 'topicresult'].includes(get().screen);
+          set({
+            programTopics: program.status === 'active' ? program.topics : [],
+            placementOverview: program.placement ?? null,
+            ...(resetCurrentTopic ? { screen: 'program', activeTopicId: null, currentAttempt: null } : {}),
+          });
+          return program;
         } catch {
           // Best-effort — a failed refresh just leaves the last-known program in place.
         }

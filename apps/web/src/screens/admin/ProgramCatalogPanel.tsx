@@ -134,14 +134,14 @@ export function ProgramCatalogPanel() {
           </form>}
           <section className="flex flex-col gap-3 rounded-xl border border-border p-4">
             <h2 className="text-section-title">Учебная цель</h2>
-            {linked && <p className="text-body-secondary">{linked.level} · {linked.title} — {linked.objective}</p>}
+            {linked && <p className="text-body-secondary">{linked.topic_number != null && `№${linked.topic_number} · `}{linked.level} · {linked.title} — {linked.objective}</p>}
             {curriculumError && <p className="text-negative">Не удалось загрузить учебные цели.</p>}
             {!topic.curriculumSlot && curriculum && (
               <>
                 <label className="flex flex-col gap-1 text-meta">Связать существующую тему
                   <select className={field} disabled={saving} value={link} onChange={(event) => { setLink(event.target.value); setLinkSaved(false); }}>
                     <option value="">Без связи с CEFR-каталогом</option>
-                    {curriculum.map((item) => <option key={item.id} value={item.id}>{item.level} · {item.title}</option>)}
+                    {curriculum.map((item) => <option key={item.id} value={item.id}>{item.topic_number != null && `№${item.topic_number} · `}{item.level} · {item.title}</option>)}
                   </select>
                 </label>
                 <Button size="sm" variant="secondary" className="self-start" disabled={saving || link === (topic.curriculumId ?? '')}
@@ -188,7 +188,7 @@ export function ProgramCatalogPanel() {
             <li key={item.key}>
               <button type="button" onClick={() => setKey(item.key)} className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-surface-subtle">
                 <span className="wrap-anywhere">{item.title}</span>
-                <span className="shrink-0 text-meta">{item.level ?? 'Без уровня'}</span>
+                <span className="shrink-0 text-meta">{item.topicNumber != null && `№${item.topicNumber} · `}{item.level ?? 'Без уровня'}</span>
               </button>
             </li>
           ))}

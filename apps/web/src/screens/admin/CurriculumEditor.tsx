@@ -41,7 +41,7 @@ export function CurriculumEditor({ topics, onCreated }: { topics?: CurriculumTop
         {topics?.map((topic) => (
           <li key={topic.id} className="py-2">
             <details>
-              <summary className="cursor-pointer">{topic.title} · {topic.level} · {topic.category}</summary>
+              <summary className="cursor-pointer">{topic.topic_number != null && `№${topic.topic_number} · `}{topic.title} · {topic.level} · {topic.category}</summary>
               <p className="mt-1 text-meta">{topic.id}</p>
               <p className="mt-1 text-body-secondary">{topic.objective}</p>
               {topic.subtopics.length > 0 && <ul className="list-disc pl-5 text-body-secondary">

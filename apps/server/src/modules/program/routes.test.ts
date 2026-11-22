@@ -10,6 +10,7 @@ vi.mock('./service.js', () => ({
   getProgramForUser: vi.fn(),
   getPlacementResult: vi.fn(),
   getTopicStudy: vi.fn(),
+  rebuildProgramFromLastTest: vi.fn(),
   startTopicAttempt: vi.fn(),
   submitPlacementTest: vi.fn(),
   submitTopicAttempt: vi.fn(),
@@ -30,6 +31,7 @@ beforeEach(async () => {
   vi.mocked(service.getProgramForUser).mockReset();
   vi.mocked(service.getPlacementResult).mockReset();
   vi.mocked(service.getTopicStudy).mockReset();
+  vi.mocked(service.rebuildProgramFromLastTest).mockReset();
   vi.mocked(service.startTopicAttempt).mockReset();
   vi.mocked(service.submitPlacementTest).mockReset();
   vi.mocked(service.submitTopicAttempt).mockReset();
@@ -81,6 +83,23 @@ describe('GET /api/program/placement-results/:id', () => {
     const res = await app.inject({ method: 'GET', url: `/api/program/placement-results/${attemptId}`, cookies: authCookie });
     expect(res.statusCode).toBe(404);
     expect(service.getPlacementResult).toHaveBeenCalledWith('user-1', attemptId);
+  });
+});
+
+describe('POST /api/program/rebuild', () => {
+  it('requires an authenticated account', async () => {
+    const res = await app.inject({ method: 'POST', url: '/api/program/rebuild' });
+    expect(res.statusCode).toBe(401);
+    expect(service.rebuildProgramFromLastTest).not.toHaveBeenCalled();
+  });
+
+  it('reports that an existing build is still running for the account', async () => {
+    vi.mocked(session.getSession).mockResolvedValue(authenticatedSession);
+    vi.mocked(service.rebuildProgramFromLastTest).mockResolvedValue('building');
+    const res = await app.inject({ method: 'POST', url: '/api/program/rebuild', cookies: authCookie, payload: { userId: 'another-user' } });
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toEqual({ status: 'building' });
+    expect(service.rebuildProgramFromLastTest).toHaveBeenCalledWith('user-1');
   });
 });
 

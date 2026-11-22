@@ -7,6 +7,7 @@ export interface UserTopicSummary {
   title: string;
   category: TopicCategory;
   level: CEFRLevel | null;
+  topicNumber?: number | null;
   rationale: string;
   source: 'placement' | 'discovered';
   status: 'assigned' | 'passed_once' | 'mastered';
@@ -14,10 +15,14 @@ export interface UserTopicSummary {
   masteredAt: string | null;
 }
 
-export type ProgramState = ({ status: 'none' } | { status: 'active'; topics: UserTopicSummary[] }) & { placement?: PlacementOverview };
+export type ProgramState = ({ status: 'none' } | { status: 'active'; topics: UserTopicSummary[] }) & { placement?: PlacementOverview; needsProgramBuild?: boolean };
 
 export async function fetchProgram(): Promise<ProgramState> {
   return getJson('/api/program');
+}
+
+export function rebuildProgram(): Promise<{ status: 'ready' | 'building' }> {
+  return postJson('/api/program/rebuild', {});
 }
 
 export function fetchPlacementResult(id: string): Promise<{ summary: PlacementResultSummary; result: PlacementGradeResult }> {

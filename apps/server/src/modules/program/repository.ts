@@ -79,6 +79,7 @@ interface PlacementSummaryRow {
   to_level: CEFRLevel;
   purpose: string[] | null;
   created_at: Date;
+  program_built_at: Date | null;
 }
 
 interface PlacementResultRow extends PlacementSummaryRow {
@@ -96,7 +97,7 @@ interface PlacementResultRow extends PlacementSummaryRow {
 
 export async function listPlacementTests(userId: string): Promise<PlacementSummaryRow[]> {
   const { rows } = await pool.query<PlacementSummaryRow>(
-    `SELECT id, variant_id, overall_level, to_level, purpose, created_at FROM placement_tests
+    `SELECT id, variant_id, overall_level, to_level, purpose, created_at, program_built_at FROM placement_tests
      WHERE user_id = $1 ORDER BY created_at DESC, id DESC LIMIT 20`,
     [userId],
   );
@@ -108,20 +109,19 @@ export async function findPlacementResult(userId: string, id: string): Promise<P
   return rows[0] ?? null;
 }
 
-export async function savePlacementTest(input: NewPlacementTest, topics: TopicRecommendation[], levels: readonly CEFRLevel[], token: string): Promise<TopicSuggestion[]> {
+async function withPlacementCheck<T>(userId: string, token: string, save: (db: PoolClient) => Promise<T>): Promise<T> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const lock = await client.query(
       'SELECT token FROM placement_test_checks WHERE user_id = $1 AND token = $2 FOR UPDATE',
-      [input.userId, token],
+      [userId, token],
     );
     if (!lock.rowCount) throw new Error('Placement check reservation was replaced');
-    await createPlacementTest(input, client);
-    const inserted = await insertNewUserTopics(input.userId, topics, levels, 'placement', client);
-    await client.query('DELETE FROM placement_test_checks WHERE user_id = $1 AND token = $2', [input.userId, token]);
+    const result = await save(client);
+    await client.query('DELETE FROM placement_test_checks WHERE user_id = $1 AND token = $2', [userId, token]);
     await client.query('COMMIT');
-    return inserted;
+    return result;
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -130,12 +130,33 @@ export async function savePlacementTest(input: NewPlacementTest, topics: TopicRe
   }
 }
 
-async function createPlacementTest(input: NewPlacementTest, client: PoolClient): Promise<void> {
+export async function savePlacementTest(input: NewPlacementTest, topics: TopicRecommendation[], levels: readonly CEFRLevel[], token: string): Promise<TopicSuggestion[]> {
+  return withPlacementCheck(input.userId, token, async (client) => {
+    const inserted = await insertNewUserTopics(input.userId, topics, levels, 'placement', client);
+    await createPlacementTest(input, client, inserted.length > 0);
+    return inserted;
+  });
+}
+
+export async function saveProgramBuild(userId: string, placementId: string, topics: TopicRecommendation[], levels: readonly CEFRLevel[], token: string) {
+  return withPlacementCheck(userId, token, async (client) => {
+    const marked = await client.query(
+      `UPDATE placement_tests SET program_built_at = now()
+       WHERE user_id = $1 AND id = $2 AND program_built_at IS NULL
+         AND id = (SELECT id FROM placement_tests WHERE user_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1)
+         AND NOT EXISTS (SELECT 1 FROM user_topics WHERE user_id = $1)`,
+      [userId, placementId],
+    );
+    if (marked.rowCount) await insertNewUserTopics(userId, topics, levels, 'placement', client);
+  });
+}
+
+async function createPlacementTest(input: NewPlacementTest, client: PoolClient, built: boolean): Promise<void> {
   await client.query(
     `INSERT INTO placement_tests
        (user_id, from_level, to_level, purpose, mcq_answers, open9, open10, essay,
-        overall_level, skills, above_level, below_level, mcq_score, open_grades, essay_grade, variant_id, id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, COALESCE($17::uuid, gen_random_uuid()))`,
+        overall_level, skills, above_level, below_level, mcq_score, open_grades, essay_grade, variant_id, id, program_built_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, COALESCE($17::uuid, gen_random_uuid()), CASE WHEN $18 THEN now() END)`,
     [
       input.userId,
       input.fromLevel,
@@ -154,6 +175,7 @@ async function createPlacementTest(input: NewPlacementTest, client: PoolClient):
       JSON.stringify(input.essayGrade),
       input.variantId ?? null,
       input.submissionId ?? null,
+      built,
     ],
   );
 }
