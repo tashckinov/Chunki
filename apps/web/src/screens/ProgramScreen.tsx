@@ -1,3 +1,4 @@
+import { rebuildProgram } from '../lib/program';
 import { useEffect, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
@@ -80,7 +81,47 @@ export function ProgramScreen() {
   const s = useAppStore();
   const topics = s.programTopics;
   const userId = s.user?.id;
-  useEffect(() => { if (userId) void useAppStore.getState().loadProgram(); }, [userId]);
+  const [phase, setPhase] = useState<'loading' | 'building' | 'ready' | 'error'>('loading');
+  const [retry, setRetry] = useState(0);
+
+  useEffect(() => {
+    if (!userId) return;
+    let active = true;
+    const { loadProgram } = useAppStore.getState();
+
+    async function prepare() {
+      setPhase('loading');
+      try {
+        const current = await loadProgram();
+        if (!active) return;
+        if (!current) throw new Error('Program unavailable');
+        if (current.needsProgramBuild) {
+          setPhase('building');
+          const { status } = await rebuildProgram();
+          if (!active) return;
+          if (status === 'building') {
+            // Another tab or a previous visit already holds the build lease.
+            for (let attempt = 0; attempt < 30 && active; attempt += 1) {
+              await new Promise((resolve) => window.setTimeout(resolve, 1500));
+              if (!active) return;
+              const updated = await loadProgram();
+              if (updated && !updated.needsProgramBuild) break;
+              if (attempt === 29) throw new Error('Program build pending');
+            }
+          } else {
+            const updated = await loadProgram();
+            if (!updated || updated.needsProgramBuild) throw new Error('Program build pending');
+          }
+        }
+        if (active) setPhase('ready');
+      } catch {
+        if (active) setPhase('error');
+      }
+    }
+
+    void prepare();
+    return () => { active = false; };
+  }, [retry, userId]);
   const masteredCount = topics.filter((t) => t.status === 'mastered').length;
 
   return (
@@ -92,7 +133,7 @@ export function ProgramScreen() {
         <div className="text-body-secondary mb-2">
           {topics.length} {topics.length === 1 ? 'тема' : 'тем'} · {masteredCount} подтверждено
         </div>
-        {topics.map((topic, i) => {
+        {topics.map((topic) => {
           const due = topic.status === 'passed_once' && topic.nextReviewAt && new Date(topic.nextReviewAt).getTime() <= Date.now();
           const waiting = topic.status === 'passed_once' && !due;
           const dotBg = topic.status === 'mastered' ? 'var(--color-accent)' : due ? 'var(--color-warning-subtle)' : 'var(--color-surface-subtle)';
@@ -112,11 +153,12 @@ export function ProgramScreen() {
               className="pressable flex gap-3.5 py-3.5 border-b border-border last:border-b-0 text-left"
             >
               <div className="w-7 h-7 flex-none rounded-full flex items-center justify-center text-[12px] font-medium mt-0.5" style={{ background: dotBg, color: dotFg }}>
-                {topic.status === 'mastered' ? '✓' : i + 1}
+                {topic.status === 'mastered' ? '✓' : '·'}
               </div>
               <div className="flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="text-[15.5px] leading-[22px]">{topic.title}</div>
+                  {topic.topicNumber != null && <span className="text-meta">CEFR №{topic.topicNumber}</span>}
                   {topic.level && <span className="text-meta">{topic.level}</span>}
                   {topic.source === 'discovered' && <span className="text-[11px] font-medium text-accent rounded-full bg-accent-subtle px-2 py-0.5">найдено ИИ</span>}
                 </div>
@@ -125,7 +167,17 @@ export function ProgramScreen() {
             </button>
           );
         })}
-        {topics.length === 0 && <div className="text-body-secondary py-2">Тем пока нет.</div>}
+        {topics.length === 0 && phase === 'loading' && <p role="status" className="text-body-secondary py-2">Загружаем программу…</p>}
+        {phase === 'building' && <p role="status" className="text-body-secondary py-2">Собираем программу по последнему тесту…</p>}
+        {phase === 'error' && <div className="py-2">
+          <p role="alert" className="text-negative mb-2">Не удалось загрузить программу. Результаты теста сохранены.</p>
+          <Button size="sm" variant="secondary" onClick={() => setRetry((value) => value + 1)}>Повторить</Button>
+        </div>}
+        {topics.length === 0 && phase === 'ready' && <div className="text-body-secondary py-2">
+          {s.placementOverview?.history.length && s.placementOverview.quota.allowed
+            ? 'В каталоге пока нет тем для этого диапазона уровней.'
+            : 'Тем пока нет.'}
+        </div>}
       </div>
     </div>
   );

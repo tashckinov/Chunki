@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { chooseGrammarTest } from '../grammarTests/repository.js';
 import { grammarTestIdSchema } from '../grammarTests/schema.js';
 import { requireAuthenticatedSession } from '../auth/requireAuth.js';
-import { getPlacementQuota, getPlacementResult, getProgramForUser, getTopicStudy, startTopicAttempt, submitPlacementTest, submitTopicAttempt } from './service.js';
+import { getPlacementQuota, getPlacementResult, getProgramForUser, getTopicStudy, rebuildProgramFromLastTest, startTopicAttempt, submitPlacementTest, submitTopicAttempt } from './service.js';
 
 const CEFR_LEVELS = ['A1', 'A2', 'A2+', 'B1', 'B1+', 'B2', 'B2+', 'C1'] as const;
 
@@ -87,6 +87,19 @@ export const programRoutes: FastifyPluginAsync = async (app) => {
     if (quota.limit !== null && quota.used >= quota.limit) return reply.code(429).send({ error: 'placement_limit_reached', quota });
     const previous = query.data.previous === 'builtin' ? undefined : query.data.previous;
     return chooseGrammarTest(previous);
+  });
+
+  app.post('/rebuild', {
+    preHandler: [requireAuthenticatedSession, app.rateLimit({ max: 5, timeWindow: '10 minutes', keyGenerator: (request) => request.session!.userId })],
+  }, async (request, reply) => {
+    try {
+      const status = await rebuildProgramFromLastTest(request.session!.userId);
+      if (status === 'not_allowed') return reply.code(403).send({ error: 'not_allowed' });
+      return reply.code(status === 'building' ? 202 : 200).send({ status });
+    } catch (err) {
+      request.log.error({ message: err instanceof Error ? err.message : String(err) }, 'rebuildProgramFromLastTest failed');
+      return reply.code(502).send({ error: 'generation_failed' });
+    }
   });
 
   app.post(

@@ -9,7 +9,7 @@ export function topicLevels(current: CEFRLevel, target: CEFRLevel): readonly CEF
 
 export async function listCurriculumTopics(target?: CEFRLevel): Promise<CurriculumTopic[]> {
   const { rows } = await pool.query<CurriculumTopic>(
-    `SELECT id, title, level, category, objective, subtopics, source FROM curriculum_topics
+    `SELECT id, title, level, category, objective, subtopics, source, topic_number FROM curriculum_topics
      WHERE $1::text[] IS NULL OR level = ANY($1) ORDER BY level, category, title, id`,
     [target ? topicLevels('A1', target) : null],
   );
@@ -59,13 +59,13 @@ export async function resolveTopics(
   return resolved;
 }
 
-export async function createCurriculumTopic(topic: CurriculumTopic): Promise<boolean> {
-  const { rowCount } = await pool.query(
+export async function createCurriculumTopic(topic: CurriculumTopic): Promise<CurriculumTopic | null> {
+  const { rows } = await pool.query<CurriculumTopic>(
     `INSERT INTO curriculum_topics (id, title, level, category, objective, subtopics)
-     VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`,
+     VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING RETURNING id, title, level, category, objective, subtopics, source, topic_number`,
     [topic.id, topic.title, topic.level, topic.category, topic.objective, topic.subtopics],
   );
-  return rowCount === 1;
+  return rows[0] ?? null;
 }
 
 export async function linkCurriculumTopic(key: string, curriculumId: string | null): Promise<boolean> {
@@ -106,12 +106,13 @@ export interface AdminTopicDetail extends TopicIdentity {
 
 export async function listTopicsForReview(search: string, offset: number) {
   const pageSize = 50;
-  const { rows } = await pool.query<TopicIdentity>(
-    `SELECT key, title, category, level FROM program_topics
+  const { rows } = await pool.query<TopicIdentity & { topicNumber: number | null }>(
+    `SELECT p.key, p.title, p.category, p.level, c.topic_number AS "topicNumber"
+     FROM program_topics p LEFT JOIN curriculum_topics c ON c.id = p.curriculum_id
      WHERE $1 = '' OR strpos(title_key, program_topic_name($1)) > 0
-       OR strpos(key, program_topic_name($1)) > 0
+       OR strpos(p.key, program_topic_name($1)) > 0
        OR EXISTS (SELECT 1 FROM unnest(aliases) AS a WHERE strpos(a, program_topic_name($1)) > 0)
-     ORDER BY title_key, key LIMIT $2 OFFSET $3`,
+     ORDER BY title_key, p.key LIMIT $2 OFFSET $3`,
     [search, pageSize + 1, offset],
   );
   return { topics: rows.slice(0, pageSize), nextOffset: rows.length > pageSize ? offset + pageSize : null };

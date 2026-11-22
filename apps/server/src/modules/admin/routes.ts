@@ -388,8 +388,9 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       subtopics: z.array(z.string().trim().min(1).max(160)).max(12).default([]),
     }).safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'invalid_request' });
-    if (!await createCurriculumTopic(parsed.data)) return reply.code(409).send({ error: 'duplicate_curriculum_topic' });
-    return reply.code(201).send({ topic: parsed.data });
+    const topic = await createCurriculumTopic(parsed.data);
+    if (!topic) return reply.code(409).send({ error: 'duplicate_curriculum_topic' });
+    return reply.code(201).send({ topic });
   });
 
   app.get('/topic-catalog', async (request, reply) => {

@@ -10,6 +10,7 @@ import type {
   TopicIdentity,
   TopicRecommendation,
   TopicPlanContext,
+  ProgramBuildEvidence,
   CurriculumTopic,
   PlacementAssessment,
   ExercisesAssessment,
@@ -93,6 +94,10 @@ export class MockGradingProvider implements GradingProvider {
       essayGrade,
       topics: pickTopics(plan, 8),
     };
+  }
+
+  async recommendProgramTopics(_evidence: ProgramBuildEvidence, plan: TopicPlanContext): Promise<TopicRecommendation[]> {
+    return pickTopics(plan, 8);
   }
 
   async gradeExercises(input: ExercisesSubmission, plan?: TopicPlanContext): Promise<ExercisesAssessment> {

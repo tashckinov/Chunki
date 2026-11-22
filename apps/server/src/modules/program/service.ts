@@ -11,6 +11,7 @@ import {
   releasePlacementCheck,
   reservePlacementCheck,
   savePlacementTest,
+  saveProgramBuild,
   findAttempt,
   findUserTopic,
   findUserTopics,
@@ -32,6 +33,7 @@ export interface UserTopicSummary {
   title: string;
   category: string;
   curriculumId: string | null;
+  topicNumber: number | null;
   level: CEFRLevel | null;
   rationale: string;
   source: UserTopicSource;
@@ -45,6 +47,7 @@ function toSummary(row: UserTopicRow): UserTopicSummary {
     id: row.id,
     ...toTopicIdentity(row),
     curriculumId: row.curriculum?.id ?? null,
+    topicNumber: row.curriculum?.topic_number ?? null,
     rationale: row.rationale,
     source: row.source,
     status: row.status,
@@ -69,7 +72,7 @@ async function topicPlan(userId: string, currentLevel: CEFRLevel | null, targetL
   return { catalog, assignedKeys, currentLevel, targetLevel };
 }
 
-export type ProgramForUser = ({ status: 'none' } | { status: 'active'; topics: UserTopicSummary[] }) & { placement: PlacementOverview };
+export type ProgramForUser = ({ status: 'none' } | { status: 'active'; topics: UserTopicSummary[] }) & { placement: PlacementOverview; needsProgramBuild?: boolean };
 
 async function placementQuota(userId: string, access: Awaited<ReturnType<typeof resolvePlacementAccess>>): Promise<PlacementQuota> {
   const now = new Date();
@@ -100,7 +103,13 @@ export async function getProgramForUser(userId: string): Promise<ProgramForUser>
   const [topics, history, quota] = await Promise.all([findUserTopics(userId), listPlacementTests(userId), getPlacementQuota(userId)]);
   const placement = { history: history.map(toPlacementSummary), quota };
   if (topics.length === 0 && history.length === 0) return { status: 'none', placement };
-  return { status: 'active', topics: visibleTopics(topics, history[0]?.overall_level ?? null, history[0]?.to_level ?? null), placement };
+  const latest = history[0];
+  return {
+    status: 'active',
+    topics: visibleTopics(topics, latest?.overall_level ?? null, latest?.to_level ?? null),
+    placement,
+    needsProgramBuild: quota.allowed && topics.length === 0 && !!latest && !latest.program_built_at,
+  };
 }
 
 export async function getPlacementResult(userId: string, id: string): Promise<{ summary: PlacementResultSummary; result: PlacementGradeResult } | null> {
@@ -177,6 +186,41 @@ export async function submitPlacementTest(userId: string, input: PlacementTestSu
     return { kind: 'ok', result: { ...grade, topics: assigned, review: buildPlacementReview(definition, input, grade) }, topics };
   } finally {
     // A stale lock expires even if the database is unavailable during cleanup.
+    await releasePlacementCheck(userId, token).catch(() => {});
+  }
+}
+
+export async function rebuildProgramFromLastTest(userId: string): Promise<'ready' | 'building' | 'not_allowed'> {
+  const token = await reservePlacementCheck(userId);
+  if (!token) return 'building';
+  try {
+    const [history, assigned] = await Promise.all([listPlacementTests(userId), findUserTopics(userId)]);
+    const latest = history[0];
+    if (!latest || latest.program_built_at || assigned.length > 0) return 'ready';
+    if (!(await resolvePlacementAccess(userId)).allowed) return 'not_allowed';
+
+    const saved = await getPlacementResult(userId, latest.id);
+    if (!saved) return 'ready';
+    const levels = topicLevels(latest.overall_level, latest.to_level);
+    const catalog = (await listCurriculumTopics(latest.to_level)).filter(({ level }) => levels.includes(level));
+    const { skills, mcqScore, belowLevel, review = [] } = saved.result;
+    const corrections = review.map(({ key, prompt, answer, correction, feedback, grammar }) => ({
+      prompt, answer: Number(key) <= mcqScore.total ? answer : '', correction, feedback, grammar,
+    }));
+    const provider = getGradingProvider();
+    const plan = { catalog, assignedKeys: [], currentLevel: latest.overall_level, targetLevel: latest.to_level };
+    const topics = catalog.length ? await withAiCallLogging({
+      userId, chunkId: null, provider: provider.name, model: provider.model ?? null, request: { placementId: latest.id },
+    }, () => provider.recommendProgramTopics({ skills, mcqScore, belowLevel, corrections }, plan)) : [];
+
+    const available = new Set(catalog.map(({ id }) => id));
+    const selected = topics.filter(({ key }) => available.has(key));
+    const fallback = catalog.slice(0, 3).map(({ id, level }) => ({
+      key: id, rationale: `Практика уровня ${level} по результатам входного теста.`,
+    }));
+    await saveProgramBuild(userId, latest.id, selected.length ? selected : fallback, levels, token);
+    return 'ready';
+  } finally {
     await releasePlacementCheck(userId, token).catch(() => {});
   }
 }

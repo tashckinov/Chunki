@@ -42,6 +42,7 @@ export interface CurriculumTopic {
   objective: string;
   subtopics: string[];
   source?: string | null;
+  topic_number?: number;
 }
 
 export type TopicRecommendation = Pick<TopicSuggestion, 'key' | 'rationale'>;
@@ -166,10 +167,15 @@ export interface ExercisesGradeResult {
   nextReviewInDays: number;
 }
 
+export type ProgramBuildEvidence = Pick<PlacementGradeResult, 'skills' | 'mcqScore' | 'belowLevel'> & {
+  corrections: Pick<PlacementReviewItem, 'prompt' | 'answer' | 'correction' | 'feedback' | 'grammar'>[];
+};
+
 export interface GradingProvider {
   name: string;
   model?: string;
   gradePlacementTest(input: PlacementTestSubmission, definition?: PlacementTestDefinition, plan?: TopicPlanContext): Promise<PlacementAssessment>;
+  recommendProgramTopics(evidence: ProgramBuildEvidence, plan: TopicPlanContext): Promise<TopicRecommendation[]>;
   gradeExercises(input: ExercisesSubmission, plan?: TopicPlanContext): Promise<ExercisesAssessment>;
   generateTopicStudy(topic: TopicIdentity, curriculum?: CurriculumTopic): Promise<TopicStudyContent>;
   generateTopicExercises(topic: ExercisesSubmission['topic'], curriculum?: CurriculumTopic): Promise<ExerciseItem[]>;
