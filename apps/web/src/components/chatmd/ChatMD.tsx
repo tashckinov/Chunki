@@ -110,6 +110,21 @@ function StudyBlock({ block }: { block: LessonBlock }) {
       return <p className="chatmd-literal">{block.source}</p>;
     case 'question':
       return <Question block={block} />;
+    case 'patterns':
+      return (
+        <dl className="chatmd-patterns">
+          {block.rows.map(({ form, explanation, example, translation }, index) => (
+            <div className="chatmd-pattern" key={index}>
+              <dt><Inline source={form} /></dt>
+              <dd>
+                <div className="chatmd-pattern-explanation"><Inline source={explanation} /></div>
+                <div lang="en"><Inline source={example} /></div>
+                <div className="chatmd-pattern-translation"><Inline source={translation} /></div>
+              </dd>
+            </div>
+          ))}
+        </dl>
+      );
     case 'compare':
       return (
         <div className="chatmd-compare">
