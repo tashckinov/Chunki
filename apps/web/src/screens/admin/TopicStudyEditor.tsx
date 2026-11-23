@@ -7,11 +7,12 @@ import { generateAdminLevelStudy, saveAdminLevelStudy, saveAdminTopicStudy } fro
 const field = 'w-full rounded-xl border border-border bg-surface px-3 py-2 text-text';
 const emptyStudy: TopicStudyContent = { explanation: '', keyPoints: [], contrastExamples: [], exampleChunks: [] };
 
-export function TopicStudyEditor({ topic, curriculum, study, level }: {
+export function TopicStudyEditor({ topic, curriculum, study, level, onStudySaved }: {
   topic: TopicIdentity;
   curriculum?: CurriculumTopic;
   study: TopicStudyContent | null;
   level?: TopicStudyLevel;
+  onStudySaved?: (study: TopicStudyContent) => void;
 }) {
   const explanationId = useId();
   const [draft, setDraft] = useState(study ?? emptyStudy);
@@ -98,6 +99,7 @@ export function TopicStudyEditor({ topic, curriculum, study, level }: {
         ? (await saveAdminLevelStudy(topic.key, level, result.data)).study ?? result.data
         : await saveAdminTopicStudy(topic.key, result.data);
       setPublished(true);
+      onStudySaved?.(updated);
       setDraft(updated);
       setJson(JSON.stringify(updated, null, 2));
       setSaved(true);

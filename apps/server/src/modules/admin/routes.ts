@@ -5,7 +5,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import multipart from '@fastify/multipart';
 import { z } from 'zod';
 import { CEFR_LEVELS, CURRICULUM_CATEGORIES, TOPIC_CATEGORIES, TOPIC_STUDY_LEVELS, topicStudySchema } from '@app/shared';
-import { createCurriculumTopic, findCurriculumTopic, getTopicForReview, linkCurriculumTopic, listCurriculumTopics, listTopicsForReview, updateCurriculumTopic, updateTopicForReview, updateTopicStudyForReview } from '../program/topicCatalog.js';
+import { createCurriculumTopic, findCurriculumTopic, getTopicForReview, linkCurriculumTopic, listCurriculumTopics, listTopicsForReview, updateCurriculumTopic, updateTopicForReview, updateTopicStudyForReview, setTopicVerification } from '../program/topicCatalog.js';
 import { generateTopicLevelStudy, readTopicLevelStudy, saveTopicLevelStudy } from '../program/topicLevelStudy.js';
 import { rebuildProgramFromLastTest } from '../program/service.js';
 import { listProductionModelStats } from '../aiLogs/repository.js';
@@ -456,6 +456,17 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     if (!params.success || !body.success) return reply.code(400).send({ error: 'invalid_request' });
     const study = await updateTopicStudyForReview(params.data.key, body.data);
     return study ? { study } : reply.code(404).send({ error: 'not_found' });
+  });
+
+  app.patch('/topic-catalog/:key/verification', async (request, reply) => {
+    const params = catalogTopicParams.safeParse(request.params);
+    const body = z.discriminatedUnion('verified', [
+      z.object({ verified: z.literal(true), study: z.custom<z.infer<typeof topicStudySchema>>((value) => topicStudySchema.safeParse(value).success) }),
+      z.object({ verified: z.literal(false) }),
+    ]).safeParse(request.body);
+    if (!params.success || !body.success) return reply.code(400).send({ error: 'invalid_request' });
+    const topic = await setTopicVerification(params.data.key, body.data.verified, body.data.verified ? body.data.study : undefined);
+    return topic ?? reply.code(409).send({ error: 'study_changed' });
   });
 
   const levelStudyParams = catalogTopicParams.extend({ level: z.enum(TOPIC_STUDY_LEVELS) });

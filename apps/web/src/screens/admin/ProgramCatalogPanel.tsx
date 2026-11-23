@@ -1,3 +1,4 @@
+import { BadgeCheck } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { CEFR_LEVELS, TOPIC_CATEGORIES, type TopicIdentity, type CurriculumTopic } from '@app/shared';
 import { Button } from '../../components/ui/Button';
@@ -5,7 +6,7 @@ import { CurriculumEditor } from './CurriculumEditor';
 import { TopicStudyEditor } from './TopicStudyEditor';
 import { TopicLevelStudyPanel } from './TopicLevelStudyPanel';
 import { ApiError } from '../../lib/collections';
-import { fetchAdminCatalogTopic, fetchAdminTopicCatalog, fetchCurriculumTopics, saveAdminCatalogTopic, setTopicCurriculumLink, type AdminCatalogTopic } from '../../lib/admin';
+import { fetchAdminCatalogTopic, fetchAdminTopicCatalog, fetchCurriculumTopics, saveAdminCatalogTopic, setTopicCurriculumLink, setAdminTopicVerification, type AdminCatalogTopic } from '../../lib/admin';
 
 const field = 'min-h-11 rounded-xl border border-border bg-surface px-3 text-text';
 
@@ -100,6 +101,21 @@ export function ProgramCatalogPanel() {
     }
   }
 
+  async function toggleVerification() {
+    if (!topic || saving || !topic.study) return;
+    setSaving(true);
+    setError('');
+    try {
+      const { verified } = await setAdminTopicVerification(topic.key, !topic.verified, topic.study);
+      setTopic((current) => current?.key === topic.key ? { ...current, verified } : current);
+      loadPage(page.q, page.offset);
+    } catch {
+      setError('Не удалось изменить отметку. Если урок изменился, откройте тему заново.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function onCurriculumSaved(updated: CurriculumTopic) {
     setCurriculum((previous) => {
       const topics = previous ?? [];
@@ -133,6 +149,12 @@ export function ProgramCatalogPanel() {
               {linked?.topic_number != null && '№' + linked.topic_number + ' · '}
               {topic.curriculumSlot && linked ? linked.title : topic.title}
             </h2>
+            <div className="flex flex-wrap items-center gap-2">
+              {topic.verified && <span className="inline-flex items-center gap-1 text-sm text-blue-700 dark:text-blue-300"><BadgeCheck size={17} aria-hidden="true" /> Верифицировано</span>}
+              <Button size="sm" variant="secondary" disabled={saving || !topic.study} onClick={() => void toggleVerification()}>
+                {topic.verified ? 'Снять отметку' : 'Отметить как верифицированную'}
+              </Button>
+            </div>
             {topic.ratings && <p className="text-meta">Понятно: {topic.ratings.clear} · Непонятно: {topic.ratings.unclear}</p>}
             <div className="flex flex-wrap gap-2">
               <Button variant="secondary" size="sm" disabled={curriculumLoading} onClick={() => levelsSection.current?.scrollIntoView({ block: 'start' })}>Объяснения по уровням</Button>
@@ -157,7 +179,13 @@ export function ProgramCatalogPanel() {
           )}
           {curriculumLoading ? <p role="status" className="text-body-secondary">Загружаем учебную цель…</p> : (
             <>
-              <TopicStudyEditor key={topic.key} topic={topic} curriculum={linked} study={topic.study} />
+              <TopicStudyEditor key={topic.key} topic={topic} curriculum={linked} study={topic.study} onStudySaved={(study) => {
+                setTopic((current) => current?.key === topic.key ? {
+                  ...current, study,
+                  verified: current.verified && JSON.stringify(current.study) === JSON.stringify(study),
+                } : current);
+                loadPage(page.q, page.offset);
+              }} />
               <div ref={levelsSection} className="scroll-mt-4">
                 <TopicLevelStudyPanel key={topic.key + '-levels'} topic={topic} curriculum={linked} />
               </div>
@@ -238,7 +266,10 @@ export function ProgramCatalogPanel() {
             <li key={item.key}>
               <button type="button" onClick={() => openTopic(item.key)} className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-surface-subtle">
                 <span className="min-w-0">
-                  <span className="block wrap-anywhere">{item.title}</span>
+                  <span className="flex items-center gap-1.5 wrap-anywhere">
+                    <span className="min-w-0">{item.title}</span>
+                    {item.verified && <BadgeCheck size={17} role="img" aria-label="Верифицировано" className="shrink-0 text-blue-700 dark:text-blue-300" />}
+                  </span>
                   <span className="block text-meta">{item.topicNumber != null && `№${item.topicNumber} · `}{item.level ?? 'Без уровня'}</span>
                   <span className="block text-meta">Понятно: {item.clear ?? 0} · Непонятно: {item.unclear ?? 0}</span>
                 </span>
