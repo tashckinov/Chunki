@@ -47,8 +47,8 @@ function renderTokens(tokens: Token[], preserveBreaks = false): ReactNode[] {
         parent.push(...renderTokens(token.children ?? [], preserveBreaks));
         break;
       case 'chatmd_icon': {
-        const name = token.meta as keyof typeof icons;
-        const Icon = Object.hasOwn(icons, name) ? icons[name] : undefined;
+        const name = token.meta?.name;
+        const Icon = typeof name === "string" && Object.hasOwn(icons, name) ? icons[name as keyof typeof icons] : undefined;
         parent.push(Icon ? <Icon key={index} className="chatmd-icon" strokeWidth={1.75} aria-hidden="true" /> : token.content);
         break;
       }

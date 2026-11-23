@@ -103,7 +103,7 @@ test('recognizes icons inline and leaves escaped syntax and code literal', () =>
   const ticks = String.fromCharCode(96);
   const source = '## **[icon:book]** [icon:arrow-right] \\[icon:check] ' + ticks + '[icon:clock]' + ticks;
   const children = parseChatMD(source).find(({ type }) => type === 'inline').children;
-  assert.deepEqual(children.filter(({ type }) => type === 'chatmd_icon').map(({ meta }) => meta), ['book', 'arrow-right']);
+  assert.deepEqual(children.filter(({ type }) => type === 'chatmd_icon').map(({ meta }) => meta.name), ['book', 'arrow-right']);
   assert.ok(children.some(({ type, content }) => type === 'text' && content.includes('[icon:check]')));
   assert.ok(children.some(({ type, content }) => type === 'code_inline' && content === '[icon:clock]'));
 });

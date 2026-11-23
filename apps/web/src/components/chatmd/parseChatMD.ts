@@ -128,7 +128,7 @@ markdown.inline.ruler.before('link', 'chatmd_icon', (state, silent) => {
   if (!silent) {
     const token = state.push('chatmd_icon', '', 0);
     token.content = match[0];
-    token.meta = match[1];
+    token.meta = { name: match[1] };
   }
   state.pos += match[0].length;
   return true;
