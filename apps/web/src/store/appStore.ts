@@ -15,7 +15,7 @@ import {
   type TopicStudy,
   type UserTopicSummary,
 } from '../lib/program';
-import { fetchCurrentUser, logout, startGoogleLogin, signInWithPasskey as signInWithPasskeyCeremony, type AuthUser } from '../lib/auth';
+import { fetchCurrentUser, logout, startGoogleLogin, authenticatePasskey, registerPasskey, type AuthUser } from '../lib/auth';
 import {
   fetchCollectionBySlug,
   fetchCollections,
@@ -246,7 +246,7 @@ interface AppState {
   /** Refreshes premiumUntil/isPremium from the server — called by checkAuth(); safe to call again after a checkout redirect brings the user back. */
   refreshPaymentStatus: () => Promise<boolean | null>;
   dismissAuthError: () => void;
-  signInWithPasskey: () => Promise<void>;
+  signInWithPasskey: (mode: 'login' | 'register') => Promise<void>;
   dismissPasskeyError: () => void;
   setInterfaceMode: (mode: 'ru-en' | 'en-en') => void;
 
@@ -471,17 +471,20 @@ export const useAppStore = create<AppState>()(
         }
       },
       dismissAuthError: () => set({ authError: false }),
-      signInWithPasskey: async () => {
+      signInWithPasskey: async (mode) => {
+        if (get().passkeyBusy) return;
         set({ passkeyBusy: true, passkeyError: null });
         try {
-          const user = await signInWithPasskeyCeremony();
+          const user = await (mode === 'login' ? authenticatePasskey() : registerPasskey());
           set({ user, passkeyBusy: false });
           void get().refreshStudyGoal();
           void get().refreshPaymentStatus();
           void get().loadProgram();
           if (get().collectionsError === 'unauthorized') void get().loadCollections();
         } catch {
-          set({ passkeyBusy: false, passkeyError: 'Не получилось войти через Passkey. Попробуйте ещё раз.' });
+          set({ passkeyBusy: false, passkeyError: mode === 'login'
+            ? 'Не получилось войти через Passkey. Попробуйте ещё раз и выберите ключ от своего аккаунта.'
+            : 'Не получилось создать аккаунт через Passkey. Попробуйте ещё раз.' });
         }
       },
       dismissPasskeyError: () => set({ passkeyError: null }),

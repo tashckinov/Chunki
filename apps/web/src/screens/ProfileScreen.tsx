@@ -94,11 +94,15 @@ function SignInPanel() {
           <GoogleGlyph />
           Войти через Google
         </Button>
-        <Button variant="secondary" disabled={passkeyBusy} onClick={() => { dismissPasskeyError(); void signInWithPasskey(); }}>
+        <Button variant="secondary" disabled={passkeyBusy} onClick={() => { dismissPasskeyError(); void signInWithPasskey('login'); }}>
           <KeyRound size={18} aria-hidden="true" />
-          {passkeyBusy ? 'Подключаем Passkey…' : 'Войти через Passkey'}
+          Войти через Passkey
         </Button>
       </div>
+      <Button variant="ghost" disabled={passkeyBusy} onClick={() => { dismissAuthError(); void signInWithPasskey('register'); }}>
+        Создать аккаунт через Passkey
+      </Button>
+      {passkeyBusy && <p role="status" className="text-meta">Подключаем Passkey…</p>}
       {authError && <p role="alert" className="text-negative">Не получилось войти. Попробуйте ещё раз.</p>}
       {passkeyError && <p role="alert" className="text-negative">{passkeyError}</p>}
     </section>
