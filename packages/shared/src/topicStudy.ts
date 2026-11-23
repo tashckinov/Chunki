@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import type { CurriculumTopic, TopicIdentity } from './types.js';
 
+export const CHATMD_TABLE_INSTRUCTION = 'Do not use Markdown tables because ChatMD does not support them. Use :::patterns for comparisons and structured lists of related forms.';
+
 export const CHATMD_ICONS = [
   'book', 'graduation', 'lightbulb', 'info', 'warning', 'question', 'check', 'cross', 'chat', 'clock',
   'calendar', 'pencil', 'list', 'bookmark', 'target', 'sparkles', 'ear', 'globe', 'repeat', 'arrow-right',
