@@ -40,7 +40,7 @@ describe('OpenRouter grammar grading', () => {
     expect(result.overallLevel).toBe('A1');
     expect(result.topics).toHaveLength(1);
     expect(create).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
-      model: 'openai/gpt-4.1', max_tokens: 4096,
+      model: 'openai/gpt-4.1', max_tokens: 6144,
       tool_choice: { type: 'function', function: { name: 'submit_placement_grade' } },
     }));
   });
@@ -58,6 +58,23 @@ describe('OpenRouter grammar grading', () => {
     const messages = create.mock.calls[0][0].messages;
     expect(messages[1].content).toContain(definition.readingQuestions[0].q);
     expect(messages[1].content).toContain(definition.essayPrompt);
+  });
+
+  it('accepts all evidenced recommendations from both placement and saved results', async () => {
+    const catalog = Array.from({ length: 13 }, (_, i) => ({
+      id: `b1-topic-${i}`, title: `Тема ${i}`, level: 'B1' as const, category: 'Grammar' as const,
+      objective: 'Учебная цель.', subtopics: [],
+    }));
+    const plan = { catalog, assignedKeys: [], currentLevel: 'A2' as const, targetLevel: 'B1' as const };
+    const topics = catalog.map(({ id }) => ({ key: id, rationale: 'В ответах есть ошибки.' }));
+    create.mockResolvedValueOnce(completion({ ...complete, topics }))
+      .mockResolvedValueOnce(completion({ topics }, 'tool_calls', 'recommend_program_topics'));
+
+    const result = await grader.gradePlacementTest(submission, BUILTIN_PLACEMENT_TEST, plan);
+    expect(result.topics).toEqual(topics);
+    await expect(grader.recommendProgramTopics({ ...result, corrections: [] }, plan)).resolves.toEqual(topics);
+    expect(create.mock.calls[1][0].messages[1].content).toContain('Review every diagnostic item');
+    expect(create.mock.calls[1][0].messages[1].content).toContain(catalog.at(-1)?.id);
   });
 
   it('rejects cut-off or incomplete verdicts', async () => {

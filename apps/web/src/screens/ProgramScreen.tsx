@@ -168,14 +168,14 @@ export function ProgramScreen() {
           );
         })}
         {topics.length === 0 && phase === 'loading' && <p role="status" className="text-body-secondary py-2">Загружаем программу…</p>}
-        {phase === 'building' && <p role="status" className="text-body-secondary py-2">Собираем программу по последнему тесту…</p>}
+        {phase === 'building' && <p role="status" className="text-body-secondary py-2">{topics.length ? 'Дополняем программу по последнему тесту…' : 'Собираем программу по последнему тесту…'}</p>}
         {phase === 'error' && <div className="py-2">
           <p role="alert" className="text-negative mb-2">Не удалось загрузить программу. Результаты теста сохранены.</p>
           <Button size="sm" variant="secondary" onClick={() => setRetry((value) => value + 1)}>Повторить</Button>
         </div>}
         {topics.length === 0 && phase === 'ready' && <div className="text-body-secondary py-2">
           {s.placementOverview?.history.length && s.placementOverview.quota.allowed
-            ? 'В каталоге пока нет тем для этого диапазона уровней.'
+            ? 'По последнему тесту пока нет рекомендаций из каталога.'
             : 'Тем пока нет.'}
         </div>}
       </div>

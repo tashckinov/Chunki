@@ -104,11 +104,12 @@ export async function getProgramForUser(userId: string): Promise<ProgramForUser>
   const placement = { history: history.map(toPlacementSummary), quota };
   if (topics.length === 0 && history.length === 0) return { status: 'none', placement };
   const latest = history[0];
+  const visible = visibleTopics(topics, latest?.overall_level ?? null, latest?.to_level ?? null);
   return {
     status: 'active',
-    topics: visibleTopics(topics, latest?.overall_level ?? null, latest?.to_level ?? null),
+    topics: visible,
     placement,
-    needsProgramBuild: quota.allowed && topics.length === 0 && !!latest && !latest.program_built_at,
+    needsProgramBuild: quota.allowed && !!latest && !latest.program_built_at,
   };
 }
 
@@ -169,6 +170,7 @@ export async function submitPlacementTest(userId: string, input: PlacementTestSu
     const plan = await topicPlan(userId, input.fromLevel, input.toLevel);
     const provider = getGradingProvider();
     const grade = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: provider.model ?? null, request: input }, () => provider.gradePlacementTest(input, definition, plan));
+    const levels = topicLevels(grade.overallLevel, input.toLevel);
     const assigned = await savePlacementTest({
       ...input,
       userId,
@@ -180,7 +182,7 @@ export async function submitPlacementTest(userId: string, input: PlacementTestSu
       mcqScore: grade.mcqScore,
       openGrades: grade.openGrades,
       essayGrade: grade.essayGrade,
-    }, grade.topics, topicLevels(grade.overallLevel, input.toLevel), token);
+    }, grade.topics, levels, token);
 
     const topics = visibleTopics(await findUserTopics(userId), grade.overallLevel, input.toLevel);
     return { kind: 'ok', result: { ...grade, topics: assigned, review: buildPlacementReview(definition, input, grade) }, topics };
@@ -194,31 +196,26 @@ export async function rebuildProgramFromLastTest(userId: string): Promise<'ready
   const token = await reservePlacementCheck(userId);
   if (!token) return 'building';
   try {
-    const [history, assigned] = await Promise.all([listPlacementTests(userId), findUserTopics(userId)]);
-    const latest = history[0];
-    if (!latest || latest.program_built_at || assigned.length > 0) return 'ready';
+    const [latest] = await listPlacementTests(userId);
+    if (!latest || latest.program_built_at) return 'ready';
     if (!(await resolvePlacementAccess(userId)).allowed) return 'not_allowed';
 
     const saved = await getPlacementResult(userId, latest.id);
     if (!saved) return 'ready';
     const levels = topicLevels(latest.overall_level, latest.to_level);
-    const catalog = (await listCurriculumTopics(latest.to_level)).filter(({ level }) => levels.includes(level));
+    const plan = await topicPlan(userId, latest.overall_level, latest.to_level);
+    plan.catalog = plan.catalog.filter(({ level }) => levels.includes(level));
     const { skills, mcqScore, belowLevel, review = [] } = saved.result;
     const corrections = review.map(({ key, prompt, answer, correction, feedback, grammar }) => ({
-      prompt, answer: Number(key) <= mcqScore.total ? answer : '', correction, feedback, grammar,
+      prompt, answered: !!answer.trim(), answer: Number(key) <= mcqScore.total ? answer : undefined, correction, feedback, grammar,
     }));
     const provider = getGradingProvider();
-    const plan = { catalog, assignedKeys: [], currentLevel: latest.overall_level, targetLevel: latest.to_level };
-    const topics = catalog.length ? await withAiCallLogging({
+    const hasUnassignedTopics = plan.catalog.some(({ id }) => !plan.assignedKeys.includes(id));
+    const topics = hasUnassignedTopics ? await withAiCallLogging({
       userId, chunkId: null, provider: provider.name, model: provider.model ?? null, request: { placementId: latest.id },
     }, () => provider.recommendProgramTopics({ skills, mcqScore, belowLevel, corrections }, plan)) : [];
 
-    const available = new Set(catalog.map(({ id }) => id));
-    const selected = topics.filter(({ key }) => available.has(key));
-    const fallback = catalog.slice(0, 3).map(({ id, level }) => ({
-      key: id, rationale: `Практика уровня ${level} по результатам входного теста.`,
-    }));
-    await saveProgramBuild(userId, latest.id, selected.length ? selected : fallback, levels, token);
+    await saveProgramBuild(userId, latest.id, topics, levels, token);
     return 'ready';
   } finally {
     await releasePlacementCheck(userId, token).catch(() => {});

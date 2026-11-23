@@ -32,12 +32,13 @@ const TOPIC_SCHEMA = {
 
 function topicPlanInstructions(plan: TopicPlanContext | undefined, currentLevel: string): string {
   if (!plan) return 'Return an empty topic recommendation list. No curriculum was provided.';
-  const catalog = plan.catalog.filter(({ id }) => !plan.assignedKeys.includes(id))
-    .map(({ id, title, level, category, objective }) => [id, level, category, title, objective]);
+  const catalog = plan.catalog.map(({ id, title, level, category }) => [id, level, category, title]);
   return [
-    `Recommend only evidenced weak topics from ${currentLevel} through target ${plan.targetLevel} inclusive. If the current level exceeds the target, use only the target level.`,
-    'Select only supplied IDs. Return just the ID as key and a Russian rationale. Never invent a topic, level, or objective. If none match, return an empty list.',
-    `Available curriculum [ID, CEFR, category, title, objective]: ${JSON.stringify(catalog)}`,
+    `Use the curriculum from ${currentLevel} through target ${plan.targetLevel} inclusive. Treat a "+" band as its base CEFR level. If the assessed level exceeds the target, use only the target level.`,
+    'Review every diagnostic item and each distinct weakness it reveals. Return the best matching catalog topic for each weakness, including weaknesses with only one clear example. A blank answer is missing evidence. Cover separate weaknesses even when they come from the same answer. Use the narrowest relevant match and list each topic only once. When the best match is already assigned, skip it without substituting a near-duplicate.',
+    'Return all supported topics in priority order. Use only supplied IDs and give a brief Russian rationale tied to the evidence. Skip unrelated topics and return an empty list if there is no supported match.',
+    `Already assigned curriculum IDs: ${JSON.stringify(plan.assignedKeys)}`,
+    `Available curriculum [ID, CEFR, category, title]: ${JSON.stringify(catalog)}`,
   ].join('\n');
 }
 
@@ -194,7 +195,7 @@ export class OpenRouterGradingProvider implements GradingProvider {
         },
         aboveLevel: { type: 'string', description: 'One short sentence in Russian.' },
         belowLevel: { type: 'string', description: 'One short sentence in Russian.' },
-        topics: { type: 'array', items: TOPIC_SCHEMA, maxItems: 12, description: 'Concrete weak topics in priority order, or an empty array.' },
+        topics: { type: 'array', items: TOPIC_SCHEMA, description: 'All distinct supported curriculum topics in priority order.' },
       },
       required: ['openGrades', 'essayGrade', 'overallLevel', 'skills', 'aboveLevel', 'belowLevel', 'topics'],
     };
@@ -220,7 +221,7 @@ export class OpenRouterGradingProvider implements GradingProvider {
       system: 'You are an expert CEFR English examiner grading a Russian-speaking learner and building them a personalized study plan. Be precise, concise, and encouraging. Always respond only via the provided tool.',
       user,
       toolName: 'submit_placement_grade',
-      maxTokens: 4096,
+      maxTokens: 6144,
       toolDescription: 'Submit the structured grade and study plan for a CEFR placement test.',
       schema,
     });
@@ -251,14 +252,16 @@ export class OpenRouterGradingProvider implements GradingProvider {
     const { topics } = await this.#callTool<{ topics: TopicRecommendation[] }>({
       system: 'You are an English curriculum tutor. Use only the saved assessment evidence and supplied curriculum. Do not grade the test again. Respond only via the provided tool.',
       user: [
+        'Free-text answers are omitted from the saved evidence. For answered items, use the examiner’s feedback and corrections. Skip items marked unanswered.',
         `Saved assessment evidence: ${JSON.stringify(evidence)}`,
         topicPlanInstructions(plan, plan.currentLevel ?? 'the saved level'),
       ].join('\n'),
       toolName: 'recommend_program_topics',
-      toolDescription: 'Pick up to eight appropriate curriculum topics based on the existing assessment.',
+      toolDescription: 'Pick all relevant curriculum topics supported by the saved assessment.',
+      maxTokens: 4096,
       schema: {
         type: 'object',
-        properties: { topics: { type: 'array', items: TOPIC_SCHEMA, maxItems: 8 } },
+        properties: { topics: { type: 'array', items: TOPIC_SCHEMA } },
         required: ['topics'],
       },
     });
@@ -294,8 +297,7 @@ export class OpenRouterGradingProvider implements GradingProvider {
         discoveredTopics: {
           type: 'array',
           items: TOPIC_SCHEMA,
-          maxItems: 3,
-          description: 'New weak spots noticed in THESE answers that are clearly different from the topic being tested (e.g. wrong article usage while testing modals) — empty array if none.',
+          description: 'All distinct new weak spots noticed in THESE answers that are clearly different from the topic being tested (e.g. wrong article usage while testing modals) — empty array if none.',
         },
       },
       required: ['writeGrades', 'notes', 'discoveredTopics'],

@@ -681,7 +681,8 @@ export const useAppStore = create<AppState>()(
           if (get().user?.id !== userId) return;
           if (request < latestAppliedProgramRequest) return program;
           latestAppliedProgramRequest = request;
-          const resetCurrentTopic = program.needsProgramBuild && ['topic', 'exercises', 'topicresult'].includes(get().screen);
+          const resetCurrentTopic = program.status === 'active' && program.topics.length === 0 && program.needsProgramBuild
+            && ['topic', 'exercises', 'topicresult'].includes(get().screen);
           set({
             programTopics: program.status === 'active' ? program.topics : [],
             placementOverview: program.placement ?? null,

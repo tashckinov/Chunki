@@ -133,7 +133,7 @@ async function withPlacementCheck<T>(userId: string, token: string, save: (db: P
 export async function savePlacementTest(input: NewPlacementTest, topics: TopicRecommendation[], levels: readonly CEFRLevel[], token: string): Promise<TopicSuggestion[]> {
   return withPlacementCheck(input.userId, token, async (client) => {
     const inserted = await insertNewUserTopics(input.userId, topics, levels, 'placement', client);
-    await createPlacementTest(input, client, inserted.length > 0);
+    await createPlacementTest(input, client);
     return inserted;
   });
 }
@@ -143,20 +143,19 @@ export async function saveProgramBuild(userId: string, placementId: string, topi
     const marked = await client.query(
       `UPDATE placement_tests SET program_built_at = now()
        WHERE user_id = $1 AND id = $2 AND program_built_at IS NULL
-         AND id = (SELECT id FROM placement_tests WHERE user_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1)
-         AND NOT EXISTS (SELECT 1 FROM user_topics WHERE user_id = $1)`,
+         AND id = (SELECT id FROM placement_tests WHERE user_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1)`,
       [userId, placementId],
     );
     if (marked.rowCount) await insertNewUserTopics(userId, topics, levels, 'placement', client);
   });
 }
 
-async function createPlacementTest(input: NewPlacementTest, client: PoolClient, built: boolean): Promise<void> {
+async function createPlacementTest(input: NewPlacementTest, client: PoolClient): Promise<void> {
   await client.query(
     `INSERT INTO placement_tests
        (user_id, from_level, to_level, purpose, mcq_answers, open9, open10, essay,
         overall_level, skills, above_level, below_level, mcq_score, open_grades, essay_grade, variant_id, id, program_built_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, COALESCE($17::uuid, gen_random_uuid()), CASE WHEN $18 THEN now() END)`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, COALESCE($17::uuid, gen_random_uuid()), now())`,
     [
       input.userId,
       input.fromLevel,
@@ -175,7 +174,6 @@ async function createPlacementTest(input: NewPlacementTest, client: PoolClient, 
       JSON.stringify(input.essayGrade),
       input.variantId ?? null,
       input.submissionId ?? null,
-      built,
     ],
   );
 }
