@@ -24,6 +24,8 @@ export function ProgramCatalogPanel() {
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const detail = useRef<HTMLElement>(null);
+  const levelsSection = useRef<HTMLDivElement>(null);
+  const curriculumSection = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let active = true;
@@ -70,7 +72,7 @@ export function ProgramCatalogPanel() {
     setError('');
     setSaved(false);
     try {
-      setTopic(await saveAdminCatalogTopic(topic));
+      setTopic({ ...await saveAdminCatalogTopic(topic), variants: topic.variants });
       setSaved(true);
       loadPage(page.q, page.offset);
     } catch (err) {
@@ -88,7 +90,7 @@ export function ProgramCatalogPanel() {
     setError('');
     try {
       await setTopicCurriculumLink(topic.key, link || null);
-      setTopic({ ...topic, curriculumId: link || null });
+      setTopic(await fetchAdminCatalogTopic(topic.key));
       setLinkSaved(true);
       loadPage(page.q, page.offset);
     } catch {
@@ -108,7 +110,15 @@ export function ProgramCatalogPanel() {
     loadPage(page.q, page.offset);
   }
 
+  function openTopic(nextKey: string) {
+    setTopic(undefined);
+    setError('');
+    setSaved(false);
+    setKey(nextKey);
+  }
+
   const linked = curriculum?.find((item) => item.id === topic?.curriculumId);
+  const curriculumLoading = !!topic?.curriculumId && !curriculum && !curriculumError;
   if (key) return (
     <section ref={detail} className="flex flex-col gap-4">
       <Button variant="ghost" size="sm" className="self-start" disabled={saving} onClick={() => {
@@ -118,57 +128,87 @@ export function ProgramCatalogPanel() {
       {!topic && !error && <p className="text-body-secondary">Загрузка темы…</p>}
       {topic && (
         <>
-          {!topic.curriculumSlot && <form onSubmit={(event) => { event.preventDefault(); void save(); }} className="flex flex-col gap-3 rounded-xl border border-border p-4">
-            <fieldset disabled={saving} className="flex flex-col gap-3">
-              <label className="flex flex-col gap-1 text-meta">Название темы
-                <input value={topic.title} onChange={(event) => update({ title: event.target.value })}
-                  className={field} maxLength={160} required />
-              </label>
-              <label className="flex flex-col gap-1 text-meta">Уровень CEFR
-                <select className={field} value={topic.level ?? ''} onChange={(event) =>
-                  update({ level: CEFR_LEVELS.find((level) => level === event.target.value) ?? null })}>
-                  <option value="">Уровень не указан</option>
-                  {CEFR_LEVELS.map((level) => <option key={level}>{level}</option>)}
-                </select>
-              </label>
-              <label className="flex flex-col gap-1 text-meta">Категория
-                <select className={field} value={topic.category} onChange={(event) => {
-                  const category = TOPIC_CATEGORIES.find((item) => item === event.target.value);
-                  if (category) update({ category });
-                }}>
-                  {TOPIC_CATEGORIES.map((category) => <option key={category}>{category}</option>)}
-                </select>
-              </label>
-            </fieldset>
-            <p className="text-meta wrap-anywhere">{[topic.key, ...topic.aliases].join(' · ')}</p>
-            <Button type="submit" size="sm" className="self-start" disabled={saving || !topic.title.trim()}>Сохранить тему</Button>
-            {saved && <p role="status" className="text-positive">Тема сохранена.</p>}
-          </form>}
-          <section className="flex flex-col gap-3 rounded-xl border border-border p-4">
-            <h2 className="text-section-title">Учебная цель</h2>
-            {topic.curriculumSlot && linked && <CurriculumEditor key={linked.id} topic={linked} onSaved={onCurriculumSaved} />}
-            {!topic.curriculumSlot && linked && <p className="text-body-secondary">{linked.topic_number != null && `№${linked.topic_number} · `}{linked.level} · {linked.title} — {linked.objective}</p>}
-            {curriculumError && <p className="text-negative">Не удалось загрузить учебные цели.</p>}
-            {!topic.curriculumSlot && curriculum && (
-              <>
-                <label className="flex flex-col gap-1 text-meta">Связать существующую тему
-                  <select className={field} disabled={saving} value={link} onChange={(event) => { setLink(event.target.value); setLinkSaved(false); }}>
-                    <option value="">Без связи с CEFR-каталогом</option>
-                    {curriculum.map((item) => <option key={item.id} value={item.id}>{item.topic_number != null && `№${item.topic_number} · `}{item.level} · {item.title}</option>)}
-                  </select>
-                </label>
-                <Button size="sm" variant="secondary" className="self-start" disabled={saving || link === (topic.curriculumId ?? '')}
-                  onClick={() => void saveLink()}>Сохранить связь</Button>
-                {linkSaved && <p role="status" className="text-positive">Связь сохранена.</p>}
-              </>
-            )}
-          </section>
-          {(!topic.curriculumId || linked) && (
+          <header className="flex flex-col gap-3">
+            <h2 className="text-section-title">
+              {linked?.topic_number != null && '№' + linked.topic_number + ' · '}
+              {topic.curriculumSlot && linked ? linked.title : topic.title}
+            </h2>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="secondary" size="sm" disabled={curriculumLoading} onClick={() => levelsSection.current?.scrollIntoView({ block: 'start' })}>Объяснения по уровням</Button>
+              <Button variant="secondary" size="sm" onClick={() => curriculumSection.current?.scrollIntoView({ block: 'start' })}>Настройки темы</Button>
+            </div>
+          </header>
+          {topic.variants && topic.variants.length > 0 && (
+            <details key={topic.key} className="rounded-xl border border-border px-4 py-3">
+              <summary className="cursor-pointer font-medium">Другие материалы этой темы</summary>
+              <ul className="mt-2 divide-y divide-border">
+                {topic.variants.map((variant) => (
+                  <li key={variant.key} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                    <div className="min-w-0 wrap-anywhere">
+                      <div>{variant.title}</div>
+                      <div className="text-meta">{variant.curriculumSlot ? 'Основной материал' : variant.key}</div>
+                    </div>
+                    <Button variant="ghost" size="sm" disabled={saving} onClick={() => openTopic(variant.key)}>Открыть</Button>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+          {curriculumLoading ? <p role="status" className="text-body-secondary">Загружаем учебную цель…</p> : (
             <>
               <TopicStudyEditor key={topic.key} topic={topic} curriculum={linked} study={topic.study} />
-              <TopicLevelStudyPanel key={topic.key + '-levels'} topic={topic} curriculum={linked} />
+              <div ref={levelsSection} className="scroll-mt-4">
+                <TopicLevelStudyPanel key={topic.key + '-levels'} topic={topic} curriculum={linked} />
+              </div>
             </>
           )}
+          <div ref={curriculumSection} className="flex scroll-mt-4 flex-col gap-4">
+            {!topic.curriculumSlot && <form onSubmit={(event) => { event.preventDefault(); void save(); }} className="flex flex-col gap-3 rounded-xl border border-border p-4">
+              <fieldset disabled={saving} className="flex flex-col gap-3">
+                <label className="flex flex-col gap-1 text-meta">Название темы
+                  <input value={topic.title} onChange={(event) => update({ title: event.target.value })}
+                    className={field} maxLength={160} required />
+                </label>
+                <label className="flex flex-col gap-1 text-meta">Уровень CEFR
+                  <select className={field} value={topic.level ?? ''} onChange={(event) =>
+                    update({ level: CEFR_LEVELS.find((level) => level === event.target.value) ?? null })}>
+                    <option value="">Уровень не указан</option>
+                    {CEFR_LEVELS.map((level) => <option key={level}>{level}</option>)}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1 text-meta">Категория
+                  <select className={field} value={topic.category} onChange={(event) => {
+                    const category = TOPIC_CATEGORIES.find((item) => item === event.target.value);
+                    if (category) update({ category });
+                  }}>
+                    {TOPIC_CATEGORIES.map((category) => <option key={category}>{category}</option>)}
+                  </select>
+                </label>
+              </fieldset>
+              <p className="text-meta wrap-anywhere">{[topic.key, ...topic.aliases].join(' · ')}</p>
+              <Button type="submit" size="sm" className="self-start" disabled={saving || !topic.title.trim()}>Сохранить тему</Button>
+              {saved && <p role="status" className="text-positive">Тема сохранена.</p>}
+            </form>}
+            <section className="flex flex-col gap-3 rounded-xl border border-border p-4">
+              <h2 className="text-section-title">Учебная цель</h2>
+              {topic.curriculumSlot && linked && <CurriculumEditor key={linked.id} topic={linked} onSaved={onCurriculumSaved} />}
+              {!topic.curriculumSlot && linked && <p className="text-body-secondary">{linked.topic_number != null && `№${linked.topic_number} · `}{linked.level} · {linked.title} — {linked.objective}</p>}
+              {curriculumError && <p className="text-negative">Не удалось загрузить учебные цели.</p>}
+              {!topic.curriculumSlot && curriculum && (
+                <>
+                  <label className="flex flex-col gap-1 text-meta">Связать существующую тему
+                    <select className={field} disabled={saving} value={link} onChange={(event) => { setLink(event.target.value); setLinkSaved(false); }}>
+                      <option value="">Без связи с CEFR-каталогом</option>
+                      {curriculum.map((item) => <option key={item.id} value={item.id}>{item.topic_number != null && `№${item.topic_number} · `}{item.level} · {item.title}</option>)}
+                    </select>
+                  </label>
+                  <Button size="sm" variant="secondary" className="self-start" disabled={saving || link === (topic.curriculumId ?? '')}
+                    onClick={() => void saveLink()}>Сохранить связь</Button>
+                  {linkSaved && <p role="status" className="text-positive">Связь сохранена.</p>}
+                </>
+              )}
+            </section>
+          </div>
         </>
       )}
     </section>
@@ -195,9 +235,12 @@ export function ProgramCatalogPanel() {
         <ul className="rounded-xl border border-border divide-y divide-border">
           {data.topics.map((item) => (
             <li key={item.key}>
-              <button type="button" onClick={() => setKey(item.key)} className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-surface-subtle">
-                <span className="wrap-anywhere">{item.title}</span>
-                <span className="shrink-0 text-meta">{item.topicNumber != null && `№${item.topicNumber} · `}{item.level ?? 'Без уровня'}</span>
+              <button type="button" onClick={() => openTopic(item.key)} className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-surface-subtle">
+                <span className="min-w-0">
+                  <span className="block wrap-anywhere">{item.title}</span>
+                  <span className="block text-meta">{item.topicNumber != null && `№${item.topicNumber} · `}{item.level ?? 'Без уровня'}</span>
+                </span>
+                <span className="shrink-0 text-sm font-medium text-accent">Редактировать</span>
               </button>
             </li>
           ))}

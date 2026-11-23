@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { topicStudyInstructions, topicStudySchema, type CurriculumTopic, type TopicIdentity, type TopicStudyContent, type TopicStudyLevel } from '@app/shared';
 import { TopicStudyMaterial } from '../../components/chatmd/TopicStudyMaterial';
 import { Button } from '../../components/ui/Button';
@@ -13,6 +13,7 @@ export function TopicStudyEditor({ topic, curriculum, study, level }: {
   study: TopicStudyContent | null;
   level?: TopicStudyLevel;
 }) {
+  const explanationId = useId();
   const [draft, setDraft] = useState(study ?? emptyStudy);
   const [json, setJson] = useState(study ? JSON.stringify(study, null, 2) : '');
   const [manualPrompt, setManualPrompt] = useState('');
@@ -109,13 +110,21 @@ export function TopicStudyEditor({ topic, curriculum, study, level }: {
 
   return (
     <section className="flex flex-col gap-4 rounded-xl border border-border p-4">
-      <h2 className="text-section-title">{level ? 'Объяснение для ' + level : 'Материал урока'}</h2>
+      <h2 className="text-section-title">{level ? 'Объяснение для ' + level : 'Редактирование урока'}</h2>
       {level && !published && (
         <Button size="sm" variant="secondary" className="self-start" disabled={busy || jsonEdited || !!draft.explanation.trim()}
           onClick={() => void generate()}>
           {generating ? 'Готовим объяснение…' : 'Сгенерировать и сохранить'}
         </Button>
       )}
+      <div className="flex flex-col gap-1">
+        <label htmlFor={explanationId} className="text-meta">{level ? 'Текст объяснения (ChatMD)' : 'Текст урока (ChatMD)'}</label>
+        <textarea id={explanationId} rows={9} className={field} maxLength={16000} value={draft.explanation} disabled={busy || jsonEdited}
+          onChange={(event) => {
+            const next = { ...draft, explanation: event.target.value };
+            setDraft(next); setJson(JSON.stringify(next, null, 2)); setSaved(false); setSaveError('');
+          }} />
+      </div>
       <details className="rounded-xl border border-border p-3">
         <summary className="cursor-pointer font-medium">Промпт и импорт из ИИ-чата</summary>
         <fieldset className="mt-3 flex flex-col gap-3" disabled={busy}>
@@ -139,13 +148,6 @@ export function TopicStudyEditor({ topic, curriculum, study, level }: {
           }}>Отменить изменения JSON</Button>}
         </fieldset>
       </details>
-      <label className="flex flex-col gap-1 text-meta">Объяснение в ChatMD
-        <textarea rows={9} className={field} maxLength={16000} value={draft.explanation} disabled={busy || jsonEdited}
-          onChange={(event) => {
-            const next = { ...draft, explanation: event.target.value };
-            setDraft(next); setJson(JSON.stringify(next, null, 2)); setSaved(false); setSaveError('');
-          }} />
-      </label>
       {draft.explanation.trim() && (
         <section aria-label="Предпросмотр урока" className="flex flex-col gap-3 rounded-xl border border-border p-4">
           <h3 className="text-section-title">Предпросмотр урока</h3>
