@@ -8,13 +8,21 @@ export interface QuestionOption {
   feedback: string;
 }
 
+interface PatternRow {
+  form: string;
+  explanation: string;
+  example: string;
+  translation: string;
+}
+
 export type LessonBlock =
   | { kind: CalloutKind; body: string }
   | { kind: 'compare'; left: string; right: string; correction: boolean }
   | { kind: 'question'; prompt: string; options: QuestionOption[] }
+  | { kind: 'patterns'; rows: PatternRow[] }
   | { kind: 'literal'; source: string };
 
-const OPEN = /^:::(tip|note|compare|example|question)[ \t]*$/;
+const OPEN = /^:::(tip|note|compare|example|question|patterns)[ \t]*$/;
 const CODE_FENCE = /^(`{3,}|~{3,})(.*)$/;
 const OPTION_START = /^[+-][ \t]/;
 // Split at the first unescaped pipe. Markdown handles the escape in each field.
@@ -32,6 +40,19 @@ function readBlock(kind: string, body: string): LessonBlock | null {
     const left = /^(wrong|left):[ \t]*(\S.*)$/.exec(entries[0]);
     const right = /^right:[ \t]*(\S.*)$/.exec(entries[1]);
     return left && right ? { kind: 'compare', left: left[2], right: right[1], correction: left[1] === 'wrong' } : null;
+  }
+
+  if (kind === 'patterns') {
+    const rows: PatternRow[] = [];
+    const row = /^((?:\\.|[^\\|])+)\|((?:\\.|[^\\|])+)\|((?:\\.|[^\\|])+)\|((?:\\.|[^\\|])+)$/;
+    for (const line of lines.filter(Boolean)) {
+      const match = row.exec(line);
+      if (!match) return null;
+      const [form, explanation, example, translation] = match.slice(1).map((field) => field.trim());
+      if (!form || !explanation || !example || !translation) return null;
+      rows.push({ form, explanation, example, translation });
+    }
+    return rows.length >= 2 ? { kind: 'patterns', rows } : null;
   }
 
   const firstOption = lines.findIndex((line) => OPTION_START.test(line));

@@ -74,3 +74,27 @@ test('treats HTML, links and fenced directives as inert content', () => {
   assert.ok(tokens.every(({ type }) => type !== 'chatmd'));
   assert.deepEqual(blocks(`:::note\n${fence}\n${marker}\n${fence}\n:::`).map(({ kind }) => kind), ['note']);
 });
+
+test('parses pattern rows with inline Markdown and escaped pipes', () => {
+  const rules = [
+    ':::patterns',
+    '**a** | Один из многих? | I need a taxi. | Любое такси.',
+    '— | В целом? | I like coffee. | Кофе \\| чай.',
+    ':::',
+  ].join('\n');
+  assert.deepEqual(blocks(rules), [{
+    kind: 'patterns',
+    rows: [
+      { form: '**a**', explanation: 'Один из многих?', example: 'I need a taxi.', translation: 'Любое такси.' },
+      { form: '—', explanation: 'В целом?', example: 'I like coffee.', translation: 'Кофе \\| чай.' },
+    ],
+  }]);
+});
+
+test('recovers from malformed pattern rows without affecting the next block', () => {
+  const valid = 'a | Форма | A taxi. | Такси.';
+  for (const invalid of ['the | Форма | The taxi.', 'the |  | The taxi. | Такси.', 'the | Форма | The taxi. | Такси. | Лишнее']) {
+    const source = [':::patterns', valid, invalid, ':::', ':::note', 'Пояснение.', ':::'].join('\n');
+    assert.deepEqual(blocks(source).map(({ kind }) => kind), ['literal', 'note']);
+  }
+});
