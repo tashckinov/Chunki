@@ -26,11 +26,11 @@ export interface ChunkRow {
 // admin/repository.ts's identical HAS_DIALOGUE_SUBQUERY. Scoped to kind='browse':
 // this flag drives the "Не знаю" comic / Комиксы tab, not the separate
 // "Ситуация" comic (chunk_dialogues.kind='situation').
-const HAS_DIALOGUE_SUBQUERY = `EXISTS (
+export const HAS_BROWSE_DIALOGUE = `EXISTS (
               SELECT 1 FROM chunk_dialogues d
               JOIN chunk_dialogue_messages m ON m.dialogue_id = d.id
               WHERE d.chunk_id = c.id AND d.kind = 'browse'
-            ) AS has_dialogue`;
+            )`;
 
 interface RawSentenceRow {
   chunk_id: string;
@@ -84,7 +84,7 @@ async function fetchSentencesForChunks(chunkIds: string[]): Promise<Map<string, 
 export async function findChunkById(id: string): Promise<ChunkRow | null> {
   const { rows } = await pool.query<Omit<ChunkRow, 'sentences'>>(
     `SELECT c.id, c.text, c.translation, c.explanation, c.level,
-            ${HAS_DIALOGUE_SUBQUERY}
+            ${HAS_BROWSE_DIALOGUE} AS has_dialogue
      FROM chunks c
      WHERE c.id = $1`,
     [id],
@@ -97,7 +97,7 @@ export async function findChunkById(id: string): Promise<ChunkRow | null> {
 export async function listChunksForCollection(collectionId: string): Promise<ChunkRow[]> {
   const { rows } = await pool.query<Omit<ChunkRow, 'sentences'>>(
     `SELECT c.id, c.text, c.translation, c.explanation, c.level,
-            ${HAS_DIALOGUE_SUBQUERY}
+            ${HAS_BROWSE_DIALOGUE} AS has_dialogue
      FROM collection_chunks cc
      JOIN chunks c ON c.id = cc.chunk_id
      WHERE cc.collection_id = $1

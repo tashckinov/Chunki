@@ -58,7 +58,16 @@ function CurrentScreen({ onOpenAdminMenu }: { onOpenAdminMenu: () => void }) {
   const screen = useAppStore((s) => s.screen);
   const user = useAppStore((s) => s.user);
   const hasTestDraft = useAppStore((s) => !!s.testVariant && s.testDraftOwner === s.user?.id);
+  const browsingComic = useAppStore((s) => s.screen === 'dialogue' && s.dialogueContinuation === 'browse');
   if (!user && screen !== 'profile') return <GuestGalleryScreen />;
+  if (screen === 'comics' || browsingComic) return (
+    <>
+      <div className={browsingComic ? 'hidden' : 'flex min-h-0 flex-1 flex-col'}>
+        <ComicsScreen />
+      </div>
+      {browsingComic && <DialogueScreen />}
+    </>
+  );
   switch (screen) {
     case 'profile':
       return <ProfileScreen />;
@@ -86,8 +95,6 @@ function CurrentScreen({ onOpenAdminMenu }: { onOpenAdminMenu: () => void }) {
       return <TopicResultScreen />;
     case 'cardslib':
       return <CardsScreen />;
-    case 'comics':
-      return <ComicsScreen />;
     case 'deck':
       return <DeckScreen />;
     case 'deckdone':
@@ -254,7 +261,6 @@ export default function App() {
     consumeAuthToken();
     if (consumeAuthErrorFlag()) useAppStore.setState({ authError: true });
     useAppStore.getState().checkAuth();
-    useAppStore.getState().loadCollections();
   }, []);
 
   useEffect(() => {

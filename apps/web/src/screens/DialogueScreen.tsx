@@ -12,6 +12,7 @@ export function DialogueScreen() {
   // Browse mode (opened from ComicsScreen) has no active deck session, so
   // fall back to every loaded collection's chunks.
   const targetText =
+    s.learnerDialogue.targetText ??
     s.activeDeckChunks.find((c) => c.id === s.dialogueChunkId)?.text ??
     flattenChunks(Object.values(s.collectionDetails)).find((c) => c.id === s.dialogueChunkId)?.text ??
     null;

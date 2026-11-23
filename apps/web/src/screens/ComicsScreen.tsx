@@ -1,79 +1,105 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { ChevronRight } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
+import { fetchComicCollections, fetchCollectionComics, type ComicCollection, type ComicSummary } from '../lib/collections';
 import { NavigationBar } from '../components/ui/NavigationBar';
-import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { plural } from '../lib/plural';
 
-export function ComicsScreen() {
-  const s = useAppStore();
-  const [openingChunkId, setOpeningChunkId] = useState<string | null>(null);
+const row = 'pressable w-full rounded-xl border border-border bg-surface p-4 text-left disabled:opacity-60';
 
-  const details = useMemo(() => Object.values(s.collectionDetails), [s.collectionDetails]);
-  const groups = useMemo(
-    () =>
-      details
-        .map((detail) => ({ detail, chunks: detail.chunks.filter((c) => c.hasDialogue) }))
-        .filter((g) => g.chunks.length > 0),
-    [details],
-  );
+function CollectionComics({ collection }: { collection: ComicCollection }) {
+  const openDialogue = useAppStore((s) => s.openDialogueFromBrowse);
+  const [comics, setComics] = useState<ComicSummary[]>([]);
+  const [offset, setOffset] = useState(0);
+  const [next, setNext] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [retry, setRetry] = useState(0);
+  const [opening, setOpening] = useState<string | null>(null);
+  const [comicError, setComicError] = useState(false);
+  const pendingOpen = useRef<AbortController | null>(null);
+  useEffect(() => () => pendingOpen.current?.abort(), []);
 
-  async function open(chunkId: string) {
-    setOpeningChunkId(chunkId);
-    await s.openDialogueFromBrowse(chunkId);
-    setOpeningChunkId(null);
+  useEffect(() => {
+    let active = true;
+    fetchCollectionComics(collection.slug, offset).then((page) => {
+      if (!active) return;
+      setComics((current) => offset === 0 ? page.comics : [...current, ...page.comics.filter(({ id }) => !current.some((item) => item.id === id))]);
+      setNext(page.nextOffset);
+    }).catch(() => { if (active) setError(true); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [collection.slug, offset, retry]);
+
+  async function open(comic: ComicSummary) {
+    const request = new AbortController();
+    pendingOpen.current = request;
+    setOpening(comic.id);
+    setComicError(false);
+    try {
+      await openDialogue(comic.id, comic.text, request.signal);
+      if (useAppStore.getState().screen === 'comics') setComicError(true);
+    } catch {
+      setComicError(true);
+    } finally {
+      setOpening(null);
+    }
   }
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col">
-      <NavigationBar size="large" title="Комиксы" />
-      <div className="scroll-clean flex-1 min-h-0 px-5 pb-8 flex flex-col gap-6">
-        {s.collectionsStatus === 'error' && s.collectionsError === 'unauthorized' && (
-          <Card variant="surface" className="border border-border p-6 flex flex-col gap-3">
-            <div className="text-[16px] font-semibold">Войдите, чтобы увидеть комиксы</div>
-            <div className="text-body-secondary">Диалоги загружаются с сервера — нужен аккаунт.</div>
-            <Button onClick={() => s.go('profile')} className="self-start">
-              Войти
-            </Button>
-          </Card>
-        )}
+    <div className="flex flex-col gap-2">
+      {comics.map((comic) => (
+        <button key={comic.id} type="button" className={row} disabled={opening !== null} onClick={() => void open(comic)}>
+          <span className="block font-medium">{comic.text}</span>
+          <span className="block text-meta">{opening === comic.id ? 'Открываем…' : comic.translation}</span>
+        </button>
+      ))}
+      {comicError && <p role="alert" className="text-negative">Не удалось открыть комикс. Попробуйте ещё раз.</p>}
+      {loading ? <p role="status" className="py-2 text-body-secondary">Загружаем комиксы…</p> : error ? (
+        <Button variant="secondary" onClick={() => { setError(false); setLoading(true); setRetry((value) => value + 1); }}>
+          Повторить загрузку
+        </Button>
+      ) : next !== null ? (
+        <Button variant="secondary" onClick={() => { setLoading(true); setOffset(next); }}>Загрузить ещё</Button>
+      ) : comics.length === 0 && <p className="text-body-secondary">В этой коллекции пока нет комиксов.</p>}
+    </div>
+  );
+}
 
-        {s.collectionsStatus === 'error' && s.collectionsError === 'error' && (
-          <Card variant="surface" className="border border-border p-6 flex flex-col gap-3">
-            <div className="text-[16px] font-semibold">Не получилось загрузить комиксы</div>
-            <Button variant="secondary" onClick={s.loadCollections} className="self-start">
-              Попробовать снова
-            </Button>
-          </Card>
-        )}
+export function ComicsScreen() {
+  const [collections, setCollections] = useState<ComicCollection[]>();
+  const [selected, setSelected] = useState<ComicCollection>();
+  const [error, setError] = useState(false);
+  const [retry, setRetry] = useState(0);
 
-        {(s.collectionsStatus === 'idle' || s.collectionsStatus === 'loading') && (
-          <div className="text-body-secondary">Загрузка…</div>
-        )}
+  useEffect(() => {
+    let active = true;
+    fetchComicCollections().then((items) => { if (active) setCollections(items); })
+      .catch(() => { if (active) setError(true); });
+    return () => { active = false; };
+  }, [retry]);
 
-        {s.collectionsStatus === 'loaded' && groups.length === 0 && (
-          <div className="text-body-secondary">Пока нет комиксов — они появляются у чанков с диалогами.</div>
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <NavigationBar size="large" title={selected?.title ?? 'Комиксы'} onBack={selected ? () => setSelected(undefined) : undefined} />
+      <div key={selected?.slug ?? 'index'} className="scroll-clean flex min-h-0 flex-1 flex-col gap-2 px-5 pb-8">
+        {selected ? <CollectionComics collection={selected} /> : (
+          <>
+            {error && <Button variant="secondary" onClick={() => { setError(false); setRetry((value) => value + 1); }}>Повторить загрузку коллекций</Button>}
+            {!collections && !error && <p role="status" className="text-body-secondary">Загружаем коллекции…</p>}
+            {collections?.length === 0 && <p className="text-body-secondary">Пока нет коллекций с комиксами.</p>}
+            {collections?.map((collection) => (
+              <button key={collection.slug} type="button" className={`${row} flex items-center justify-between gap-3`} onClick={() => setSelected(collection)}>
+                <span className="min-w-0">
+                  <span className="block font-medium">{collection.title}</span>
+                  <span className="block text-meta">{collection.level} · {collection.count} {plural(collection.count, 'комикс', 'комикса', 'комиксов')}</span>
+                </span>
+                <ChevronRight size={18} className="shrink-0 text-text-secondary" aria-hidden="true" />
+              </button>
+            ))}
+          </>
         )}
-
-        {s.collectionsStatus === 'loaded' &&
-          groups.map(({ detail, chunks }) => (
-            <div key={detail.id} className="flex flex-col gap-2">
-              <div className="text-section-title">{detail.title}</div>
-              <div className="flex flex-col gap-2">
-                {chunks.map((chunk) => (
-                  <button
-                    key={chunk.id}
-                    type="button"
-                    disabled={openingChunkId === chunk.id}
-                    onClick={() => open(chunk.id)}
-                    className="pressable flex flex-col gap-0.5 rounded-[var(--radius-md)] border border-border p-4 text-left disabled:opacity-60"
-                  >
-                    <div className="text-[14.5px] font-medium">{chunk.text}</div>
-                    <div className="text-meta">{chunk.translation}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import { listComicCollections, listCollectionComics } from './repository.js';
 import { requireAuth } from '../auth/requireAuth.js';
 import { getPublishedCollectionBySlug, getPublishedCollections } from './service.js';
 
@@ -11,6 +12,15 @@ const slugParamSchema = z.object({ slug: z.string().min(1).max(200).regex(/^[a-z
 export const collectionsRoutes: FastifyPluginAsync = async (app) => {
   app.get('/', { preHandler: requireAuth }, async () => {
     return { collections: await getPublishedCollections() };
+  });
+
+  app.get('/comics/index', { preHandler: requireAuth }, async () => ({ collections: await listComicCollections() }));
+
+  app.get('/:slug/comics', { preHandler: requireAuth }, async (request, reply) => {
+    const params = slugParamSchema.safeParse(request.params);
+    const query = z.object({ offset: z.coerce.number().int().min(0).max(2147483647).default(0) }).safeParse(request.query);
+    if (!params.success || !query.success) return reply.code(400).send({ error: 'invalid_request' });
+    return listCollectionComics(params.data.slug, query.data.offset);
   });
 
   app.get('/:slug', { preHandler: requireAuth }, async (request, reply) => {
