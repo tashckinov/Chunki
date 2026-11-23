@@ -32,6 +32,14 @@ I bought ___ book yesterday.
 
 Выбор работает в браузере и сбрасывается при повторном открытии темы. HTML, ссылки и изображения отображаются как текст. Ошибочные блоки остаются читаемыми.
 
+### Иконки в тексте
+
+Используйте `[icon:lightbulb]` рядом с текстом, например `[icon:lightbulb] **Запомните правило**`. Иконки работают и в заголовках, списках, учебных блоках и предпросмотре админки.
+
+Поддерживаются `book`, `graduation`, `lightbulb`, `info`, `warning`, `question`, `check`, `cross`, `chat`, `clock`, `calendar`, `pencil`, `list`, `bookmark`, `target`, `sparkles`, `ear`, `globe`, `repeat`, `arrow-right`.
+
+Неизвестные имена и обозначения внутри кода отображаются как текст.
+
 Проверки парсера запускаются командой `npm test -w apps/web`.
 
 # React + TypeScript + Vite

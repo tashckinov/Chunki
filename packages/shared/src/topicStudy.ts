@@ -1,6 +1,11 @@
 import { z } from 'zod';
 import type { CurriculumTopic, TopicIdentity, TopicStudyContent } from './types.js';
 
+export const CHATMD_ICONS = [
+  'book', 'graduation', 'lightbulb', 'info', 'warning', 'question', 'check', 'cross', 'chat', 'clock',
+  'calendar', 'pencil', 'list', 'bookmark', 'target', 'sparkles', 'ear', 'globe', 'repeat', 'arrow-right',
+] as const;
+
 export const TOPIC_STUDY_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1'] as const;
 export type TopicStudyLevel = typeof TOPIC_STUDY_LEVELS[number];
 
@@ -41,6 +46,7 @@ export function topicStudyInstructions(topic: TopicIdentity, curriculum?: Curric
     'Introduce English forms first, then optionally give a Russian gloss (e.g. **bread** — хлеб). Use neutral examples suitable for the learner’s level (or the topic level when unspecified).',
     'Use Markdown in explanation, without HTML. Optional ChatMD blocks use :::tip (rule), :::note (clarification), :::example (example with translation or explanation), :::compare (two lines: wrong: … and right: …), or :::question. Put each marker on its own line and close with :::. Do not nest blocks.',
     'Optional :::patterns compares related forms when learners need to choose between them. Use at least two rows, one per form: form | short Russian usage cue | English example | Russian translation or note. Close with :::. Use it only when the comparison clarifies the lesson.',
+    'Optional inline icons use [icon:name], for example [icon:lightbulb] Подсказка. Use icons sparingly next to descriptive text. Names: ' + CHATMD_ICONS.join(', ') + '.',
     'Use blocks only when useful. Usually 1–2 questions near the relevant rule suffice. Each needs a prompt, exactly one + option, at least one - option, and specific Russian feedback for every option:',
     ':::question\n[Question about this objective]\n+ [Correct option] | [Why it works]\n- [Distractor] | [Why it does not work]\n:::',
     'Use keyPoints for additional rules in Russian (up to 5), contrastExamples for English mistake/correction pairs (up to 4), and exampleChunks for English phrases (up to 5). Use empty arrays when there is nothing to add.',

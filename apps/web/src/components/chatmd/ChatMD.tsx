@@ -1,11 +1,22 @@
 import { createElement, useId, useMemo, useState, type ReactNode } from 'react';
 import type { Token } from 'markdown-it';
-import { Check, X } from 'lucide-react';
+import {
+  ArrowRight, BookOpen, Bookmark, Calendar, Check, CircleHelp, Clock, Ear, Globe, GraduationCap, Info,
+  Lightbulb, ListChecks, MessageCircle, Pencil, Repeat, Sparkles, Target, TriangleAlert, X, type LucideIcon,
+} from 'lucide-react';
+import type { CHATMD_ICONS } from '@app/shared';
 import { parseChatMD, parseInline, parseLessonBody, type LessonBlock } from './parseChatMD';
 import './chatmd.css';
 
 const TAGS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'ul', 'ol', 'li', 'blockquote', 'strong', 'em']);
 const CALLOUT_LABELS = { tip: 'Подсказка', note: 'Примечание', example: 'Пример' };
+
+const icons = {
+  book: BookOpen, graduation: GraduationCap, lightbulb: Lightbulb, info: Info, warning: TriangleAlert,
+  question: CircleHelp, check: Check, cross: X, chat: MessageCircle, clock: Clock, calendar: Calendar,
+  pencil: Pencil, list: ListChecks, bookmark: Bookmark, target: Target, sparkles: Sparkles, ear: Ear,
+  globe: Globe, repeat: Repeat, 'arrow-right': ArrowRight,
+} satisfies Record<typeof CHATMD_ICONS[number], LucideIcon>;
 
 function renderTokens(tokens: Token[], preserveBreaks = false): ReactNode[] {
   const root: ReactNode[] = [];
@@ -35,6 +46,12 @@ function renderTokens(tokens: Token[], preserveBreaks = false): ReactNode[] {
       case 'inline':
         parent.push(...renderTokens(token.children ?? [], preserveBreaks));
         break;
+      case 'chatmd_icon': {
+        const name = token.meta as keyof typeof icons;
+        const Icon = Object.hasOwn(icons, name) ? icons[name] : undefined;
+        parent.push(Icon ? <Icon key={index} className="chatmd-icon" strokeWidth={1.75} aria-hidden="true" /> : token.content);
+        break;
+      }
       case 'text':
         parent.push(token.content);
         break;
