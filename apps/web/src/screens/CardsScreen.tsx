@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Play, Check } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { apiUrl, flattenChunks, type CollectionDetail } from '../lib/collections';
@@ -96,6 +96,8 @@ function DeckWidget({ detail }: { detail: CollectionDetail }) {
 
 export function CardsScreen() {
   const s = useAppStore();
+  const { loadCollections } = s;
+  useEffect(() => { void loadCollections(); }, [loadCollections]);
   const [level, setLevel] = useState<string | null>(null);
   const [mode, setMode] = useState<'collections' | 'progress'>('collections');
 

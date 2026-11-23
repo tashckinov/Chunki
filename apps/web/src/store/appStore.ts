@@ -311,7 +311,7 @@ interface AppState {
   ensureLearnerDialogue: (chunkId: string) => Promise<LearnerDialogue | null>;
   handleDontKnow: (chunkId: string) => Promise<void>;
   closeDialogue: () => void;
-  openDialogueFromBrowse: (chunkId: string) => Promise<void>;
+  openDialogueFromBrowse: (chunkId: string, targetText: string, signal: AbortSignal) => Promise<void>;
 }
 
 let dragStart: { x: number; y: number } | null = null;
@@ -440,7 +440,6 @@ export const useAppStore = create<AppState>()(
       signOut: async () => {
         set({ user: null, grading: false, checkingContext: null, screen: 'cardslib', profileReturnScreen: 'cardslib', checkoutFromProfile: false, studyGoal: null, studyGoalChecked: false, isPremium: false, premiumUntil: null, placementResult: null, placementResultOwner: null, placementOverview: null, programTopics: [], collections: [], collectionDetails: {}, collectionsStatus: 'idle', collectionsError: null });
         await logout().catch(() => {});
-        void get().loadCollections();
       },
       checkAuth: async () => {
         try {
@@ -948,10 +947,10 @@ export const useAppStore = create<AppState>()(
 
       // Browse mode hasn't pre-fetched the dialogue — await it before
       // switching screens, so DialogueScreen never renders a blank interim state.
-      openDialogueFromBrowse: async (chunkId) => {
+      openDialogueFromBrowse: async (chunkId, targetText, signal) => {
         const dialogue = await get().ensureLearnerDialogue(chunkId);
-        if (!dialogue) return;
-        set({ screen: 'dialogue', dialogueChunkId: chunkId, dialogueContinuation: 'browse', learnerDialogue: dialogue });
+        if (!dialogue || signal.aborted || get().screen !== 'comics') return;
+        set({ screen: 'dialogue', dialogueChunkId: chunkId, dialogueContinuation: 'browse', learnerDialogue: { ...dialogue, targetText } });
       },
 
       startRecognitionCheck: async (chunkId) => {

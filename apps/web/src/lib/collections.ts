@@ -122,6 +122,7 @@ export interface LearnerDialogueMessage {
 }
 
 export interface LearnerDialogue {
+  targetText?: string;
   chunkId: string;
   messages: LearnerDialogueMessage[];
 }
@@ -151,4 +152,27 @@ export function flattenChunks(details: CollectionDetail[]): ChunkSummary[] {
     }
   }
   return [...seen.values()];
+}
+
+export interface ComicCollection {
+  slug: string;
+  title: string;
+  level: string;
+  count: number;
+}
+
+export interface ComicSummary {
+  id: string;
+  text: string;
+  translation: string;
+}
+
+export async function fetchComicCollections() {
+  return (await getJson<{ collections: ComicCollection[] }>('/api/collections/comics/index')).collections;
+}
+
+export function fetchCollectionComics(slug: string, offset: number) {
+  return getJson<{ comics: ComicSummary[]; nextOffset: number | null }>(
+    `/api/collections/${encodeURIComponent(slug)}/comics?offset=${offset}`,
+  );
 }
