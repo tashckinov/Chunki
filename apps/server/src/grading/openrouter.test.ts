@@ -107,4 +107,17 @@ describe('OpenRouter grammar grading', () => {
     expect(instruction).toContain('a и an');
     expect(instruction).not.toContain('Старое название');
   });
+
+  it('explains a fixed topic at a different learner level', async () => {
+    const topic = { key: 'tenses', title: 'Времена', category: 'Грамматика', level: 'B1' } as const;
+    const study = { explanation: '**I work every day.**', keyPoints: [], contrastExamples: [], exampleChunks: [] };
+    create.mockResolvedValue(completion(study, 'tool_calls', 'submit_topic_study'));
+
+    await expect(grader.generateTopicStudy(topic, undefined, 'A1')).resolves.toEqual(study);
+    const request = create.mock.calls[0][0];
+    expect(request.messages[1].content).toContain('CEFR: B1');
+    expect(request.messages[1].content).toContain('current CEFR level is A1');
+    expect(request.messages[1].content).toContain('worked examples');
+  });
+
 });

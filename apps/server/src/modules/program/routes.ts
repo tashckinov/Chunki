@@ -1,10 +1,10 @@
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
 import { z } from 'zod';
 import { chooseGrammarTest } from '../grammarTests/repository.js';
 import { grammarTestIdSchema } from '../grammarTests/schema.js';
 import { requireAuthenticatedSession } from '../auth/requireAuth.js';
-import { getPlacementQuota, getPlacementResult, getProgramForUser, getTopicStudy, rebuildProgramFromLastTest, startTopicAttempt, submitPlacementTest, submitTopicAttempt } from './service.js';
+import { getPlacementQuota, getPlacementResult, getProgramForUser, getTopicStudy, getLearnerTopicLevelStudy, rebuildProgramFromLastTest, startTopicAttempt, submitPlacementTest, submitTopicAttempt } from './service.js';
 
 const CEFR_LEVELS = ['A1', 'A2', 'A2+', 'B1', 'B1+', 'B2', 'B2+', 'C1'] as const;
 
@@ -73,10 +73,28 @@ export const programRoutes: FastifyPluginAsync = async (app) => {
     return { study: result.study };
   });
 
-  // Rate-limited, unlike the plain GET routes above — every route below this
-  // point makes at least one LLM call, so it's scoped separately rather than
-  // applied to the whole plugin (mirrors progress/routes.ts's production-check route).
+  // Apply route-specific limits to requests that can trigger generation.
   await app.register(rateLimit, { global: false });
+
+  async function handleLevelStudy(request: FastifyRequest, reply: FastifyReply) {
+    const params = topicIdParamSchema.safeParse(request.params);
+    if (!params.success) return reply.code(400).send({ error: 'invalid_request' });
+    reply.header('Cache-Control', 'no-store');
+    try {
+      const result = await getLearnerTopicLevelStudy(request.session!.userId, params.data.id, request.method === 'POST');
+      if (result.kind === 'not_found') return reply.code(404).send({ error: 'not_found' });
+      if (result.kind === 'not_allowed') return reply.code(403).send({ error: 'not_allowed' });
+      return reply.code(result.material.generating && request.method === 'POST' ? 202 : 200).send(result.material);
+    } catch (err) {
+      request.log.error({ message: err instanceof Error ? err.message : String(err) }, 'Learner level study generation failed');
+      return reply.code(502).send({ error: 'generation_failed' });
+    }
+  }
+
+  app.get('/topics/:id/level-study', { preHandler: requireAuthenticatedSession }, handleLevelStudy);
+  app.post('/topics/:id/level-study', {
+    preHandler: [requireAuthenticatedSession, app.rateLimit({ max: 10, timeWindow: '10 minutes', keyGenerator: (request) => request.session!.userId })],
+  }, handleLevelStudy);
 
   app.get('/placement-variant', { preHandler: requireAuthenticatedSession }, async (request, reply) => {
     const query = z.object({ previous: grammarTestIdSchema.optional() }).safeParse(request.query);

@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import { Ajv } from 'ajv';
-import { scoreMcq, TOPIC_ENGLISH_INSTRUCTION, topicScope, topicStudyInstructions } from '@app/shared';
+import { scoreMcq, TOPIC_ENGLISH_INSTRUCTION, topicScope, topicStudyInstructions, type TopicStudyLevel } from '@app/shared';
 import type { Env } from '../config/env.js';
 import type {
   ExerciseItem,
@@ -333,11 +333,11 @@ export class OpenRouterGradingProvider implements GradingProvider {
     };
   }
 
-  async generateTopicStudy(topic: TopicIdentity, curriculum?: CurriculumTopic): Promise<TopicStudyContent> {
+  async generateTopicStudy(topic: TopicIdentity, curriculum?: CurriculumTopic, learnerLevel?: TopicStudyLevel): Promise<TopicStudyContent> {
     const schema = {
       type: 'object',
       properties: {
-        explanation: { type: 'string', description: 'A concise Russian lesson in ChatMD.' },
+        explanation: { type: 'string', description: 'A Russian lesson in ChatMD.' },
         keyPoints: { type: 'array', items: { type: 'string' }, maxItems: 5, description: 'Additional short Russian rules, or an empty array.' },
         contrastExamples: {
           type: 'array',
@@ -346,17 +346,20 @@ export class OpenRouterGradingProvider implements GradingProvider {
             type: 'object',
             properties: { wrong: { type: 'string' }, right: { type: 'string' } },
             required: ['wrong', 'right'],
+            additionalProperties: false,
           },
           description: 'Additional English mistake/correction pairs, or an empty array.',
         },
         exampleChunks: { type: 'array', items: { type: 'string' }, maxItems: 5, description: 'Additional English chunks, or an empty array.' },
       },
       required: ['explanation', 'keyPoints', 'contrastExamples', 'exampleChunks'],
+      additionalProperties: false,
     };
 
     return this.#callTool<TopicStudyContent>({
       system: 'You teach English as a foreign language to Russian speakers. Always respond only via the provided tool.',
-      user: topicStudyInstructions(topic, curriculum),
+      user: topicStudyInstructions(topic, curriculum, learnerLevel),
+      maxTokens: learnerLevel ? 3500 : undefined,
       toolName: 'submit_topic_study',
       toolDescription: 'Submit structured study material for one topic.',
       schema,
