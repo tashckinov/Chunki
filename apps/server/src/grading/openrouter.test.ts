@@ -32,6 +32,22 @@ function completion(output: unknown, reason = 'tool_calls', name = 'submit_place
 beforeEach(() => create.mockReset());
 
 describe('OpenRouter grammar grading', () => {
+  it('adds the question reference only when the answer was wrong', async () => {
+    const question = BUILTIN_PLACEMENT_TEST.mcq.find(({ n }) => n === 5)!;
+    create.mockResolvedValue(completion({
+      ...complete,
+      topics: [{ ...complete.topics[0], questionNumber: 5 }, { ...complete.topics[0], questionNumber: 6 }],
+    }));
+
+    const result = await grader.gradePlacementTest({
+      ...submission, mcqAnswers: { 5: question.correct === 'A' ? 'B' : 'A' },
+    });
+    expect(result.topics.map(({ rationale }) => rationale)).toEqual([
+      'В вопросе №5 допущена ошибка. Нужно повторить основы.',
+      'Нужно повторить основы.',
+    ]);
+  });
+
   it('uses the configured model and accepts a complete placement verdict', async () => {
     create.mockResolvedValue(completion(complete));
 
