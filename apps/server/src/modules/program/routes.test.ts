@@ -10,6 +10,7 @@ vi.mock('./service.js', () => ({
   getProgramForUser: vi.fn(),
   getPlacementResult: vi.fn(),
   getTopicStudy: vi.fn(),
+  getLearnerTopicLevelStudy: vi.fn(),
   rebuildProgramFromLastTest: vi.fn(),
   startTopicAttempt: vi.fn(),
   submitPlacementTest: vi.fn(),
@@ -31,6 +32,7 @@ beforeEach(async () => {
   vi.mocked(service.getProgramForUser).mockReset();
   vi.mocked(service.getPlacementResult).mockReset();
   vi.mocked(service.getTopicStudy).mockReset();
+  vi.mocked(service.getLearnerTopicLevelStudy).mockReset();
   vi.mocked(service.rebuildProgramFromLastTest).mockReset();
   vi.mocked(service.startTopicAttempt).mockReset();
   vi.mocked(service.submitPlacementTest).mockReset();
@@ -138,6 +140,26 @@ describe('GET /api/program/topics/:id/study', () => {
 
     expect(res.statusCode).toBe(502);
   });
+});
+
+it('starts additional explanation generation only with an authenticated POST', async () => {
+  const url = '/api/program/topics/' + topicId + '/level-study';
+  expect((await app.inject({ method: 'POST', url })).statusCode).toBe(401);
+  expect(service.getLearnerTopicLevelStudy).not.toHaveBeenCalled();
+
+  vi.mocked(session.getSession).mockResolvedValue(authenticatedSession);
+  const material = { level: 'A1' as const, study: null, generating: true };
+  vi.mocked(service.getLearnerTopicLevelStudy).mockResolvedValue({ kind: 'ok', material });
+
+  const start = await app.inject({ method: 'POST', url, cookies: authCookie });
+  expect(start.statusCode).toBe(202);
+  expect(start.json()).toEqual(material);
+  expect(service.getLearnerTopicLevelStudy).toHaveBeenLastCalledWith('user-1', topicId, true);
+
+  const read = await app.inject({ method: 'GET', url, cookies: authCookie });
+  expect(read.statusCode).toBe(200);
+  expect(read.headers['cache-control']).toBe('no-store');
+  expect(service.getLearnerTopicLevelStudy).toHaveBeenLastCalledWith('user-1', topicId, false);
 });
 
 describe('POST /api/program/placement-test', () => {

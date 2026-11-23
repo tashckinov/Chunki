@@ -1,6 +1,7 @@
 import { useAppStore } from '../store/appStore';
 import { daysUntil } from '../lib/schedule';
-import { ChatMD } from '../components/chatmd/ChatMD';
+import { TopicStudyMaterial } from '../components/chatmd/TopicStudyMaterial';
+import { TopicExtraStudy } from './TopicExtraStudy';
 import { NavigationBar } from '../components/ui/NavigationBar';
 import { Button } from '../components/ui/Button';
 
@@ -42,60 +43,13 @@ export function TopicScreen() {
           </div>
         )}
 
-        {study && (
-          <>
-            <ChatMD key={topic.id} source={study.explanation} />
-
-            {study.keyPoints.length > 0 && (
-              <div>
-                <div className="text-section-title mb-3">Ключевые моменты</div>
-                <div className="flex flex-col gap-2">
-                  {study.keyPoints.map((point, i) => (
-                    <div key={i} className="flex gap-3 text-[15px] leading-[22px]">
-                      <span className="w-1 rounded-full bg-accent flex-none" />
-                      <div>{point}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {study.contrastExamples.length > 0 && (
-              <div className="flex flex-col divide-y divide-border border-t border-b border-border">
-                {study.contrastExamples.map((c, i) => (
-                  <div key={i} className="flex gap-4 py-4">
-                    <div className="flex-1 text-[15px] leading-[22px] text-negative">
-                      <div className="text-meta mb-1">Неверно</div>
-                      {c.wrong}
-                    </div>
-                    <div className="flex-1 text-[15px] leading-[22px]">
-                      <div className="text-[12.5px] font-medium text-accent mb-1">Верно</div>
-                      {c.right}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {study.exampleChunks.length > 0 && (
-              <div>
-                <div className="text-section-title mb-3">Полезные выражения</div>
-                <div className="flex gap-2 flex-wrap">
-                  {study.exampleChunks.map((chunk) => (
-                    <span key={chunk} className="rounded-full bg-surface-subtle px-3.5 py-2 text-[14px] text-text-secondary">
-                      {chunk}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-          </>
-        )}
+        {study && <TopicStudyMaterial key={topic.id} study={study} />}
 
         {topic.status === 'mastered' && <div className="text-body-secondary border-l-2 border-accent pl-4">✓ Тема подтверждена.</div>}
         {waitingForReconfirm && topic.nextReviewAt && (
           <div className="text-body-secondary border-l-2 border-border pl-4">Контрольная проверка будет доступна через {daysUntil(topic.nextReviewAt)} дн.</div>
         )}
+        {study && <TopicExtraStudy key={topic.id} topicId={topic.id} />}
         {topic.status !== 'mastered' && !waitingForReconfirm && (
           <Button size="lg" onClick={() => void s.goExercises()} className="w-full">
             К упражнениям

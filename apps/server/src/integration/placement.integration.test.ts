@@ -3,8 +3,9 @@ import { MockGradingProvider, type PlacementTestSubmission, type CurriculumTopic
 import { afterAll, expect, it, vi } from 'vitest';
 import { pool } from '../db/pool.js';
 import { createCurriculumTopic, getTopicForReview, linkCurriculumTopic, listTopicsForReview, updateCurriculumTopic, updateTopicStudyForReview } from '../modules/program/topicCatalog.js';
+import { generateTopicLevelStudy, readTopicLevelStudy, saveTopicLevelStudy } from '../modules/program/topicLevelStudy.js';
 import { getGradingProvider } from '../grading/index.js';
-import { getPlacementResult, getProgramForUser, getTopicStudy, rebuildProgramFromLastTest, startTopicAttempt, submitPlacementTest, submitTopicAttempt } from '../modules/program/service.js';
+import { getPlacementResult, getProgramForUser, getTopicStudy, getLearnerTopicLevelStudy, rebuildProgramFromLastTest, startTopicAttempt, submitPlacementTest, submitTopicAttempt } from '../modules/program/service.js';
 
 vi.mock('../grading/index.js', () => {
   const provider = new MockGradingProvider();
@@ -301,5 +302,94 @@ it('regenerates unstarted recommendations from the saved test and can reactivate
     grade.mockRestore();
     recommend.mockRestore();
     await pool.query('DELETE FROM users WHERE id = $1', [learner.id]);
+  }
+});
+
+it('selects additional material by assessed level and reuses it across learners', async () => {
+  const { rows: users } = await pool.query<{ id: string }>(
+    'INSERT INTO users (is_admin) VALUES (false), (false), (false) RETURNING id',
+  );
+  const topicId = 'study-level-' + randomUUID();
+  const input: PlacementTestSubmission = { fromLevel: 'B1', toLevel: 'B1', purpose: [], mcqAnswers: {}, open9: '', open10: '', essay: '' };
+  const provider = getGradingProvider();
+  const assessment = await provider.gradePlacementTest(input);
+  const grade = vi.spyOn(provider, 'gradePlacementTest');
+  const generate = vi.spyOn(provider, 'generateTopicStudy').mockImplementation(async (_topic, _scope, level) => ({
+    explanation: 'Материал ' + level, keyPoints: [], contrastExamples: [], exampleChunks: [],
+  }));
+
+  try {
+    await createCurriculumTopic({
+      id: topicId, title: 'Проверка ' + topicId, level: 'B1', category: 'Grammar', objective: 'Учебная цель.', subtopics: [],
+    });
+    const learnerTopics = [];
+    const assessedLevels = ['A1', 'A1', 'A2+'] as const;
+    for (const [i, user] of users.entries()) {
+      grade.mockResolvedValueOnce({
+        ...assessment, overallLevel: assessedLevels[i], topics: [{ key: topicId, rationale: 'Нужна практика.' }],
+      });
+      const result = await submitPlacementTest(user.id, input);
+      if (result.kind !== 'ok') throw new Error(result.kind);
+      learnerTopics.push(result.topics[0]);
+    }
+    const [first, second, third] = learnerTopics;
+    await expect(getLearnerTopicLevelStudy(users[0].id, first.id, false)).resolves.toEqual({
+      kind: 'ok', material: { level: 'A1', study: null, generating: false },
+    });
+    await expect(getLearnerTopicLevelStudy(users[1].id, first.id, true)).resolves.toEqual({ kind: 'not_found' });
+    const firstStudy = await getLearnerTopicLevelStudy(users[0].id, first.id, true);
+    expect(firstStudy).toMatchObject({ kind: 'ok', material: { level: 'A1', study: { explanation: 'Материал A1' } } });
+    expect(await getLearnerTopicLevelStudy(users[1].id, second.id, true)).toEqual(firstStudy);
+    expect(await getLearnerTopicLevelStudy(users[2].id, third.id, true)).toMatchObject({
+      kind: 'ok', material: { level: 'A2', study: { explanation: 'Материал A2' } },
+    });
+    expect(generate.mock.calls.map((call) => call[2])).toEqual(['A1', 'A2']);
+    expect((await getTopicForReview(first.key))?.study).toBeNull();
+  } finally {
+    generate.mockRestore();
+    grade.mockRestore();
+    await pool.query('DELETE FROM users WHERE id = ANY($1::uuid[])', [users.map(({ id }) => id)]);
+    await pool.query('DELETE FROM program_topics WHERE curriculum_id = $1', [topicId]);
+    await pool.query('DELETE FROM curriculum_topics WHERE id = $1', [topicId]);
+  }
+});
+
+it('serializes generation for the same topic and level and preserves a concurrent manual save', async () => {
+  const { rows: [user] } = await pool.query<{ id: string }>('INSERT INTO users DEFAULT VALUES RETURNING id');
+  const key = 'study-lease-' + randomUUID();
+  const topic = { key, title: key, level: 'A1', category: 'Грамматика' } as const;
+  const manual = { explanation: 'Материал редактора', keyPoints: [], contrastExamples: [], exampleChunks: [] };
+
+  await pool.query('INSERT INTO program_topics (key, title, level, category) VALUES ($1, $1, $2, $3)', [key, topic.level, topic.category]);
+  const generate = vi.spyOn(getGradingProvider(), 'generateTopicStudy');
+  try {
+    generate.mockRejectedValueOnce(new Error('Provider unavailable'));
+    await expect(generateTopicLevelStudy(user.id, topic, 'A1')).rejects.toThrow('Provider unavailable');
+    await expect(readTopicLevelStudy(key, 'A1')).resolves.toEqual({ level: 'A1', study: null, generating: false });
+
+    let markStarted!: () => void;
+    let finish!: () => void;
+    const started = new Promise<void>((resolve) => { markStarted = resolve; });
+    const canFinish = new Promise<void>((resolve) => { finish = resolve; });
+    generate.mockImplementationOnce(async () => {
+      markStarted();
+      await canFinish;
+      return { ...manual, explanation: 'Материал модели' };
+    });
+    const pending = generateTopicLevelStudy(user.id, topic, 'A1');
+    try {
+      await Promise.race([started, pending]);
+      expect(await generateTopicLevelStudy(user.id, topic, 'A1')).toEqual({ level: 'A1', study: null, generating: true });
+      await saveTopicLevelStudy(key, 'A1', manual);
+    } finally {
+      finish();
+      await pending;
+    }
+    expect(await pending).toEqual({ level: 'A1', study: manual, generating: false });
+    expect(generate).toHaveBeenCalledTimes(2);
+  } finally {
+    generate.mockRestore();
+    await pool.query('DELETE FROM program_topics WHERE key = $1', [key]);
+    await pool.query('DELETE FROM users WHERE id = $1', [user.id]);
   }
 });

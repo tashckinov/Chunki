@@ -3,6 +3,7 @@ import { CEFR_LEVELS, TOPIC_CATEGORIES, type TopicIdentity, type CurriculumTopic
 import { Button } from '../../components/ui/Button';
 import { CurriculumEditor } from './CurriculumEditor';
 import { TopicStudyEditor } from './TopicStudyEditor';
+import { TopicLevelStudyPanel } from './TopicLevelStudyPanel';
 import { ApiError } from '../../lib/collections';
 import { fetchAdminCatalogTopic, fetchAdminTopicCatalog, fetchCurriculumTopics, saveAdminCatalogTopic, setTopicCurriculumLink, type AdminCatalogTopic } from '../../lib/admin';
 
@@ -162,7 +163,12 @@ export function ProgramCatalogPanel() {
               </>
             )}
           </section>
-          {(!topic.curriculumId || linked) && <TopicStudyEditor key={topic.key} topic={topic} curriculum={linked} study={topic.study} />}
+          {(!topic.curriculumId || linked) && (
+            <>
+              <TopicStudyEditor key={topic.key} topic={topic} curriculum={linked} study={topic.study} />
+              <TopicLevelStudyPanel key={topic.key + '-levels'} topic={topic} curriculum={linked} />
+            </>
+          )}
         </>
       )}
     </section>

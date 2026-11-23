@@ -1,5 +1,14 @@
 import { z } from 'zod';
-import type { CurriculumTopic, TopicIdentity } from './types.js';
+import type { CurriculumTopic, TopicIdentity, TopicStudyContent } from './types.js';
+
+export const TOPIC_STUDY_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1'] as const;
+export type TopicStudyLevel = typeof TOPIC_STUDY_LEVELS[number];
+
+export interface TopicLevelStudy {
+  level: TopicStudyLevel;
+  study: TopicStudyContent | null;
+  generating: boolean;
+}
 
 const studyLine = z.string().trim().min(1).max(1000);
 
@@ -21,11 +30,15 @@ export function topicScope(topic: TopicIdentity, curriculum?: CurriculumTopic): 
   ].join('\n');
 }
 
-export function topicStudyInstructions(topic: TopicIdentity, curriculum?: CurriculumTopic): string {
+export function topicStudyInstructions(topic: TopicIdentity, curriculum?: CurriculumTopic, learnerLevel?: TopicStudyLevel): string {
   return [
     TOPIC_ENGLISH_INSTRUCTION,
     topicScope(topic, curriculum),
-    'Introduce English forms first, then optionally give a Russian gloss (e.g. **bread** — хлеб). Use neutral examples suitable for the CEFR level.',
+    ...(learnerLevel ? [
+      'This is a follow-up for a learner who did not understand the base lesson. The learner’s current CEFR level is ' + learnerLevel + '. The curriculum level above describes the topic; it is separate from the learner’s level.',
+      'Keep the same learning objective. Give a fresh, more detailed explanation in small steps, from an intuitive example to the rule. Use English examples and Russian explanations. Match vocabulary, pace, and assumed knowledge to the learner’s level. If the topic is more advanced, bridge from familiar sentences. Explain a likely confusion with worked examples and include a short self-check.',
+    ] : []),
+    'Introduce English forms first, then optionally give a Russian gloss (e.g. **bread** — хлеб). Use neutral examples suitable for the learner’s level (or the topic level when unspecified).',
     'Use Markdown in explanation, without HTML. Optional ChatMD blocks use :::tip (rule), :::note (clarification), :::example (example with translation or explanation), :::compare (two lines: wrong: … and right: …), or :::question. Put each marker on its own line and close with :::. Do not nest blocks.',
     'Use blocks only when useful. Usually 1–2 questions near the relevant rule suffice. Each needs a prompt, exactly one + option, at least one - option, and specific Russian feedback for every option:',
     ':::question\n[Question about this objective]\n+ [Correct option] | [Why it works]\n- [Distractor] | [Why it does not work]\n:::',
