@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import { Ajv } from 'ajv';
-import { scoreMcq, TOPIC_ENGLISH_INSTRUCTION, topicScope, topicStudyInstructions, type TopicStudyLevel } from '@app/shared';
+import { scoreMcq, CHATMD_TABLE_INSTRUCTION, TOPIC_ENGLISH_INSTRUCTION, topicScope, topicStudyInstructions, type TopicStudyLevel } from '@app/shared';
 import type { Env } from '../config/env.js';
 import type {
   ExerciseItem,
@@ -387,7 +387,7 @@ export class OpenRouterGradingProvider implements GradingProvider {
     };
 
     return this.#callTool<TopicStudyContent>({
-      system: 'You teach English as a foreign language to Russian speakers. Always respond only via the provided tool.',
+      system: 'You teach English as a foreign language to Russian speakers. Always respond only via the provided tool. ' + CHATMD_TABLE_INSTRUCTION,
       user: topicStudyInstructions(topic, curriculum, learnerLevel),
       maxTokens: learnerLevel ? 3500 : undefined,
       toolName: 'submit_topic_study',
