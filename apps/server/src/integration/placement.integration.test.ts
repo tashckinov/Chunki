@@ -1,3 +1,4 @@
+import { rateTopicStudy } from '../modules/program/topicStudyRating.js';
 import { randomUUID } from 'node:crypto';
 import { MockGradingProvider, type PlacementTestSubmission, type CurriculumTopic } from '@app/shared';
 import { afterAll, expect, it, vi } from 'vitest';
@@ -140,6 +141,14 @@ it('assigns only fixed curriculum IDs, preserves legacy progress, and generates 
     expect(shared.key).toBe(assigned.key);
     expect(shared.topicNumber).toBe(assigned.topicNumber);
     expect(await getTopicStudy(learner.id, assigned.id)).toEqual(await getTopicStudy(other.id, shared.id));
+    expect(await rateTopicStudy(other.id, assigned.id, 'clear')).toBeUndefined();
+    expect(await rateTopicStudy(learner.id, assigned.id)).toBeNull();
+    await rateTopicStudy(learner.id, assigned.id, 'clear');
+    await rateTopicStudy(other.id, shared.id, 'unclear');
+    await rateTopicStudy(learner.id, assigned.id, 'unclear');
+    expect(await rateTopicStudy(learner.id, assigned.id)).toBe('unclear');
+    expect((await getTopicForReview(shared.key))?.ratings).toEqual({ clear: 0, unclear: 2 });
+    expect((await listTopicsForReview('№' + shared.topicNumber, 0)).topics[0]).toMatchObject({ clear: 0, unclear: 2 });
     expect(lesson).toHaveBeenCalledTimes(1);
     expect(lesson.mock.lastCall?.[1]).toMatchObject({ id: extension.id, objective: extension.objective });
     expect((await pool.query("SELECT key FROM program_topics WHERE key = 'invented-topic'")).rowCount).toBe(0);

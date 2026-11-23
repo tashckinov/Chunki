@@ -72,7 +72,7 @@ export function ProgramCatalogPanel() {
     setError('');
     setSaved(false);
     try {
-      setTopic({ ...await saveAdminCatalogTopic(topic), variants: topic.variants });
+      setTopic({ ...await saveAdminCatalogTopic(topic), variants: topic.variants, ratings: topic.ratings });
       setSaved(true);
       loadPage(page.q, page.offset);
     } catch (err) {
@@ -133,6 +133,7 @@ export function ProgramCatalogPanel() {
               {linked?.topic_number != null && '№' + linked.topic_number + ' · '}
               {topic.curriculumSlot && linked ? linked.title : topic.title}
             </h2>
+            {topic.ratings && <p className="text-meta">Понятно: {topic.ratings.clear} · Непонятно: {topic.ratings.unclear}</p>}
             <div className="flex flex-wrap gap-2">
               <Button variant="secondary" size="sm" disabled={curriculumLoading} onClick={() => levelsSection.current?.scrollIntoView({ block: 'start' })}>Объяснения по уровням</Button>
               <Button variant="secondary" size="sm" onClick={() => curriculumSection.current?.scrollIntoView({ block: 'start' })}>Настройки темы</Button>
@@ -239,6 +240,7 @@ export function ProgramCatalogPanel() {
                 <span className="min-w-0">
                   <span className="block wrap-anywhere">{item.title}</span>
                   <span className="block text-meta">{item.topicNumber != null && `№${item.topicNumber} · `}{item.level ?? 'Без уровня'}</span>
+                  <span className="block text-meta">Понятно: {item.clear ?? 0} · Непонятно: {item.unclear ?? 0}</span>
                 </span>
                 <span className="shrink-0 text-sm font-medium text-accent">Редактировать</span>
               </button>
