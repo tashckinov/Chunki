@@ -168,7 +168,7 @@ export function ProgramScreen() {
           );
         })}
         {topics.length === 0 && phase === 'loading' && <p role="status" className="text-body-secondary py-2">Загружаем программу…</p>}
-        {phase === 'building' && <p role="status" className="text-body-secondary py-2">Собираем программу по последнему тесту…</p>}
+        {phase === 'building' && <p role="status" className="text-body-secondary py-2">{topics.length ? 'Дополняем программу по последнему тесту…' : 'Собираем программу по последнему тесту…'}</p>}
         {phase === 'error' && <div className="py-2">
           <p role="alert" className="text-negative mb-2">Не удалось загрузить программу. Результаты теста сохранены.</p>
           <Button size="sm" variant="secondary" onClick={() => setRetry((value) => value + 1)}>Повторить</Button>

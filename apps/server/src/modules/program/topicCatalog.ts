@@ -4,7 +4,9 @@ import { pool } from '../../db/pool.js';
 
 export function topicLevels(current: CEFRLevel, target: CEFRLevel): readonly CEFRLevel[] {
   const end = CEFR_LEVELS.indexOf(target);
-  return CEFR_LEVELS.slice(Math.min(CEFR_LEVELS.indexOf(current), end), end + 1);
+  // The app's '+' assessments are upper bands of the same CEFR level.
+  const start = CEFR_LEVELS.indexOf(current) - (current.endsWith('+') ? 1 : 0);
+  return CEFR_LEVELS.slice(Math.min(start, end), end + 1);
 }
 
 export async function listCurriculumTopics(target?: CEFRLevel): Promise<CurriculumTopic[]> {

@@ -116,9 +116,10 @@ it('assigns only fixed curriculum IDs, preserves legacy progress, and generates 
   try {
     const first = await submitPlacementTest(learner.id, input);
     if (first.kind !== 'ok') throw new Error(first.kind);
-    expect(first.topics).toHaveLength(2);
+    expect(first.topics).toHaveLength(3);
     expect(first.topics).toContainEqual(expect.objectContaining({ id: legacy.id, key: legacyKey, status: 'mastered', curriculumId: 'a2-articles' }));
-    expect(first.result.topics).toEqual([expect.objectContaining({ title: extension.title, level: 'B1', category: 'Использование языка' })]);
+    expect(first.result.topics).toHaveLength(2);
+    expect(first.result.topics[0]).toMatchObject({ title: extension.title, level: 'B1', category: 'Использование языка' });
     expect(placement.mock.lastCall?.[2]?.catalog).toContainEqual(expect.objectContaining({ id: extension.id, objective: extension.objective }));
     expect(placement.mock.lastCall?.[2]?.assignedKeys).toContain('a2-articles');
     expect(await getTopicStudy(learner.id, legacy.id)).toEqual({ kind: 'ok', study });
@@ -152,7 +153,7 @@ it('assigns only fixed curriculum IDs, preserves legacy progress, and generates 
   }
 });
 
-it('rebuilds an empty program from saved evidence once, without regrading or using quota', async () => {
+it('supplements an existing short program from saved evidence once, without regrading or using quota', async () => {
   const { rows: [learner] } = await pool.query<{ id: string }>('INSERT INTO users DEFAULT VALUES RETURNING id');
   const userId = learner.id;
   const submissionId = randomUUID();
@@ -165,13 +166,20 @@ it('rebuilds an empty program from saved evidence once, without regrading or usi
   const recommend = vi.spyOn(provider, 'recommendProgramTopics');
   try {
     expect(await submitPlacementTest(userId, input)).toMatchObject({ kind: 'ok' });
+    const initial = await getProgramForUser(userId);
+    if (initial.status !== 'active') throw new Error('No initial program');
+    expect(initial.topics).toHaveLength(3);
+    const existing = initial.topics[0];
+    await pool.query('DELETE FROM user_topics WHERE user_id = $1 AND id <> $2', [userId, existing.id]);
+    await pool.query("UPDATE user_topics SET status = 'mastered' WHERE id = $1", [existing.id]);
+    await pool.query('UPDATE placement_tests SET program_built_at = NULL WHERE id = $1', [submissionId]);
     const saved = await getPlacementResult(userId, submissionId);
     const before = await getProgramForUser(userId);
-    expect(before).toMatchObject({ needsProgramBuild: true, topics: [], placement: { quota: { used: 1 } } });
+    expect(before).toMatchObject({ needsProgramBuild: true, topics: [{ id: existing.id, status: 'mastered' }], placement: { quota: { used: 1 } } });
 
     recommend.mockRejectedValueOnce(new Error('Provider unavailable'));
     await expect(rebuildProgramFromLastTest(userId)).rejects.toThrow('Provider unavailable');
-    expect(await getProgramForUser(userId)).toMatchObject({ needsProgramBuild: true, topics: [] });
+    expect(await getProgramForUser(userId)).toMatchObject({ needsProgramBuild: true, topics: [{ id: existing.id }] });
 
     let notifyStarted!: () => void;
     let finish!: () => void;
@@ -203,8 +211,14 @@ it('rebuilds an empty program from saved evidence once, without regrading or usi
     expect(after).toMatchObject({
       needsProgramBuild: false,
       placement: before.placement,
-      topics: [{ curriculumId: 'a2-articles', topicNumber: expect.any(Number), status: 'assigned' }],
+      topics: expect.arrayContaining([
+        expect.objectContaining({ id: existing.id, status: 'mastered' }),
+        expect.objectContaining({ curriculumId: 'a2-articles', topicNumber: expect.any(Number) }),
+      ]),
     });
+    if (after.status !== 'active') throw new Error('No supplemented program');
+    expect(after.topics).toHaveLength(3);
+    expect(after.topics.every(({ level }) => level === 'A2' || level === 'B1')).toBe(true);
   } finally {
     grade.mockRestore();
     recommend.mockRestore();
