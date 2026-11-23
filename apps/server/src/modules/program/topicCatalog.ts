@@ -139,15 +139,16 @@ export interface AdminTopicDetail extends TopicIdentity {
   study: TopicStudyContent | null;
   curriculumId: string | null;
   curriculumSlot: boolean;
+  verified: boolean;
   ratings?: RatingCounts;
   variants?: Pick<AdminTopicDetail, 'key' | 'title' | 'curriculumSlot'>[];
 }
 
 export async function listTopicsForReview(search: string, offset: number) {
   const pageSize = 50;
-  const { rows } = await pool.query<TopicIdentity & RatingCounts & { topicNumber: number | null }>(
+  const { rows } = await pool.query<TopicIdentity & RatingCounts & { topicNumber: number | null; verified: boolean }>(
     `WITH ranked AS (
-       SELECT p.key, p.title, p.category, p.level, p.title_key, c.topic_number AS "topicNumber",
+       SELECT p.key, p.title, p.category, p.level, p.title_key, p.verified, c.topic_number AS "topicNumber",
          row_number() OVER (topic_group ORDER BY p.curriculum_slot DESC, p.key) AS position,
          bool_or(CASE WHEN $1 ~ '^[№#]? *[0-9]+$' THEN c.topic_number::text = ltrim($1, '№# ')
            ELSE $1 = '' OR strpos(p.title_key, program_topic_name($1)) > 0
@@ -157,7 +158,7 @@ export async function listTopicsForReview(search: string, offset: number) {
        FROM program_topics p LEFT JOIN curriculum_topics c ON c.id = p.curriculum_id
        WINDOW topic_group AS (PARTITION BY p.curriculum_id, CASE WHEN p.curriculum_id IS NULL THEN p.key END)
      )
-     SELECT p.key, title, category, level, "topicNumber", stats.* FROM ranked p
+     SELECT p.key, title, category, level, "topicNumber", p.verified, stats.* FROM ranked p
      CROSS JOIN LATERAL (${ratingCounts}) stats
      WHERE position = 1 AND matched
      ORDER BY "topicNumber" NULLS LAST, title_key, key LIMIT $2 OFFSET $3`,
@@ -168,7 +169,7 @@ export async function listTopicsForReview(search: string, offset: number) {
 
 export async function getTopicForReview(key: string): Promise<AdminTopicDetail | null> {
   const { rows } = await pool.query<AdminTopicDetail>(
-    `SELECT p.key, p.title, p.category, p.level, p.aliases, p.study_content AS study,
+    `SELECT p.key, p.title, p.category, p.level, p.aliases, p.study_content AS study, p.verified,
        p.curriculum_id AS "curriculumId", p.curriculum_slot AS "curriculumSlot",
        ARRAY(
          SELECT jsonb_build_object('key', v.key, 'title', v.title, 'curriculumSlot', v.curriculum_slot)
@@ -180,6 +181,16 @@ export async function getTopicForReview(key: string): Promise<AdminTopicDetail |
     [key],
   );
   return rows[0] ?? null;
+}
+
+export async function setTopicVerification(key: string, verified: boolean, study?: TopicStudyContent) {
+  const { rows: [row] } = await pool.query<{ verified: boolean }>(
+    `UPDATE program_topics SET verified = $2 WHERE key = $1
+       AND (NOT $2 OR (study_content IS NOT NULL AND study_content = $3::jsonb))
+     RETURNING verified`,
+    [key, verified, study ?? null],
+  );
+  return row ?? null;
 }
 
 export async function updateTopicStudyForReview(key: string, study: TopicStudyContent): Promise<TopicStudyContent | null> {
@@ -218,7 +229,7 @@ export async function updateTopicForReview(topic: TopicIdentity) {
            OR other.key = program_topic_name($2) OR program_topic_name($2) = ANY(other.aliases)
          )
        )
-       RETURNING key, title, category, level, aliases, study_content AS study, curriculum_id AS "curriculumId", curriculum_slot AS "curriculumSlot"`,
+       RETURNING key, title, category, level, aliases, study_content AS study, verified, curriculum_id AS "curriculumId", curriculum_slot AS "curriculumSlot"`,
       [topic.key, topic.title, topic.category, topic.level],
     );
     await db.query('COMMIT');

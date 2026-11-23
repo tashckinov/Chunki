@@ -251,13 +251,14 @@ export interface AdminCatalogTopic extends TopicIdentity {
   study: TopicStudyContent | null;
   curriculumId: string | null;
   curriculumSlot: boolean;
+  verified: boolean;
   ratings?: { clear: number; unclear: number };
   variants?: Pick<AdminCatalogTopic, 'key' | 'title' | 'curriculumSlot'>[];
 }
 
 export function fetchAdminTopicCatalog(q: string, offset: number) {
   const query = new URLSearchParams({ q, offset: String(offset) });
-  return getJson<{ topics: (TopicIdentity & { topicNumber?: number | null; clear: number; unclear: number })[]; nextOffset: number | null }>(`/api/admin/topic-catalog?${query}`);
+  return getJson<{ topics: (TopicIdentity & { topicNumber?: number | null; clear: number; unclear: number; verified: boolean })[]; nextOffset: number | null }>(`/api/admin/topic-catalog?${query}`);
 }
 
 export async function fetchAdminCatalogTopic(key: string) {
@@ -280,6 +281,10 @@ export async function saveCurriculumTopic({ id, title, level, category, objectiv
   return (await patchJson<{ topic: CurriculumTopic }>(`/api/admin/curriculum-topics/${encodeURIComponent(id)}`, {
     title, level, category, objective, subtopics,
   })).topic;
+}
+
+export function setAdminTopicVerification(key: string, verified: boolean, study: TopicStudyContent | null) {
+  return patchJson<{ verified: boolean }>(`/api/admin/topic-catalog/${encodeURIComponent(key)}/verification`, { verified, study });
 }
 
 export async function saveAdminTopicStudy(key: string, study: TopicStudyContent) {

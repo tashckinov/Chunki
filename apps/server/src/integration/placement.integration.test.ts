@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { MockGradingProvider, type PlacementTestSubmission, type CurriculumTopic } from '@app/shared';
 import { afterAll, expect, it, vi } from 'vitest';
 import { pool } from '../db/pool.js';
-import { createCurriculumTopic, getTopicForReview, linkCurriculumTopic, listTopicsForReview, updateCurriculumTopic, updateTopicStudyForReview } from '../modules/program/topicCatalog.js';
+import { createCurriculumTopic, getTopicForReview, linkCurriculumTopic, listTopicsForReview, setTopicVerification, updateCurriculumTopic, updateTopicStudyForReview } from '../modules/program/topicCatalog.js';
 import { generateTopicLevelStudy, readTopicLevelStudy, saveTopicLevelStudy } from '../modules/program/topicLevelStudy.js';
 import { getGradingProvider } from '../grading/index.js';
 import { getPlacementResult, getProgramForUser, getTopicStudy, getLearnerTopicLevelStudy, rebuildProgramFromLastTest, startTopicAttempt, submitPlacementTest, submitTopicAttempt } from '../modules/program/service.js';
@@ -258,7 +258,16 @@ it('shows unassigned curriculum topics by number and keeps the lesson key when e
     const { topics: [entry] } = await listTopicsForReview('№' + created.topic_number, 0);
     expect(entry).toMatchObject({ title: id, topicNumber: created.topic_number });
     const study = { explanation: '**Bread** — хлеб.', keyPoints: [], contrastExamples: [], exampleChunks: [] };
+    expect(await setTopicVerification(entry.key, true, study)).toBeNull();
     expect(await updateTopicStudyForReview(entry.key, study)).toEqual(study);
+    expect(await setTopicVerification(entry.key, true, study)).toEqual({ verified: true });
+    expect((await listTopicsForReview('№' + created.topic_number, 0)).topics[0].verified).toBe(true);
+    await updateTopicStudyForReview(entry.key, study);
+    expect((await getTopicForReview(entry.key))?.verified).toBe(true);
+    await updateTopicStudyForReview(entry.key, { ...study, explanation: 'Новая версия.' });
+    expect((await getTopicForReview(entry.key))?.verified).toBe(false);
+    expect(await setTopicVerification(entry.key, true, study)).toBeNull();
+    await updateTopicStudyForReview(entry.key, study);
     const updated = await updateCurriculumTopic({ ...created, title: 'Новое название ' + id, level: 'A2', category: 'Grammar' });
     expect(updated).toMatchObject({ id, topic_number: created.topic_number });
     expect(await getTopicForReview(entry.key)).toMatchObject({
