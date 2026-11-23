@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { CEFR_LEVELS, TOPIC_CATEGORIES, type TopicIdentity, type CurriculumTopic } from '@app/shared';
-import { ChatMD } from '../../components/chatmd/ChatMD';
 import { Button } from '../../components/ui/Button';
 import { CurriculumEditor } from './CurriculumEditor';
+import { TopicStudyEditor } from './TopicStudyEditor';
 import { ApiError } from '../../lib/collections';
 import { fetchAdminCatalogTopic, fetchAdminTopicCatalog, fetchCurriculumTopics, saveAdminCatalogTopic, setTopicCurriculumLink, type AdminCatalogTopic } from '../../lib/admin';
 
@@ -89,11 +89,22 @@ export function ProgramCatalogPanel() {
       await setTopicCurriculumLink(topic.key, link || null);
       setTopic({ ...topic, curriculumId: link || null });
       setLinkSaved(true);
+      loadPage(page.q, page.offset);
     } catch {
       setError('Не удалось сохранить связь с учебной целью.');
     } finally {
       setSaving(false);
     }
+  }
+
+  function onCurriculumSaved(updated: CurriculumTopic) {
+    setCurriculum((previous) => {
+      const topics = previous ?? [];
+      return topics.some(({ id }) => id === updated.id)
+        ? topics.map((item) => item.id === updated.id ? updated : item)
+        : [...topics, updated];
+    });
+    loadPage(page.q, page.offset);
   }
 
   const linked = curriculum?.find((item) => item.id === topic?.curriculumId);
@@ -134,7 +145,8 @@ export function ProgramCatalogPanel() {
           </form>}
           <section className="flex flex-col gap-3 rounded-xl border border-border p-4">
             <h2 className="text-section-title">Учебная цель</h2>
-            {linked && <p className="text-body-secondary">{linked.topic_number != null && `№${linked.topic_number} · `}{linked.level} · {linked.title} — {linked.objective}</p>}
+            {topic.curriculumSlot && linked && <CurriculumEditor key={linked.id} topic={linked} onSaved={onCurriculumSaved} />}
+            {!topic.curriculumSlot && linked && <p className="text-body-secondary">{linked.topic_number != null && `№${linked.topic_number} · `}{linked.level} · {linked.title} — {linked.objective}</p>}
             {curriculumError && <p className="text-negative">Не удалось загрузить учебные цели.</p>}
             {!topic.curriculumSlot && curriculum && (
               <>
@@ -150,19 +162,7 @@ export function ProgramCatalogPanel() {
               </>
             )}
           </section>
-          <section aria-label="Предпросмотр урока" className="flex flex-col gap-3 rounded-xl border border-border p-4">
-            <h2 className="text-section-title">Предпросмотр урока</h2>
-            {topic.study ? (
-              <>
-                <ChatMD source={topic.study.explanation} />
-                {topic.study.keyPoints.length > 0 && <ul className="list-disc pl-5">{topic.study.keyPoints.map((text, index) => <li key={index}>{text}</li>)}</ul>}
-                {topic.study.contrastExamples.map(({ wrong, right }, index) => (
-                  <p key={index} className="text-body-secondary"><del>{wrong}</del> → {right}</p>
-                ))}
-                {topic.study.exampleChunks.length > 0 && <p className="text-body-secondary">{topic.study.exampleChunks.join(' · ')}</p>}
-              </>
-            ) : <p className="text-body-secondary">Общее объяснение для этой темы пока не сохранено.</p>}
-          </section>
+          {(!topic.curriculumId || linked) && <TopicStudyEditor key={topic.key} topic={topic} curriculum={linked} study={topic.study} />}
         </>
       )}
     </section>
@@ -171,12 +171,15 @@ export function ProgramCatalogPanel() {
   const nextOffset = data?.nextOffset;
   return (
     <section className="flex flex-col gap-3">
-      <CurriculumEditor topics={curriculum} onCreated={(topic) => setCurriculum((previous) => [...(previous ?? []), topic])} />
+      <details className="rounded-xl border border-border px-4 py-3">
+        <summary className="cursor-pointer font-medium">Добавить учебную цель CEFR</summary>
+        <CurriculumEditor onSaved={onCurriculumSaved} />
+      </details>
       {curriculumError && <p className="text-negative">Не удалось загрузить учебные цели.</p>}
       <h2 className="text-section-title">Темы и материалы</h2>
       <form className="flex flex-wrap gap-2" onSubmit={(event) => { event.preventDefault(); loadPage(search.trim(), 0); }}>
         <input value={search} onChange={(event) => setSearch(event.target.value)} type="search" aria-label="Поиск тем"
-          placeholder="Название или ключ" className={`${field} min-w-40 flex-1`} maxLength={160} />
+          placeholder="Номер, название или ключ" className={`${field} min-w-40 flex-1`} maxLength={160} />
         <Button type="submit" size="sm">Найти</Button>
       </form>
       {listError && <p role="alert" className="text-negative">Не удалось загрузить каталог.</p>}

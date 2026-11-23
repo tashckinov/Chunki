@@ -97,6 +97,8 @@ describe('OpenRouter grammar grading', () => {
 
     expect(result).toEqual(study);
     const instruction = create.mock.calls[0][0].messages[1].content;
+    expect(instruction).toContain('English is the target language');
+    expect(instruction).toContain('Never ask the learner to produce Russian');
     expect(instruction).toContain(':::question');
     expect(instruction).toContain('+ [Correct option] |');
     expect(instruction).toContain('1–2 questions near the relevant rule');

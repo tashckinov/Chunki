@@ -77,6 +77,10 @@ export async function resetDailyChecks(userId: string): Promise<AdminUser> {
   return data.user;
 }
 
+export function regenerateUserProgram(userId: string) {
+  return postJson<{ status: 'ready' }>(`/api/admin/users/${userId}/regenerate-program`, {});
+}
+
 export async function uploadCollectionBanner(file: File): Promise<string> {
   const form = new FormData();
   form.set('file', file);
@@ -267,6 +271,16 @@ export async function fetchCurriculumTopics() {
 
 export async function addCurriculumTopic(topic: CurriculumTopic) {
   return (await postJson<{ topic: CurriculumTopic }>('/api/admin/curriculum-topics', topic)).topic;
+}
+
+export async function saveCurriculumTopic({ id, title, level, category, objective, subtopics }: CurriculumTopic) {
+  return (await patchJson<{ topic: CurriculumTopic }>(`/api/admin/curriculum-topics/${encodeURIComponent(id)}`, {
+    title, level, category, objective, subtopics,
+  })).topic;
+}
+
+export async function saveAdminTopicStudy(key: string, study: TopicStudyContent) {
+  return (await patchJson<{ study: TopicStudyContent }>(`/api/admin/topic-catalog/${encodeURIComponent(key)}/study`, study)).study;
 }
 
 export function setTopicCurriculumLink(key: string, curriculumId: string | null) {

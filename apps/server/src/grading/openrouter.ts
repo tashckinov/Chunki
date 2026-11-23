@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import { Ajv } from 'ajv';
-import { scoreMcq } from '@app/shared';
+import { scoreMcq, TOPIC_ENGLISH_INSTRUCTION, topicScope, topicStudyInstructions } from '@app/shared';
 import type { Env } from '../config/env.js';
 import type {
   ExerciseItem,
@@ -39,15 +39,6 @@ function topicPlanInstructions(plan: TopicPlanContext | undefined, currentLevel:
     'Return all supported topics in priority order. Use only supplied IDs and give a brief Russian rationale tied to the evidence. Skip unrelated topics and return an empty list if there is no supported match.',
     `Already assigned curriculum IDs: ${JSON.stringify(plan.assignedKeys)}`,
     `Available curriculum [ID, CEFR, category, title]: ${JSON.stringify(catalog)}`,
-  ].join('\n');
-}
-
-function topicScope(topic: TopicIdentity, curriculum?: CurriculumTopic): string {
-  if (!curriculum) return `Topic: "${topic.title}" (${topic.category}). CEFR: ${topic.level ?? 'unspecified'}.`;
-  const { id, title, category, level, objective, subtopics } = curriculum;
-  return [
-    `Fixed curriculum scope: ${JSON.stringify({ id, title, category, level, objective, subtopics })}`,
-    'Teach or practise this objective at this exact CEFR level. Use only the listed subtopics when present. Choose your own examples, but do not introduce a separate objective, topic or level.',
   ].join('\n');
 }
 
@@ -364,15 +355,8 @@ export class OpenRouterGradingProvider implements GradingProvider {
     };
 
     return this.#callTool<TopicStudyContent>({
-      system: 'You are an expert English teacher writing concise study material in Russian for a Russian-speaking learner. Always respond only via the provided tool.',
-      user: [
-        topicScope(topic, curriculum),
-        'Use neutral examples suitable for this level.',
-        'Use Markdown in explanation, without HTML. Optional ChatMD blocks use :::tip (rule), :::note (clarification), :::example (example with translation or explanation), :::compare (two lines: wrong: … and right: …), or :::question. Put each marker on its own line and close with :::. Do not nest blocks.',
-        'Use blocks only when useful. Usually 1–2 questions near the relevant rule suffice. Each needs a prompt, exactly one + option, at least one - option, and specific Russian feedback for every option:',
-        ':::question\n[Question about this objective]\n+ [Correct option] | [Why it works]\n- [Distractor] | [Why it does not work]\n:::',
-        'Use the other fields only for material that adds to the lesson.',
-      ].join('\n'),
+      system: 'You teach English as a foreign language to Russian speakers. Always respond only via the provided tool.',
+      user: topicStudyInstructions(topic, curriculum),
       toolName: 'submit_topic_study',
       toolDescription: 'Submit structured study material for one topic.',
       schema,
@@ -414,6 +398,7 @@ export class OpenRouterGradingProvider implements GradingProvider {
       system: 'You are an expert English teacher writing a short practice quiz for a Russian-speaking learner. Always respond only via the provided tool.',
       user: [
         'Write 5–8 practice exercises.',
+        TOPIC_ENGLISH_INSTRUCTION,
         topicScope(topic, curriculum),
         ...(curriculum ? [] : [`Learner context: ${topic.rationale}`]),
       ].join('\n'),
