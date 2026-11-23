@@ -213,7 +213,7 @@ export async function rebuildProgramFromLastTest(
     plan.catalog = plan.catalog.filter(({ level }) => levels.includes(level));
     const { skills, mcqScore, belowLevel, review = [] } = saved.result;
     const corrections = review.map(({ key, prompt, answer, correction, feedback, grammar }) => ({
-      prompt, answered: !!answer.trim(), answer: Number(key) <= mcqScore.total ? answer : undefined, correction, feedback, grammar,
+      prompt, questionNumber: key === 'essay' ? undefined : Number(key), answered: !!answer.trim(), answer: Number(key) <= mcqScore.total ? answer : undefined, correction, feedback, grammar,
     }));
     const provider = getGradingProvider();
     const hasUnassignedTopics = plan.catalog.some(({ id }) => !plan.assignedKeys.includes(id));

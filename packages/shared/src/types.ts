@@ -173,6 +173,7 @@ export type ProgramBuildEvidence = Pick<PlacementGradeResult, 'skills' | 'mcqSco
   corrections: Array<Pick<PlacementReviewItem, 'prompt' | 'correction' | 'feedback' | 'grammar'> & {
     answer?: string;
     answered: boolean;
+    questionNumber?: number;
   }>;
 };
 

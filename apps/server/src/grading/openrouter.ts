@@ -30,6 +30,28 @@ const TOPIC_SCHEMA = {
   additionalProperties: false,
 } as const;
 
+type PlacementTopicRecommendation = TopicRecommendation & { questionNumber?: number };
+
+const PLACEMENT_TOPIC_SCHEMA = {
+  ...TOPIC_SCHEMA,
+  properties: {
+    ...TOPIC_SCHEMA.properties,
+    questionNumber: {
+      type: 'integer', minimum: 1,
+      description: 'Number of the answered question that best supports this recommendation. Omit for essay-only or general feedback. Keep the number out of rationale.',
+    },
+  },
+};
+
+function placementTopicReasons(topics: PlacementTopicRecommendation[], incorrect: number[]): TopicRecommendation[] {
+  return topics.map(({ key, rationale, questionNumber }) => ({
+    key,
+    rationale: questionNumber !== undefined && incorrect.includes(questionNumber)
+      ? 'В вопросе №' + questionNumber + ' допущена ошибка. ' + rationale
+      : rationale,
+  }));
+}
+
 function topicPlanInstructions(plan: TopicPlanContext | undefined, currentLevel: string): string {
   if (!plan) return 'Return an empty topic recommendation list. No curriculum was provided.';
   const catalog = plan.catalog.map(({ id, title, level, category }) => [id, level, category, title]);
@@ -143,7 +165,7 @@ export class OpenRouterGradingProvider implements GradingProvider {
     const missedQuestions = definition.mcq.flatMap(({ n, q, correct, options }) => {
       const chosen = letters.indexOf(input.mcqAnswers[n]);
       return chosen >= 0 && letters[chosen] !== correct
-        ? [{ question: q, chosen: options[chosen], correct: options[letters.indexOf(correct)] }]
+        ? [{ questionNumber: n, question: q, chosen: options[chosen], correct: options[letters.indexOf(correct)] }]
         : [];
     });
 
@@ -154,7 +176,7 @@ export class OpenRouterGradingProvider implements GradingProvider {
       skills: PlacementGradeResult['skills'];
       aboveLevel: string;
       belowLevel: string;
-      topics: TopicRecommendation[];
+      topics: PlacementTopicRecommendation[];
     };
 
     const schema = {
@@ -186,7 +208,7 @@ export class OpenRouterGradingProvider implements GradingProvider {
         },
         aboveLevel: { type: 'string', description: 'One short sentence in Russian.' },
         belowLevel: { type: 'string', description: 'One short sentence in Russian.' },
-        topics: { type: 'array', items: TOPIC_SCHEMA, description: 'All distinct supported curriculum topics in priority order.' },
+        topics: { type: 'array', items: PLACEMENT_TOPIC_SCHEMA, description: 'All distinct supported curriculum topics in priority order.' },
       },
       required: ['openGrades', 'essayGrade', 'overallLevel', 'skills', 'aboveLevel', 'belowLevel', 'topics'],
     };
@@ -235,12 +257,18 @@ export class OpenRouterGradingProvider implements GradingProvider {
       mcqScore,
       openGrades,
       essayGrade: out.essayGrade,
-      topics: out.topics,
+      topics: placementTopicReasons(out.topics, [
+        ...missedQuestions.map(({ questionNumber }) => questionNumber),
+        ...definition.readingQuestions.filter(({ n }, index) =>
+          (index === 0 ? input.open9 : input.open10).trim() &&
+          ['partial', 'incorrect'].includes(openGrades[n]?.correctness),
+        ).map(({ n }) => n),
+      ]),
     };
   }
 
   async recommendProgramTopics(evidence: ProgramBuildEvidence, plan: TopicPlanContext): Promise<TopicRecommendation[]> {
-    const { topics } = await this.#callTool<{ topics: TopicRecommendation[] }>({
+    const { topics } = await this.#callTool<{ topics: PlacementTopicRecommendation[] }>({
       system: 'You are an English curriculum tutor. Use only the saved assessment evidence and supplied curriculum. Do not grade the test again. Respond only via the provided tool.',
       user: [
         'Free-text answers are omitted from the saved evidence. For answered items, use the examiner’s feedback and corrections. Skip items marked unanswered.',
@@ -252,11 +280,13 @@ export class OpenRouterGradingProvider implements GradingProvider {
       maxTokens: 4096,
       schema: {
         type: 'object',
-        properties: { topics: { type: 'array', items: TOPIC_SCHEMA } },
+        properties: { topics: { type: 'array', items: PLACEMENT_TOPIC_SCHEMA } },
         required: ['topics'],
       },
     });
-    return topics;
+    return placementTopicReasons(topics, evidence.corrections.flatMap(({ answered, questionNumber }) =>
+      answered && questionNumber !== undefined ? [questionNumber] : [],
+    ));
   }
 
   async gradeExercises(input: ExercisesSubmission, plan?: TopicPlanContext): Promise<ExercisesAssessment> {
