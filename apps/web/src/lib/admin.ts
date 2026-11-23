@@ -251,6 +251,7 @@ export interface AdminCatalogTopic extends TopicIdentity {
   study: TopicStudyContent | null;
   curriculumId: string | null;
   curriculumSlot: boolean;
+  variants?: Pick<AdminCatalogTopic, 'key' | 'title' | 'curriculumSlot'>[];
 }
 
 export function fetchAdminTopicCatalog(q: string, offset: number) {

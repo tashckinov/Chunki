@@ -133,19 +133,26 @@ export interface AdminTopicDetail extends TopicIdentity {
   study: TopicStudyContent | null;
   curriculumId: string | null;
   curriculumSlot: boolean;
+  variants?: Pick<AdminTopicDetail, 'key' | 'title' | 'curriculumSlot'>[];
 }
 
 export async function listTopicsForReview(search: string, offset: number) {
   const pageSize = 50;
   const { rows } = await pool.query<TopicIdentity & { topicNumber: number | null }>(
-    `SELECT p.key, p.title, p.category, p.level, c.topic_number AS "topicNumber"
-     FROM program_topics p LEFT JOIN curriculum_topics c ON c.id = p.curriculum_id
-     WHERE CASE WHEN $1 ~ '^[№#]? *[0-9]+$' THEN c.topic_number::text = ltrim($1, '№# ')
-       ELSE $1 = '' OR strpos(p.title_key, program_topic_name($1)) > 0
-         OR strpos(p.key, program_topic_name($1)) > 0
-         OR EXISTS (SELECT 1 FROM unnest(p.aliases) AS a WHERE strpos(a, program_topic_name($1)) > 0)
-     END
-     ORDER BY c.topic_number NULLS LAST, p.curriculum_slot DESC, p.title_key, p.key LIMIT $2 OFFSET $3`,
+    `WITH ranked AS (
+       SELECT p.key, p.title, p.category, p.level, p.title_key, c.topic_number AS "topicNumber",
+         row_number() OVER (topic_group ORDER BY p.curriculum_slot DESC, p.key) AS position,
+         bool_or(CASE WHEN $1 ~ '^[№#]? *[0-9]+$' THEN c.topic_number::text = ltrim($1, '№# ')
+           ELSE $1 = '' OR strpos(p.title_key, program_topic_name($1)) > 0
+             OR strpos(p.key, program_topic_name($1)) > 0
+             OR EXISTS (SELECT 1 FROM unnest(p.aliases) AS a WHERE strpos(a, program_topic_name($1)) > 0)
+         END) OVER topic_group AS matched
+       FROM program_topics p LEFT JOIN curriculum_topics c ON c.id = p.curriculum_id
+       WINDOW topic_group AS (PARTITION BY p.curriculum_id, CASE WHEN p.curriculum_id IS NULL THEN p.key END)
+     )
+     SELECT key, title, category, level, "topicNumber" FROM ranked
+     WHERE position = 1 AND matched
+     ORDER BY "topicNumber" NULLS LAST, title_key, key LIMIT $2 OFFSET $3`,
     [search, pageSize + 1, offset],
   );
   return { topics: rows.slice(0, pageSize), nextOffset: rows.length > pageSize ? offset + pageSize : null };
@@ -153,7 +160,15 @@ export async function listTopicsForReview(search: string, offset: number) {
 
 export async function getTopicForReview(key: string): Promise<AdminTopicDetail | null> {
   const { rows } = await pool.query<AdminTopicDetail>(
-    'SELECT key, title, category, level, aliases, study_content AS study, curriculum_id AS "curriculumId", curriculum_slot AS "curriculumSlot" FROM program_topics WHERE key = $1', [key],
+    `SELECT p.key, p.title, p.category, p.level, p.aliases, p.study_content AS study,
+       p.curriculum_id AS "curriculumId", p.curriculum_slot AS "curriculumSlot",
+       ARRAY(
+         SELECT jsonb_build_object('key', v.key, 'title', v.title, 'curriculumSlot', v.curriculum_slot)
+         FROM program_topics v WHERE v.curriculum_id = p.curriculum_id AND v.key <> p.key
+         ORDER BY v.curriculum_slot DESC, v.title_key, v.key
+       ) AS variants
+     FROM program_topics p WHERE p.key = $1`,
+    [key],
   );
   return rows[0] ?? null;
 }

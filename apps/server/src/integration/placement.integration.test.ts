@@ -261,6 +261,39 @@ it('shows unassigned curriculum topics by number and keeps the lesson key when e
   }
 });
 
+it('lists one topic per CEFR number and keeps linked lesson variants editable', async () => {
+  const suffix = randomUUID();
+  const before = await listTopicsForReview('№1', 0);
+  const canonical = before.topics[0];
+  const alternateKey = 'older-be-' + suffix;
+  const alias = 'older-alias-' + suffix;
+  const alternateTitle = canonical.title + ' · ' + suffix;
+  const original = { explanation: 'Старый урок.', keyPoints: [], contrastExamples: [], exampleChunks: [] };
+  const revised = { ...original, explanation: 'Обновлённый урок.' };
+
+  await pool.query(
+    `INSERT INTO program_topics (key, title, category, level, curriculum_id, aliases, study_content)
+     VALUES ($1, $2, 'Грамматика', 'A1', 'a1-verb-to-be', ARRAY[$3::text], $4)`,
+    [alternateKey, alternateTitle, alias, original],
+  );
+  try {
+    expect((await listTopicsForReview('', 0)).topics.filter(({ topicNumber }) => topicNumber === 1)).toEqual([canonical]);
+    expect((await listTopicsForReview('№1', 0)).topics).toEqual([canonical]);
+    expect((await listTopicsForReview(alias, 0)).topics).toEqual([canonical]);
+    expect((await getTopicForReview(canonical.key))?.variants).toContainEqual({
+      key: alternateKey, title: alternateTitle, curriculumSlot: false,
+    });
+    expect(await getTopicForReview(alternateKey)).toMatchObject({
+      study: original, variants: expect.arrayContaining([expect.objectContaining({ key: canonical.key, curriculumSlot: true })]),
+    });
+    expect(await updateTopicStudyForReview(alternateKey, revised)).toEqual(revised);
+    expect((await getTopicForReview(alternateKey))?.study).toEqual(revised);
+    expect((await getTopicForReview(canonical.key))?.study).not.toEqual(revised);
+  } finally {
+    await pool.query('DELETE FROM program_topics WHERE key = $1', [alternateKey]);
+  }
+});
+
 it('regenerates unstarted recommendations from the saved test and can reactivate the same assignment', async () => {
   const { rows: [learner] } = await pool.query<{ id: string }>('INSERT INTO users DEFAULT VALUES RETURNING id');
   const input: PlacementTestSubmission = { submissionId: randomUUID(), fromLevel: 'A2', toLevel: 'B1', purpose: [], mcqAnswers: {}, open9: '', open10: '', essay: '' };
