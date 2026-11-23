@@ -21,7 +21,7 @@ export async function listCurriculumTopics(target?: CEFRLevel): Promise<Curricul
 const PROGRAM_CATEGORY: Record<CurriculumTopic['category'], TopicCategory> = {
   Grammar: 'Грамматика', Vocabulary: 'Лексика', Functions: 'Использование языка',
   Discourse: 'Использование языка', Reading: 'Понимание', Writing: 'Письмо',
-  Listening: 'Понимание', Speaking: 'Использование языка',
+  Listening: 'Понимание', Speaking: 'Использование языка', Topics: 'Лексика',
 };
 
 export async function resolveTopics(
@@ -40,25 +40,28 @@ export async function resolveTopics(
     [candidates.map(({ key }) => key), levels, userId],
   );
   const available = new Map(rows.map((topic) => [topic.id, topic]));
-  const resolved: TopicSuggestion[] = [];
-  for (const { key, rationale } of candidates) {
+  const selected = candidates.flatMap(({ key, rationale }) => {
     const topic = available.get(key);
-    if (!topic) continue;
+    if (!topic) return [];
     available.delete(key);
-    const category = PROGRAM_CATEGORY[topic.category];
-    // The slot uses independent study storage. Existing authored lessons stay
-    // on their original records and never become input to catalog generation.
-    const { rows: [slot] } = await db.query<{ key: string }>(
-      `INSERT INTO program_topics (key, title, category, level, curriculum_id, curriculum_slot)
-       VALUES ('curriculum-' || gen_random_uuid(), $1, $2, $3, $4, true)
-       ON CONFLICT (curriculum_id) WHERE curriculum_slot
-       DO UPDATE SET curriculum_id = EXCLUDED.curriculum_id
-       RETURNING key`,
-      [topic.title, category, topic.level, topic.id],
-    );
-    resolved.push({ key: slot.key, title: topic.title, category, level: topic.level, rationale });
-  }
-  return resolved;
+    return [{ ...topic, category: PROGRAM_CATEGORY[topic.category], rationale }];
+  });
+  if (!selected.length) return [];
+
+  // Each slot shares only the generated curriculum material. Authored lessons
+  // linked to the same curriculum entry keep their original content.
+  const { rows: slots } = await db.query<{ key: string; curriculum_id: string }>(
+    `INSERT INTO program_topics (key, title, category, level, curriculum_id, curriculum_slot)
+     SELECT 'curriculum-' || gen_random_uuid(), title, category, level, id, true
+     FROM unnest($1::text[], $2::text[], $3::text[], $4::text[]) AS topics(id, title, category, level)
+     ON CONFLICT (curriculum_id) WHERE curriculum_slot
+     DO UPDATE SET curriculum_id = EXCLUDED.curriculum_id
+     RETURNING key, curriculum_id`,
+    [selected.map((topic) => topic.id), selected.map((topic) => topic.title),
+      selected.map((topic) => topic.category), selected.map((topic) => topic.level)],
+  );
+  const keys = new Map(slots.map((slot) => [slot.curriculum_id, slot.key]));
+  return selected.map(({ id, title, category, level, rationale }) => ({ key: keys.get(id)!, title, category, level, rationale }));
 }
 
 export async function createCurriculumTopic(topic: CurriculumTopic): Promise<CurriculumTopic | null> {

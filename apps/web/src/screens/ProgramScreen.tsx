@@ -175,7 +175,7 @@ export function ProgramScreen() {
         </div>}
         {topics.length === 0 && phase === 'ready' && <div className="text-body-secondary py-2">
           {s.placementOverview?.history.length && s.placementOverview.quota.allowed
-            ? 'В каталоге пока нет тем для этого диапазона уровней.'
+            ? 'По последнему тесту пока нет рекомендаций из каталога.'
             : 'Тем пока нет.'}
         </div>}
       </div>

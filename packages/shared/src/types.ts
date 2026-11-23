@@ -32,7 +32,7 @@ export interface TopicSuggestion extends TopicIdentity {
   rationale: string;
 }
 
-export const CURRICULUM_CATEGORIES = ['Grammar', 'Vocabulary', 'Functions', 'Discourse', 'Reading', 'Writing', 'Listening', 'Speaking'] as const;
+export const CURRICULUM_CATEGORIES = ['Grammar', 'Vocabulary', 'Functions', 'Discourse', 'Reading', 'Writing', 'Listening', 'Speaking', 'Topics'] as const;
 
 export interface CurriculumTopic {
   id: string;
@@ -168,7 +168,10 @@ export interface ExercisesGradeResult {
 }
 
 export type ProgramBuildEvidence = Pick<PlacementGradeResult, 'skills' | 'mcqScore' | 'belowLevel'> & {
-  corrections: Pick<PlacementReviewItem, 'prompt' | 'answer' | 'correction' | 'feedback' | 'grammar'>[];
+  corrections: Array<Pick<PlacementReviewItem, 'prompt' | 'correction' | 'feedback' | 'grammar'> & {
+    answer?: string;
+    answered: boolean;
+  }>;
 };
 
 export interface GradingProvider {
