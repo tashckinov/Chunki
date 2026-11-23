@@ -185,3 +185,10 @@
   color: var(--color-text-secondary);
   font-size: 0.9em;
 }
+
+.chatmd-icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.125em;
+}

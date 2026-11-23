@@ -121,6 +121,19 @@ const markdown = new MarkdownIt('commonmark', { html: false });
 markdown.disable(['link', 'image', 'autolink', 'reference']);
 markdown.block.ruler.before('fence', 'chatmd', directive, { alt: ['paragraph', 'blockquote'] });
 
+markdown.inline.ruler.before('link', 'chatmd_icon', (state, silent) => {
+  if (state.src[state.pos] !== '[') return false;
+  const match = /^\[icon:([a-z][a-z-]{0,31})\]/.exec(state.src.slice(state.pos, state.posMax));
+  if (!match) return false;
+  if (!silent) {
+    const token = state.push('chatmd_icon', '', 0);
+    token.content = match[0];
+    token.meta = { name: match[1] };
+  }
+  state.pos += match[0].length;
+  return true;
+});
+
 export const parseChatMD = (source: string) => markdown.parse(source, { chatMD: true });
 export const parseLessonBody = (source: string) => markdown.parse(source, {});
 export const parseInline = (source: string) => markdown.parseInline(source, {});
