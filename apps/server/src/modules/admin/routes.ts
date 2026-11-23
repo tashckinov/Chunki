@@ -4,8 +4,9 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyPluginAsync } from 'fastify';
 import multipart from '@fastify/multipart';
 import { z } from 'zod';
-import { CEFR_LEVELS, CURRICULUM_CATEGORIES, TOPIC_CATEGORIES } from '@app/shared';
-import { createCurriculumTopic, getTopicForReview, linkCurriculumTopic, listCurriculumTopics, listTopicsForReview, updateTopicForReview } from '../program/topicCatalog.js';
+import { CEFR_LEVELS, CURRICULUM_CATEGORIES, TOPIC_CATEGORIES, topicStudySchema } from '@app/shared';
+import { createCurriculumTopic, getTopicForReview, linkCurriculumTopic, listCurriculumTopics, listTopicsForReview, updateCurriculumTopic, updateTopicForReview, updateTopicStudyForReview } from '../program/topicCatalog.js';
+import { rebuildProgramFromLastTest } from '../program/service.js';
 import { listProductionModelStats } from '../aiLogs/repository.js';
 import { createTimecode, listTimecodes } from '../timecodes/service.js';
 import { requireAdmin } from '../auth/requireAuth.js';
@@ -163,6 +164,20 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       return { error: 'not_found' };
     }
     return { user: result.user };
+  });
+
+  app.post('/users/:id/regenerate-program', async (request, reply) => {
+    const params = idParamSchema.safeParse(request.params);
+    if (!params.success) return reply.code(400).send({ error: 'invalid_request' });
+    try {
+      const status = await rebuildProgramFromLastTest(params.data.id, 'replace_unstarted');
+      if (status === 'building') return reply.code(409).send({ error: 'program_build_in_progress' });
+      if (status === 'no_result') return reply.code(404).send({ error: 'no_placement_result' });
+      return { status };
+    } catch (err) {
+      request.log.error({ message: err instanceof Error ? err.message : String(err) }, 'Admin program regeneration failed');
+      return reply.code(502).send({ error: 'generation_failed' });
+    }
   });
 
   app.get('/collections', async () => ({ collections: await listCollectionsAdmin() }));
@@ -377,20 +392,34 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   });
 
   const curriculumIdSchema = z.string().min(1).max(72).regex(SLUG_REGEX);
+  const curriculumTopicSchema = z.object({
+    title: z.string().trim().min(1).max(160),
+    level: z.enum(CEFR_LEVELS),
+    category: z.enum(CURRICULUM_CATEGORIES),
+    objective: z.string().trim().min(1).max(800),
+    subtopics: z.array(z.string().trim().min(1).max(160)).max(12).default([]),
+  });
   app.get('/curriculum-topics', async () => ({ topics: await listCurriculumTopics() }));
   app.post('/curriculum-topics', async (request, reply) => {
-    const parsed = z.object({
-      id: curriculumIdSchema,
-      title: z.string().trim().min(1).max(160),
-      level: z.enum(CEFR_LEVELS),
-      category: z.enum(CURRICULUM_CATEGORIES),
-      objective: z.string().trim().min(1).max(800),
-      subtopics: z.array(z.string().trim().min(1).max(160)).max(12).default([]),
-    }).safeParse(request.body);
+    const parsed = curriculumTopicSchema.extend({ id: curriculumIdSchema }).safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'invalid_request' });
     const topic = await createCurriculumTopic(parsed.data);
     if (!topic) return reply.code(409).send({ error: 'duplicate_curriculum_topic' });
     return reply.code(201).send({ topic });
+  });
+  app.patch('/curriculum-topics/:id', async (request, reply) => {
+    const params = z.object({ id: curriculumIdSchema }).safeParse(request.params);
+    const body = curriculumTopicSchema.safeParse(request.body);
+    if (!params.success || !body.success) return reply.code(400).send({ error: 'invalid_request' });
+    try {
+      const topic = await updateCurriculumTopic({ id: params.data.id, ...body.data });
+      return topic ? { topic } : reply.code(404).send({ error: 'not_found' });
+    } catch (error) {
+      if ((error as { constraint?: string }).constraint === 'curriculum_topics_normalized_title') {
+        return reply.code(409).send({ error: 'duplicate_curriculum_topic' });
+      }
+      throw error;
+    }
   });
 
   app.get('/topic-catalog', async (request, reply) => {
@@ -418,6 +447,14 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(409).send({ error: 'curriculum_link_unavailable' });
     }
     return { ok: true };
+  });
+
+  app.patch('/topic-catalog/:key/study', async (request, reply) => {
+    const params = catalogTopicParams.safeParse(request.params);
+    const body = topicStudySchema.safeParse(request.body);
+    if (!params.success || !body.success) return reply.code(400).send({ error: 'invalid_request' });
+    const study = await updateTopicStudyForReview(params.data.key, body.data);
+    return study ? { study } : reply.code(404).send({ error: 'not_found' });
   });
 
   app.patch('/topic-catalog/:key', async (request, reply) => {

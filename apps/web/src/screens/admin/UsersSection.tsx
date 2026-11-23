@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { NavigationBar } from '../../components/ui/NavigationBar';
 import { IconButton } from '../../components/ui/IconButton';
+import { ApiError } from '../../lib/collections';
 import { Button } from '../../components/ui/Button';
-import { fetchAdminUsers, setUserPremiumUntil, resetDailyChecks, fetchAdminTariffs, type AdminUser, type AdminTariff } from '../../lib/admin';
+import { fetchAdminUsers, setUserPremiumUntil, resetDailyChecks, fetchAdminTariffs, regenerateUserProgram, type AdminUser, type AdminTariff } from '../../lib/admin';
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
@@ -31,6 +32,9 @@ export function UsersSection({ onOpenMenu }: { onOpenMenu: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [customDate, setCustomDate] = useState<Record<string, string>>({});
+
+  const [regenerating, setRegenerating] = useState<string | null>(null);
+  const [programFeedback, setProgramFeedback] = useState<{ id: string; message: string; error: boolean }>();
 
   useEffect(() => {
     fetchAdminUsers()
@@ -72,6 +76,22 @@ export function UsersSection({ onOpenMenu }: { onOpenMenu: () => void }) {
       setError('Не удалось сбросить попытки.');
     } finally {
       setBusyId(null);
+    }
+  }
+
+  async function regenerate(userId: string) {
+    setRegenerating(userId);
+    setProgramFeedback(undefined);
+    try {
+      await regenerateUserProgram(userId);
+      setProgramFeedback({ id: userId, message: 'Программа обновлена по последнему тесту.', error: false });
+    } catch (err) {
+      let message = 'Не удалось обновить программу. Попробуйте ещё раз.';
+      if (err instanceof ApiError && err.status === 404) message = 'У ученика ещё нет результата теста.';
+      if (err instanceof ApiError && err.status === 409) message = 'Тест или программа уже обрабатывается. Попробуйте чуть позже.';
+      setProgramFeedback({ id: userId, message, error: true });
+    } finally {
+      setRegenerating(null);
     }
   }
 
@@ -131,6 +151,16 @@ export function UsersSection({ onOpenMenu }: { onOpenMenu: () => void }) {
                   >
                     Задать дату
                   </Button>
+                </div>
+                <div className="border-t border-border pt-2">
+                  <Button size="sm" variant="secondary" disabled={regenerating !== null} onClick={() => void regenerate(u.id)}>
+                    {regenerating === u.id ? 'Подбираем темы…' : 'Пересобрать программу по последнему тесту'}
+                  </Button>
+                  {programFeedback?.id === u.id && (
+                    <p role={programFeedback.error ? 'alert' : 'status'} className={programFeedback.error ? 'mt-1 text-negative' : 'mt-1 text-positive'}>
+                      {programFeedback.message}
+                    </p>
+                  )}
                 </div>
               </div>
             ))}

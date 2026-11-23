@@ -138,15 +138,33 @@ export async function savePlacementTest(input: NewPlacementTest, topics: TopicRe
   });
 }
 
-export async function saveProgramBuild(userId: string, placementId: string, topics: TopicRecommendation[], levels: readonly CEFRLevel[], token: string) {
+// Only untouched recommendations from the shared curriculum can be replaced.
+const REPLACEABLE_PLACEMENT_TOPIC = `p.curriculum_slot AND u.source = 'placement' AND u.status = 'assigned'
+  AND u.study_content IS NULL AND NOT EXISTS (SELECT 1 FROM topic_attempts a WHERE a.user_topic_id = u.id)`;
+
+export async function saveProgramBuild(
+  userId: string, placementId: string, topics: TopicRecommendation[], levels: readonly CEFRLevel[], token: string,
+  replaceUnstarted = false,
+) {
   return withPlacementCheck(userId, token, async (client) => {
     const marked = await client.query(
       `UPDATE placement_tests SET program_built_at = now()
-       WHERE user_id = $1 AND id = $2 AND program_built_at IS NULL
+       WHERE user_id = $1 AND id = $2 AND (program_built_at IS NULL OR $3::boolean)
          AND id = (SELECT id FROM placement_tests WHERE user_id = $1 ORDER BY created_at DESC, id DESC LIMIT 1)`,
-      [userId, placementId],
+      [userId, placementId, replaceUnstarted],
     );
-    if (marked.rowCount) await insertNewUserTopics(userId, topics, levels, 'placement', client);
+    if (!marked.rowCount) return;
+    if (replaceUnstarted) {
+      const catalogIds = topics.map(({ key }) => key);
+      const unselected = `u.user_id = $1 AND u.withdrawn_at IS NULL AND p.key = u.catalog_key
+        AND p.curriculum_id <> ALL($2::text[]) AND ${REPLACEABLE_PLACEMENT_TOPIC}`;
+      // Serialize with the start of an attempt, then recheck under a fresh snapshot.
+      await client.query(`SELECT u.id FROM user_topics u, program_topics p WHERE ${unselected} FOR UPDATE OF u`, [userId, catalogIds]);
+      await client.query(
+        `UPDATE user_topics u SET withdrawn_at = now() FROM program_topics p WHERE ${unselected}`, [userId, catalogIds],
+      );
+    }
+    await insertNewUserTopics(userId, topics, levels, 'placement', client);
   });
 }
 
@@ -192,7 +210,9 @@ async function insertNewUserTopics(
   const { rows: inserted } = await db.query<{ catalog_key: string }>(
     `INSERT INTO user_topics (user_id, catalog_key, key, title, category, rationale, source)
      VALUES ${rows.placeholders}
-     ON CONFLICT (user_id, catalog_key) DO NOTHING
+     ON CONFLICT (user_id, catalog_key) DO UPDATE SET withdrawn_at = NULL, rationale = EXCLUDED.rationale,
+       source = EXCLUDED.source, updated_at = now()
+     WHERE user_topics.withdrawn_at IS NOT NULL
      RETURNING catalog_key`,
     rows.values,
   );
@@ -205,23 +225,24 @@ const USER_TOPIC_SELECT = `SELECT t.*, c.title AS catalog_title, c.category AS c
   FROM user_topics t JOIN program_topics c ON c.key = t.catalog_key
   LEFT JOIN curriculum_topics curriculum ON curriculum.id = c.curriculum_id`;
 
-export async function listAssignedTopicKeys(userId: string): Promise<string[]> {
+export async function listAssignedTopicKeys(userId: string, replaceUnstarted = false): Promise<string[]> {
   const { rows } = await pool.query<{ curriculum_id: string }>(
-    `SELECT DISTINCT c.curriculum_id FROM user_topics u JOIN program_topics c ON c.key = u.catalog_key
-     WHERE u.user_id = $1 AND c.curriculum_id IS NOT NULL`,
-    [userId],
+    `SELECT DISTINCT p.curriculum_id FROM user_topics u JOIN program_topics p ON p.key = u.catalog_key
+     WHERE u.user_id = $1 AND p.curriculum_id IS NOT NULL AND u.withdrawn_at IS NULL
+       AND (NOT $2::boolean OR NOT (${REPLACEABLE_PLACEMENT_TOPIC}))`,
+    [userId, replaceUnstarted],
   );
   return rows.map(({ curriculum_id }) => curriculum_id);
 }
 
 export async function findUserTopics(userId: string): Promise<UserTopicRow[]> {
-  const { rows } = await pool.query<UserTopicRow>(`${USER_TOPIC_SELECT} WHERE t.user_id = $1 ORDER BY t.created_at, t.id`, [userId]);
+  const { rows } = await pool.query<UserTopicRow>(`${USER_TOPIC_SELECT} WHERE t.user_id = $1 AND t.withdrawn_at IS NULL ORDER BY t.created_at, t.id`, [userId]);
   return rows;
 }
 
 export async function findUserTopic(userId: string, id: string): Promise<UserTopicRow | null> {
   const { rows } = await pool.query<UserTopicRow>(
-    `${USER_TOPIC_SELECT} WHERE t.user_id = $1
+    `${USER_TOPIC_SELECT} WHERE t.user_id = $1 AND t.withdrawn_at IS NULL
      AND t.id = COALESCE((SELECT topic_id FROM user_topic_redirects WHERE old_id = $2), $2)`,
     [userId, id],
   );
@@ -249,12 +270,14 @@ export interface TopicAttemptRow {
   graded_at: Date | null;
 }
 
-export async function createAttempt(userTopicId: string, kind: TopicAttemptKind, items: unknown): Promise<TopicAttemptRow> {
+export async function createAttempt(userTopicId: string, kind: TopicAttemptKind, items: unknown): Promise<TopicAttemptRow | null> {
   const { rows } = await pool.query<TopicAttemptRow>(
-    `INSERT INTO topic_attempts (user_topic_id, kind, items) VALUES ($1, $2, $3) RETURNING *`,
+    `INSERT INTO topic_attempts (user_topic_id, kind, items)
+     SELECT id, $2, $3 FROM user_topics WHERE id = $1 AND withdrawn_at IS NULL FOR UPDATE
+     RETURNING *`,
     [userTopicId, kind, JSON.stringify(items)],
   );
-  return rows[0];
+  return rows[0] ?? null;
 }
 
 export async function findAttempt(id: string): Promise<TopicAttemptRow | null> {
@@ -329,6 +352,7 @@ export async function listRecentActivityForAdmin(limit: number): Promise<AdminTo
      FROM user_topics t
      JOIN program_topics c ON c.key = t.catalog_key
      LEFT JOIN users u ON u.id = t.user_id
+     WHERE t.withdrawn_at IS NULL
      ORDER BY t.updated_at DESC
      LIMIT $1`,
     [limit],

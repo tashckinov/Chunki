@@ -67,8 +67,8 @@ function visibleTopics(topics: UserTopicRow[], current: CEFRLevel | null, target
   return topics.filter((topic) => !topic.level || (topic.status === 'mastered' ? upToTarget : levels).includes(topic.level)).map(toSummary);
 }
 
-async function topicPlan(userId: string, currentLevel: CEFRLevel | null, targetLevel: CEFRLevel): Promise<TopicPlanContext> {
-  const [catalog, assignedKeys] = await Promise.all([listCurriculumTopics(targetLevel), listAssignedTopicKeys(userId)]);
+async function topicPlan(userId: string, currentLevel: CEFRLevel | null, targetLevel: CEFRLevel, replaceUnstarted = false): Promise<TopicPlanContext> {
+  const [catalog, assignedKeys] = await Promise.all([listCurriculumTopics(targetLevel), listAssignedTopicKeys(userId, replaceUnstarted)]);
   return { catalog, assignedKeys, currentLevel, targetLevel };
 }
 
@@ -192,18 +192,23 @@ export async function submitPlacementTest(userId: string, input: PlacementTestSu
   }
 }
 
-export async function rebuildProgramFromLastTest(userId: string): Promise<'ready' | 'building' | 'not_allowed'> {
+export async function rebuildProgramFromLastTest(
+  userId: string, mode: 'supplement' | 'replace_unstarted' = 'supplement',
+): Promise<'ready' | 'building' | 'not_allowed' | 'no_result'> {
+  const replaceUnstarted = mode === 'replace_unstarted';
+  if (replaceUnstarted && !(await listPlacementTests(userId)).length) return 'no_result';
   const token = await reservePlacementCheck(userId);
   if (!token) return 'building';
   try {
     const [latest] = await listPlacementTests(userId);
-    if (!latest || latest.program_built_at) return 'ready';
-    if (!(await resolvePlacementAccess(userId)).allowed) return 'not_allowed';
+    if (!latest) return replaceUnstarted ? 'no_result' : 'ready';
+    if (!replaceUnstarted && latest.program_built_at) return 'ready';
+    if (!replaceUnstarted && !(await resolvePlacementAccess(userId)).allowed) return 'not_allowed';
 
     const saved = await getPlacementResult(userId, latest.id);
-    if (!saved) return 'ready';
+    if (!saved) return replaceUnstarted ? 'no_result' : 'ready';
     const levels = topicLevels(latest.overall_level, latest.to_level);
-    const plan = await topicPlan(userId, latest.overall_level, latest.to_level);
+    const plan = await topicPlan(userId, latest.overall_level, latest.to_level, replaceUnstarted);
     plan.catalog = plan.catalog.filter(({ level }) => levels.includes(level));
     const { skills, mcqScore, belowLevel, review = [] } = saved.result;
     const corrections = review.map(({ key, prompt, answer, correction, feedback, grammar }) => ({
@@ -215,7 +220,12 @@ export async function rebuildProgramFromLastTest(userId: string): Promise<'ready
       userId, chunkId: null, provider: provider.name, model: provider.model ?? null, request: { placementId: latest.id },
     }, () => provider.recommendProgramTopics({ skills, mcqScore, belowLevel, corrections }, plan)) : [];
 
-    await saveProgramBuild(userId, latest.id, topics, levels, token);
+    const eligible = new Set(plan.catalog.map(({ id }) => id));
+    const recommendations = topics.filter(({ key }) => eligible.has(key));
+    if (replaceUnstarted && topics.length && !recommendations.length) {
+      throw new Error('No recommendations match the placement curriculum.');
+    }
+    await saveProgramBuild(userId, latest.id, recommendations, levels, token, replaceUnstarted);
     return 'ready';
   } finally {
     await releasePlacementCheck(userId, token).catch(() => {});
@@ -271,6 +281,7 @@ export async function startTopicAttempt(userId: string, userTopicId: string): Pr
   const items = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: provider.model ?? null, request: row.curriculum ?? topic }, () => provider.generateTopicExercises(topic, row.curriculum ?? undefined));
 
   const attempt = await createAttempt(row.id, attemptKind, items);
+  if (!attempt) return { kind: 'not_found' };
   return { kind: 'ok', attemptId: attempt.id, attemptKind, items: redact(items) };
 }
 

@@ -12,7 +12,7 @@ export function topicLevels(current: CEFRLevel, target: CEFRLevel): readonly CEF
 export async function listCurriculumTopics(target?: CEFRLevel): Promise<CurriculumTopic[]> {
   const { rows } = await pool.query<CurriculumTopic>(
     `SELECT id, title, level, category, objective, subtopics, source, topic_number FROM curriculum_topics
-     WHERE $1::text[] IS NULL OR level = ANY($1) ORDER BY level, category, title, id`,
+     WHERE $1::text[] IS NULL OR level = ANY($1) ORDER BY topic_number`,
     [target ? topicLevels('A1', target) : null],
   );
   return rows;
@@ -35,7 +35,7 @@ export async function resolveTopics(
     `SELECT c.* FROM curriculum_topics c WHERE c.id = ANY($1::text[]) AND c.level = ANY($2::text[])
        AND NOT EXISTS (
          SELECT 1 FROM user_topics u JOIN program_topics p ON p.key = u.catalog_key
-         WHERE u.user_id = $3 AND p.curriculum_id = c.id
+         WHERE u.user_id = $3 AND u.withdrawn_at IS NULL AND p.curriculum_id = c.id
        )`,
     [candidates.map(({ key }) => key), levels, userId],
   );
@@ -66,9 +66,30 @@ export async function resolveTopics(
 
 export async function createCurriculumTopic(topic: CurriculumTopic): Promise<CurriculumTopic | null> {
   const { rows } = await pool.query<CurriculumTopic>(
-    `INSERT INTO curriculum_topics (id, title, level, category, objective, subtopics)
-     VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING RETURNING id, title, level, category, objective, subtopics, source, topic_number`,
-    [topic.id, topic.title, topic.level, topic.category, topic.objective, topic.subtopics],
+    `WITH curriculum AS (
+       INSERT INTO curriculum_topics (id, title, level, category, objective, subtopics)
+       VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING RETURNING *
+     ), slot AS (
+       INSERT INTO program_topics (key, title, category, level, curriculum_id, curriculum_slot)
+       SELECT 'curriculum-' || gen_random_uuid(), title, $7, level, id, true FROM curriculum
+     )
+     SELECT * FROM curriculum`,
+    [topic.id, topic.title, topic.level, topic.category, topic.objective, topic.subtopics, PROGRAM_CATEGORY[topic.category]],
+  );
+  return rows[0] ?? null;
+}
+
+export async function updateCurriculumTopic(topic: CurriculumTopic): Promise<CurriculumTopic | null> {
+  const { rows } = await pool.query<CurriculumTopic>(
+    `WITH curriculum AS (
+       UPDATE curriculum_topics SET title = $2, level = $3, category = $4, objective = $5, subtopics = $6
+       WHERE id = $1 RETURNING *
+     ), slot AS (
+       UPDATE program_topics p SET title = c.title, category = $7, level = c.level
+       FROM curriculum c WHERE p.curriculum_slot AND p.curriculum_id = c.id
+     )
+     SELECT * FROM curriculum`,
+    [topic.id, topic.title, topic.level, topic.category, topic.objective, topic.subtopics, PROGRAM_CATEGORY[topic.category]],
   );
   return rows[0] ?? null;
 }
@@ -114,10 +135,12 @@ export async function listTopicsForReview(search: string, offset: number) {
   const { rows } = await pool.query<TopicIdentity & { topicNumber: number | null }>(
     `SELECT p.key, p.title, p.category, p.level, c.topic_number AS "topicNumber"
      FROM program_topics p LEFT JOIN curriculum_topics c ON c.id = p.curriculum_id
-     WHERE $1 = '' OR strpos(title_key, program_topic_name($1)) > 0
-       OR strpos(p.key, program_topic_name($1)) > 0
-       OR EXISTS (SELECT 1 FROM unnest(aliases) AS a WHERE strpos(a, program_topic_name($1)) > 0)
-     ORDER BY title_key, p.key LIMIT $2 OFFSET $3`,
+     WHERE CASE WHEN $1 ~ '^[№#]? *[0-9]+$' THEN c.topic_number::text = ltrim($1, '№# ')
+       ELSE $1 = '' OR strpos(p.title_key, program_topic_name($1)) > 0
+         OR strpos(p.key, program_topic_name($1)) > 0
+         OR EXISTS (SELECT 1 FROM unnest(p.aliases) AS a WHERE strpos(a, program_topic_name($1)) > 0)
+     END
+     ORDER BY c.topic_number NULLS LAST, p.curriculum_slot DESC, p.title_key, p.key LIMIT $2 OFFSET $3`,
     [search, pageSize + 1, offset],
   );
   return { topics: rows.slice(0, pageSize), nextOffset: rows.length > pageSize ? offset + pageSize : null };
@@ -128,6 +151,14 @@ export async function getTopicForReview(key: string): Promise<AdminTopicDetail |
     'SELECT key, title, category, level, aliases, study_content AS study, curriculum_id AS "curriculumId", curriculum_slot AS "curriculumSlot" FROM program_topics WHERE key = $1', [key],
   );
   return rows[0] ?? null;
+}
+
+export async function updateTopicStudyForReview(key: string, study: TopicStudyContent): Promise<TopicStudyContent | null> {
+  const { rows } = await pool.query<{ study: TopicStudyContent }>(
+    'UPDATE program_topics SET study_content = $2::jsonb WHERE key = $1 RETURNING study_content AS study',
+    [key, JSON.stringify(study)],
+  );
+  return rows[0]?.study ?? null;
 }
 
 export async function updateTopicForReview(topic: TopicIdentity) {
