@@ -1,6 +1,7 @@
 import { useAppStore } from '../store/appStore';
 import { daysUntil } from '../lib/schedule';
 import { TopicStudyMaterial } from '../components/chatmd/TopicStudyMaterial';
+import { TopicStudyRating } from './TopicStudyRating';
 import { TopicExtraStudy } from './TopicExtraStudy';
 import { NavigationBar } from '../components/ui/NavigationBar';
 import { Button } from '../components/ui/Button';
@@ -44,6 +45,7 @@ export function TopicScreen() {
         )}
 
         {study && <TopicStudyMaterial key={topic.id} study={study} />}
+        {study && <TopicStudyRating key={topic.id + '-rating'} topicId={topic.id} />}
 
         {topic.status === 'mastered' && <div className="text-body-secondary border-l-2 border-accent pl-4">✓ Тема подтверждена.</div>}
         {waitingForReconfirm && topic.nextReviewAt && (

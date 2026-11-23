@@ -1,3 +1,4 @@
+import { rateTopicStudy } from './topicStudyRating.js';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
 import { z } from 'zod';
@@ -71,6 +72,24 @@ export const programRoutes: FastifyPluginAsync = async (app) => {
       return { error: 'not_allowed', upsellTariffs: result.upsellTariffs };
     }
     return { study: result.study };
+  });
+
+  app.route({
+    method: ['GET', 'PATCH'],
+    url: '/topics/:id/study-rating',
+    preHandler: requireAuthenticatedSession,
+    handler: async (request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      const params = topicIdParamSchema.safeParse(request.params);
+      if (!params.success) return reply.code(400).send({ error: 'invalid_request' });
+      const body = z.object({ rating: z.enum(['clear', 'unclear']) }).optional().safeParse(request.body);
+      if (request.method === 'PATCH' && (!body.success || !body.data)) {
+        return reply.code(400).send({ error: 'invalid_request' });
+      }
+      const rating = await rateTopicStudy(request.session!.userId, params.data.id,
+        request.method === 'PATCH' && body.success ? body.data?.rating : undefined);
+      return rating === undefined ? reply.code(404).send({ error: 'not_found' }) : { rating };
+    },
   });
 
   // Apply route-specific limits to requests that can trigger generation.

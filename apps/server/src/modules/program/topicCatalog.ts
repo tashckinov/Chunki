@@ -128,17 +128,24 @@ export async function saveCatalogStudy(topic: TopicIdentity, study: TopicStudyCo
   return rows[0]?.study_content ?? study;
 }
 
+const ratingCounts = `SELECT count(*) FILTER (WHERE rating = 'clear')::int AS clear,
+  count(*) FILTER (WHERE rating = 'unclear')::int AS unclear
+  FROM topic_study_ratings WHERE topic_key = p.key`;
+
+type RatingCounts = { clear: number; unclear: number };
+
 export interface AdminTopicDetail extends TopicIdentity {
   aliases: string[];
   study: TopicStudyContent | null;
   curriculumId: string | null;
   curriculumSlot: boolean;
+  ratings?: RatingCounts;
   variants?: Pick<AdminTopicDetail, 'key' | 'title' | 'curriculumSlot'>[];
 }
 
 export async function listTopicsForReview(search: string, offset: number) {
   const pageSize = 50;
-  const { rows } = await pool.query<TopicIdentity & { topicNumber: number | null }>(
+  const { rows } = await pool.query<TopicIdentity & RatingCounts & { topicNumber: number | null }>(
     `WITH ranked AS (
        SELECT p.key, p.title, p.category, p.level, p.title_key, c.topic_number AS "topicNumber",
          row_number() OVER (topic_group ORDER BY p.curriculum_slot DESC, p.key) AS position,
@@ -150,7 +157,8 @@ export async function listTopicsForReview(search: string, offset: number) {
        FROM program_topics p LEFT JOIN curriculum_topics c ON c.id = p.curriculum_id
        WINDOW topic_group AS (PARTITION BY p.curriculum_id, CASE WHEN p.curriculum_id IS NULL THEN p.key END)
      )
-     SELECT key, title, category, level, "topicNumber" FROM ranked
+     SELECT p.key, title, category, level, "topicNumber", stats.* FROM ranked p
+     CROSS JOIN LATERAL (${ratingCounts}) stats
      WHERE position = 1 AND matched
      ORDER BY "topicNumber" NULLS LAST, title_key, key LIMIT $2 OFFSET $3`,
     [search, pageSize + 1, offset],
@@ -166,7 +174,8 @@ export async function getTopicForReview(key: string): Promise<AdminTopicDetail |
          SELECT jsonb_build_object('key', v.key, 'title', v.title, 'curriculumSlot', v.curriculum_slot)
          FROM program_topics v WHERE v.curriculum_id = p.curriculum_id AND v.key <> p.key
          ORDER BY v.curriculum_slot DESC, v.title_key, v.key
-       ) AS variants
+       ) AS variants,
+       (SELECT row_to_json(stats) FROM (${ratingCounts}) stats) AS ratings
      FROM program_topics p WHERE p.key = $1`,
     [key],
   );
