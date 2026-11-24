@@ -158,6 +158,7 @@ interface AppState {
   programTopics: UserTopicSummary[];
   grammarView: 'overview' | 'level' | 'topics';
   activeTopicId: string | null;
+  learningTopic: { userId: string; topicId: string } | null;
   /** Study material cache, keyed by user_topic id — generated once server-side and cached there too, so caching here just avoids a redundant fetch. */
   topicStudyByTopic: Record<string, TopicStudy>;
   /** Set when the last openTopic() fetch failed — cleared on the next attempt. Drives TopicScreen's retry state. */
@@ -370,6 +371,7 @@ export const useAppStore = create<AppState>()(
       programTopics: [],
       grammarView: 'overview',
       activeTopicId: null,
+      learningTopic: null,
       topicStudyByTopic: {},
       topicStudyError: null,
       currentAttempt: null,
@@ -442,7 +444,7 @@ export const useAppStore = create<AppState>()(
       }),
       signIn: () => startGoogleLogin(),
       signOut: async () => {
-        set({ user: null, grading: false, checkingContext: null, screen: 'cardslib', profileReturnScreen: 'cardslib', checkoutFromProfile: false, studyGoal: null, studyGoalChecked: false, isPremium: false, premiumUntil: null, placementResult: null, placementResultOwner: null, placementOverview: null, programTopics: [], collections: [], collectionDetails: {}, collectionsStatus: 'idle', collectionsError: null });
+        set({ user: null, learningTopic: null, grading: false, checkingContext: null, screen: 'cardslib', profileReturnScreen: 'cardslib', checkoutFromProfile: false, studyGoal: null, studyGoalChecked: false, isPremium: false, premiumUntil: null, placementResult: null, placementResultOwner: null, placementOverview: null, programTopics: [], collections: [], collectionDetails: {}, collectionsStatus: 'idle', collectionsError: null });
         await logout().catch(() => {});
       },
       checkAuth: async () => {
@@ -708,7 +710,12 @@ export const useAppStore = create<AppState>()(
         set({ placementResult: result, placementResultOwner: userId, placementResultGoal: summary.goal, placementResultSkipSchedule: true, screen: 'result' });
       },
       openTopic: async (userTopicId) => {
-        set({ activeTopicId: userTopicId, screen: 'topic', topicStudyError: null });
+        const { user, programTopics } = get();
+        const learning = user && programTopics.some(({ id, status }) => id === userTopicId && status === 'assigned');
+        set({
+          activeTopicId: userTopicId, screen: 'topic', topicStudyError: null,
+          ...(learning ? { learningTopic: { userId: user.id, topicId: userTopicId } } : {}),
+        });
         if (get().topicStudyByTopic[userTopicId]) return;
         try {
           const study = await fetchTopicStudy(userTopicId);

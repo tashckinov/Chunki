@@ -1,3 +1,4 @@
+import { CEFR_LEVELS } from '@app/shared';
 import type { CEFRLevel, ExerciseItem, ExercisesGradeResult, PlacementGradeResult, PlacementOverview, PlacementQuota, PlacementResultSummary, PlacementTestSubmission, TopicStudyContent, TopicIdentity, TopicPlanContext, TopicLevelStudy, TopicStudyLevel } from '@app/shared';
 import { findGrammarTest } from '../grammarTests/repository.js';
 import { getGradingProvider } from '../../grading/index.js';
@@ -62,10 +63,18 @@ function toTopicIdentity(row: UserTopicRow): TopicIdentity {
 }
 
 function visibleTopics(topics: UserTopicRow[], current: CEFRLevel | null, target: CEFRLevel | null): UserTopicSummary[] {
-  if (!current || !target) return topics.map(toSummary);
-  const levels = topicLevels(current, target);
-  const upToTarget = topicLevels('A1', target);
-  return topics.filter((topic) => !topic.level || (topic.status === 'mastered' ? upToTarget : levels).includes(topic.level)).map(toSummary);
+  const levels = current && target ? topicLevels(current, target) : null;
+  const upToTarget = target ? topicLevels('A1', target) : null;
+  const visible = topics.filter((topic) => !levels || !topic.level ||
+    (topic.status === 'mastered' ? upToTarget ?? levels : levels).includes(topic.level));
+  const history = visible.filter(({ status }) => status !== 'assigned');
+  const queue = visible.filter(({ status }) => status === 'assigned');
+  const currentTopic = queue.reduce<UserTopicRow | undefined>((latest, topic) =>
+    topic.last_attempt_at && (!latest?.last_attempt_at || topic.last_attempt_at > latest.last_attempt_at) ? topic : latest, undefined);
+  const difficulty = (topic: UserTopicRow) => topic.level ? CEFR_LEVELS.indexOf(topic.level) : CEFR_LEVELS.length;
+
+  queue.sort((a, b) => difficulty(a) - difficulty(b));
+  return [...history, ...(currentTopic ? [currentTopic] : []), ...queue.filter((topic) => topic !== currentTopic)].map(toSummary);
 }
 
 async function topicPlan(userId: string, currentLevel: CEFRLevel | null, targetLevel: CEFRLevel, replaceUnstarted = false): Promise<TopicPlanContext> {

@@ -24,6 +24,7 @@ export interface UserTopicRow {
   passed_once_at: Date | null;
   next_review_at: Date | null;
   mastered_at: Date | null;
+  last_attempt_at?: Date | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -236,7 +237,13 @@ export async function listAssignedTopicKeys(userId: string, replaceUnstarted = f
 }
 
 export async function findUserTopics(userId: string): Promise<UserTopicRow[]> {
-  const { rows } = await pool.query<UserTopicRow>(`${USER_TOPIC_SELECT} WHERE t.user_id = $1 AND t.withdrawn_at IS NULL ORDER BY t.created_at, t.id`, [userId]);
+  const { rows } = await pool.query<UserTopicRow>(`SELECT topics.*, attempts.last_attempt_at FROM (${USER_TOPIC_SELECT}
+       WHERE t.user_id = $1 AND t.withdrawn_at IS NULL) topics
+     LEFT JOIN LATERAL (
+       SELECT max(a.created_at) AS last_attempt_at FROM topic_attempts a
+       WHERE a.user_topic_id = topics.id AND topics.status = 'assigned'
+     ) attempts ON true
+     ORDER BY topics.created_at, topics.id`, [userId]);
   return rows;
 }
 
