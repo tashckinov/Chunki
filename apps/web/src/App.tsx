@@ -35,7 +35,7 @@ import { ADMIN_SECTIONS } from './screens/admin/sections';
 const SIDEBAR_ITEMS: { label: string; icon: IconName }[] = [
   { label: 'Карточки', icon: 'Stars' },
   { label: 'Комиксы', icon: 'Characters' },
-  { label: 'Грамматика', icon: 'CheckBox' },
+  { label: 'Обучение', icon: 'CheckBox' },
 ];
 
 // Mobile tab bar carries the brand mark on the flashcards tab instead of a
@@ -44,7 +44,7 @@ const SIDEBAR_ITEMS: { label: string; icon: IconName }[] = [
 const MOBILE_NAV_ITEMS: NavItem[] = [
   { label: 'Chunki', logo: true },
   { label: 'Комиксы', icon: 'Characters' },
-  { label: 'Грамматика', icon: 'CheckBox' },
+  { label: 'Обучение', icon: 'CheckBox' },
   { label: 'Профиль', account: true },
 ];
 
