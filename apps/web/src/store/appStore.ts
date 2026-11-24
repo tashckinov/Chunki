@@ -156,6 +156,7 @@ interface AppState {
   time: string;
 
   programTopics: UserTopicSummary[];
+  grammarView: 'overview' | 'level' | 'topics';
   activeTopicId: string | null;
   /** Study material cache, keyed by user_topic id — generated once server-side and cached there too, so caching here just avoids a redundant fetch. */
   topicStudyByTopic: Record<string, TopicStudy>;
@@ -367,6 +368,7 @@ export const useAppStore = create<AppState>()(
       time: '19:00',
 
       programTopics: [],
+      grammarView: 'overview',
       activeTopicId: null,
       topicStudyByTopic: {},
       topicStudyError: null,
@@ -425,6 +427,7 @@ export const useAppStore = create<AppState>()(
         if (screen === 'profile' && s.screen !== 'profile' && !(s.screen === 'checkout' && s.checkoutFromProfile)) {
           return { screen, profileReturnScreen: s.screen };
         }
+        if (screen === 'program') return { screen, grammarView: 'overview' };
         if (screen === 'checkout' && s.screen !== 'checkout') return { screen, checkoutFromProfile: s.screen === 'profile' };
         return { screen };
       }),
@@ -434,6 +437,7 @@ export const useAppStore = create<AppState>()(
         if ((s.screen === 'test' && s.testFromProgram) || (s.screen === 'result' && s.placementResultSkipSchedule)) {
           return { screen: 'program' };
         }
+        if (s.screen === 'program' && s.grammarView !== 'overview') return { grammarView: 'overview' };
         return { screen: BACK_MAP[s.screen] ?? 'cardslib' };
       }),
       signIn: () => startGoogleLogin(),
@@ -499,7 +503,7 @@ export const useAppStore = create<AppState>()(
         const userId = state.user?.id;
         if (!userId || state.testStarting) return;
         if (!restart && state.testDraftOwner === userId && state.testVariant) {
-          set({ screen: 'test', gradingError: null, testStartError: null });
+          set({ screen: 'test', testFromProgram: state.screen === 'program' || state.testFromProgram, gradingError: null, testStartError: null });
           return;
         }
         set({ testStarting: true, testStartError: null });
@@ -586,7 +590,7 @@ export const useAppStore = create<AppState>()(
       skipPaywall: () => set({ screen: 'program' }),
 
       goHome: () => set({ screen: 'cardslib' }),
-      goProgram: () => set({ screen: 'program' }),
+      goProgram: () => set({ screen: 'program', grammarView: 'overview' }),
       goCardsLib: () => set({ screen: 'cardslib' }),
       refreshStudyGoal: async () => {
         const user = get().user;
@@ -1127,6 +1131,7 @@ export const useAppStore = create<AppState>()(
           user,
           authChecked,
           authError,
+          grammarView,
           passkeyBusy,
           passkeyError,
           collections,
@@ -1155,6 +1160,7 @@ export const useAppStore = create<AppState>()(
         void user;
         void authChecked;
         void authError;
+        void grammarView;
         void passkeyBusy;
         void passkeyError;
         void collections;

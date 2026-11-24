@@ -1,10 +1,18 @@
 import { rebuildProgram } from '../lib/program';
 import { useEffect, useState } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { BookOpen, CalendarClock, Check, ChevronLeft, ChevronRight, Clock, List, MessageCircle } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
-import { daysUntil } from '../lib/schedule';
 import { Button } from '../components/ui/Button';
-import { NavigationBar } from '../components/ui/NavigationBar';
+import type { UserTopicSummary } from '../lib/program';
+
+const SHORT_DATE = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' });
+const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+const PLURAL = new Intl.PluralRules('ru');
+
+function topicCount(count: number) {
+  const form = PLURAL.select(count);
+  return count + (form === 'one' ? ' тема' : form === 'few' ? ' темы' : ' тем');
+}
 
 const RESULT_DATE = new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium' });
 const RESET_DATE = new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeZone: 'UTC' });
@@ -17,7 +25,6 @@ function GrammarLevelCard() {
   const remaining = quota?.limit == null ? null : Math.max(0, quota.limit - quota.used);
   const unavailable = quota?.allowed === false || quota?.limit === 0;
   const [openingId, setOpeningId] = useState<string | null>(null);
-  const [showHistory, setShowHistory] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function openResult(id: string) {
@@ -34,16 +41,19 @@ function GrammarLevelCard() {
 
   return (
     <div className="mb-6 flex flex-col gap-3">
-      <section aria-label="Текущий уровень" className="rounded-[var(--radius-lg)] bg-accent-subtle p-4">
-        <h2 className="text-meta">Текущий уровень</h2>
-        <div className="mt-1 text-2xl font-semibold">{latest?.level ?? 'Ещё не определён'}</div>
-        {quota && (
-          <div className="mt-2 text-body-secondary">
-            {unavailable ? 'Тест уровня недоступен на вашем тарифе.'
-              : remaining === null ? 'Тесты уровня без месячного лимита.'
-              : `Осталось проверок в этом месяце: ${remaining} из ${quota.limit}. Обновится ${RESET_DATE.format(new Date(quota.resetsAt))}.`}
-          </div>
-        )}
+      <section aria-label="Текущий уровень" className="border-b border-border pb-5">
+        <div className="py-5 text-center">
+          <div className="text-4xl font-semibold text-accent">{latest?.level ?? 'Ещё не определён'}</div>
+          <p className="text-meta mt-1">Текущий уровень английского</p>
+        </div>
+        <div className="grid grid-cols-6 gap-1.5">
+          {LEVELS.map((level, index) => (
+            <div key={level} className="text-center text-meta">
+              <div className={'mb-1 h-1 rounded-full ' + (latest && index <= LEVELS.indexOf(latest.level.replace('+', '')) ? 'bg-accent' : 'bg-border')} />
+              {level}
+            </div>
+          ))}
+        </div>
         <Button
           className="mt-4 w-full"
           disabled={!user || testStarting || !!openingId || (!hasDraft && (unavailable || remaining === 0))}
@@ -51,25 +61,29 @@ function GrammarLevelCard() {
         >
           {testStarting ? 'Загружаем тест…' : hasDraft ? 'Продолжить тест' : latest ? 'Перепройти тест' : 'Пройти тест'}
         </Button>
+        {quota && (
+          <div className="mt-3 text-center text-meta">
+            {unavailable ? 'Тест уровня недоступен на вашем тарифе.'
+              : remaining === null ? 'Тесты уровня без месячного лимита.'
+              : `Осталось проверок в этом месяце: ${remaining} из ${quota.limit}. Обновится ${RESET_DATE.format(new Date(quota.resetsAt))}.`}
+          </div>
+        )}
         {testStartError && <p role="alert" className="mt-2 text-negative">{testStartError}</p>}
       </section>
       {history.length > 0 && (
-        <section aria-label="Результаты тестов" className="rounded-[var(--radius-md)] border border-border px-4">
-          <h2 className="text-section-title pt-3 pb-1">Результаты тестов</h2>
-          {(showHistory ? history : history.slice(0, 1)).map(({ id, level, completedAt }) => (
+        <section aria-label="Результаты тестов" className="pt-3">
+          <h2 className="text-section-title pt-3 pb-1">История тестирования</h2>
+          {history.map(({ id, level, completedAt }) => (
             <button key={id} type="button" disabled={!!openingId || testStarting} onClick={() => void openResult(id)}
               className="flex w-full min-h-11 items-center gap-2 border-b border-border py-2 text-left last:border-b-0 disabled:opacity-60">
               <span className="font-semibold">{level}</span>
-              <span className="flex-1 text-body-secondary">{RESULT_DATE.format(new Date(completedAt))}</span>
-              <span className="text-sm text-accent">{openingId === id ? 'Загружаем…' : 'Смотреть результат'}</span>
+              <span className="flex-1">
+                <span className="block text-sm font-medium">{RESULT_DATE.format(new Date(completedAt))}</span>
+                <span className="block text-meta">{openingId === id ? 'Загружаем…' : 'Смотреть результат'}</span>
+              </span>
               <ChevronRight size={16} aria-hidden="true" />
             </button>
           ))}
-          {history.length > 1 && (
-            <Button variant="ghost" size="sm" onClick={() => setShowHistory((value) => !value)} className="mb-2">
-              {showHistory ? 'Свернуть историю' : 'Предыдущие результаты'}
-            </Button>
-          )}
           {error && <p role="alert" className="pb-3 text-negative">{error}</p>}
         </section>
       )}
@@ -122,62 +136,145 @@ export function ProgramScreen() {
     void prepare();
     return () => { active = false; };
   }, [retry, userId]);
-  const masteredCount = topics.filter((t) => t.status === 'mastered').length;
+  const latest = s.placementOverview?.history[0];
+  const goal = latest?.goal ?? s.to;
+  const mastered = topics.filter((topic) => topic.status === 'mastered').length;
+  const pending = topics.filter((topic) => topic.status === 'passed_once');
+  const now = Date.now();
+  const due = pending.find((topic) => topic.nextReviewAt && Date.parse(topic.nextReviewAt) <= now);
+  const today = due ?? topics.find((topic) => topic.status === 'assigned');
+  const reviewGroups = new Map<string, UserTopicSummary[]>();
+  const scheduled = pending.flatMap((topic) => {
+    const time = topic.nextReviewAt ? Date.parse(topic.nextReviewAt) : NaN;
+    return time > now ? [{ topic, time }] : [];
+  }).sort((a, b) => a.time - b.time);
+  for (const { topic, time } of scheduled) {
+    const date = SHORT_DATE.format(time);
+    reviewGroups.set(date, [...(reviewGroups.get(date) ?? []), topic]);
+  }
+  const view = s.grammarView;
+  const selectView = (grammarView: typeof view) => useAppStore.setState({ grammarView });
+
+  const notice = phase === 'error' ? (
+    <div className="space-y-2">
+      <p role="alert" className="text-negative">Не удалось загрузить программу.</p>
+      <Button size="sm" variant="secondary" onClick={() => setRetry((value) => value + 1)}>Повторить</Button>
+    </div>
+  ) : userId && (phase === 'building' || phase === 'loading') ? (
+    <p role="status" className="text-meta">{phase === 'building' ? 'Собираем программу по последнему тесту…' : 'Загружаем программу…'}</p>
+  ) : null;
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col">
-      <NavigationBar size="large" title="Грамматика" />
-      <div className="scroll-clean flex-1 min-h-0 px-5 pb-6 flex flex-col">
-        <GrammarLevelCard />
-        <h2 className="text-section-title mb-1">Программа до {s.placementOverview?.history[0]?.goal ?? s.to}</h2>
-        <div className="text-body-secondary mb-2">
-          {topics.length} {topics.length === 1 ? 'тема' : 'тем'} · {masteredCount} подтверждено
-        </div>
-        {topics.map((topic) => {
-          const due = topic.status === 'passed_once' && topic.nextReviewAt && new Date(topic.nextReviewAt).getTime() <= Date.now();
-          const waiting = topic.status === 'passed_once' && !due;
-          const dotBg = topic.status === 'mastered' ? 'var(--color-accent)' : due ? 'var(--color-warning-subtle)' : 'var(--color-surface-subtle)';
-          const dotFg = topic.status === 'mastered' ? 'var(--color-on-accent)' : 'var(--color-text-secondary)';
-
-          let meta: string = topic.category;
-          if (topic.status === 'assigned') meta = `${topic.category} · Изучить`;
-          else if (waiting && topic.nextReviewAt) meta = `${topic.category} · Проверка через ${daysUntil(topic.nextReviewAt)} дн.`;
-          else if (due) meta = `${topic.category} · Готово к переподтверждению`;
-          else if (topic.status === 'mastered') meta = `${topic.category} · Подтверждено`;
-
-          return (
-            <button
-              key={topic.id}
-              type="button"
-              onClick={() => void s.openTopic(topic.id)}
-              className="pressable flex gap-3.5 py-3.5 border-b border-border last:border-b-0 text-left"
-            >
-              <div className="w-7 h-7 flex-none rounded-full flex items-center justify-center text-[12px] font-medium mt-0.5" style={{ background: dotBg, color: dotFg }}>
-                {topic.status === 'mastered' ? '✓' : '·'}
-              </div>
-              <div className="flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="text-[15.5px] leading-[22px]">{topic.title}</div>
-                  {topic.topicNumber != null && <span className="text-meta">CEFR №{topic.topicNumber}</span>}
-                  {topic.level && <span className="text-meta">{topic.level}</span>}
-                  {topic.source === 'discovered' && <span className="text-[11px] font-medium text-accent rounded-full bg-accent-subtle px-2 py-0.5">найдено ИИ</span>}
+    <div key={view} className="scroll-clean flex-1 min-h-0">
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-5 pb-6 pt-4">
+        {view !== 'overview' && (
+          <button type="button" className="flex min-h-9 items-center gap-1 self-start text-sm text-accent"
+            onClick={() => selectView('overview')}><ChevronLeft size={16} aria-hidden="true" /> Грамматика</button>
+        )}
+        <header className="flex items-center justify-between gap-3">
+          <h1 className="text-page-title">{view === 'overview' ? 'Грамматика' : view === 'level' ? 'Мой уровень' : 'Моя программа'}</h1>
+          {view === 'overview' && (
+            <Button size="sm" variant="secondary" className="bg-accent-subtle text-accent" onClick={() => selectView('level')}>
+              {latest?.level ?? 'Мой уровень'} <ChevronRight size={14} aria-hidden="true" />
+            </Button>
+          )}
+        </header>
+        {view === 'level' && <GrammarLevelCard />}
+        {view === 'overview' && (
+          <>
+            {latest && (
+              <section className="space-y-1.5 border-b border-border pb-5">
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="text-sm font-semibold">На пути к {goal}</h2>
+                  <span className="text-meta">{mastered} из {topics.length}</span>
                 </div>
-                <div className="text-meta mt-0.5">{meta}</div>
+                <progress aria-label="Подтверждено тем" max={Math.max(topics.length, 1)} value={mastered}
+                  className="block h-1.5 w-full overflow-hidden rounded-full bg-surface-subtle [&::-webkit-progress-bar]:bg-surface-subtle [&::-webkit-progress-value]:bg-accent [&::-moz-progress-bar]:bg-accent" />
+                {pending.length > 0 && <p className="text-meta">Ожидают проверки · {topicCount(pending.length)}</p>}
+              </section>
+            )}
+            <section className="space-y-3">
+              <div>
+                <h2 className="text-section-title">На сегодня</h2>
+                <p className="text-meta">{SHORT_DATE.format(new Date())}{today && (due ? ' · Около 5–10 минут' : ' · Около 15 минут')}</p>
               </div>
+              {today ? (
+                <div className="space-y-3 rounded-2xl border border-border p-3">
+                  <div className="flex items-center gap-3">
+                    <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-accent-subtle text-accent">
+                      {due ? <Clock size={17} aria-hidden="true" /> : <BookOpen size={17} aria-hidden="true" />}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold">{due ? 'Повторение' : 'Новая тема'}</p>
+                      <p className="text-meta wrap-anywhere">{today.title}</p>
+                    </div>
+                  </div>
+                  {!due && (
+                    <div className="flex items-center gap-3 border-t border-border pt-3">
+                      <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-accent-subtle text-accent"><MessageCircle size={17} aria-hidden="true" /></span>
+                      <div><p className="text-sm font-semibold">Практика</p><p className="text-meta">Упражнения по новой теме</p></div>
+                    </div>
+                  )}
+                  <Button className="w-full" onClick={() => void s.openTopic(today.id)}>{due ? 'Начать повторение' : 'Начать обучение'}</Button>
+                </div>
+              ) : !notice && (
+                latest ? <p className="text-body-secondary">На сегодня тем к изучению и повторению нет.</p>
+                  : <Button onClick={() => selectView('level')}>Определить уровень</Button>
+              )}
+              {notice}
+            </section>
+            {reviewGroups.size > 0 && (
+              <section className="border-b border-border pb-3">
+                <h2 className="text-section-title">Ближайшие повторения</h2>
+                {[...reviewGroups].slice(0, 3).map(([date, group]) => (
+                  <div key={date} className="flex items-center gap-2 py-3">
+                    <CalendarClock size={16} className="shrink-0 text-text-secondary" aria-hidden="true" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium">{date}</p>
+                      <p className="text-meta wrap-anywhere">{group.map(({ title }) => title).join(' · ')}</p>
+                    </div>
+                    <span className="shrink-0 text-meta">{topicCount(group.length)}</span>
+                  </div>
+                ))}
+              </section>
+            )}
+            <button type="button" onClick={() => selectView('topics')}
+              className="pressable flex w-full items-center gap-3 border-b border-border py-4 text-left">
+              <List size={18} className="shrink-0 text-accent" aria-hidden="true" />
+              <span className="flex-1"><span className="block font-medium">Моя программа</span><span className="block text-meta">{topicCount(topics.length)} · прогресс по темам</span></span>
+              <ChevronRight size={16} aria-hidden="true" />
             </button>
-          );
-        })}
-        {topics.length === 0 && phase === 'loading' && <p role="status" className="text-body-secondary py-2">Загружаем программу…</p>}
-        {phase === 'building' && <p role="status" className="text-body-secondary py-2">{topics.length ? 'Дополняем программу по последнему тесту…' : 'Собираем программу по последнему тесту…'}</p>}
-        {phase === 'error' && <div className="py-2">
-          <p role="alert" className="text-negative mb-2">Не удалось загрузить программу. Результаты теста сохранены.</p>
-          <Button size="sm" variant="secondary" onClick={() => setRetry((value) => value + 1)}>Повторить</Button>
-        </div>}
-        {topics.length === 0 && phase === 'ready' && <div className="text-body-secondary py-2">
-          {s.placementOverview?.history.length && s.placementOverview.quota.allowed
-            ? 'По последнему тесту пока нет рекомендаций из каталога.'
-            : 'Тем пока нет.'}
-        </div>}
+          </>
+        )}
+        {view === 'topics' && (
+          <section>
+            <p className="text-meta">{latest && latest.level + ' → ' + goal + ' · '}{mastered} из {topics.length} подтверждено</p>
+            {topics.map((topic) => {
+              const isToday = topic.id === today?.id;
+              const review = topic.nextReviewAt ? new Date(topic.nextReviewAt) : null;
+              const status = topic.status === 'mastered' ? 'Подтверждено' :
+                topic.status === 'passed_once' ? review && review.getTime() <= now ? 'Можно повторить'
+                  : review ? 'Проверка ' + SHORT_DATE.format(review) : 'Ожидает проверки'
+                  : isToday ? 'Сегодня' : 'Предстоит изучить';
+              return (
+                <button key={topic.id} type="button" onClick={() => void s.openTopic(topic.id)}
+                  className="pressable flex w-full items-center gap-3 border-b border-border py-4 text-left">
+                  <span className="grid size-5 shrink-0 place-items-center text-accent">
+                    {topic.status === 'mastered' ? <Check size={16} aria-hidden="true" /> :
+                      topic.status === 'passed_once' ? <Clock size={16} aria-hidden="true" /> :
+                      isToday ? <BookOpen size={16} aria-hidden="true" /> : <span className="size-2.5 rounded-full bg-accent" />}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium wrap-anywhere">{topic.title}</span>
+                    <span className="block text-meta">{[topic.level, status, topic.topicNumber != null && 'CEFR №' + topic.topicNumber].filter(Boolean).join(' · ')}</span>
+                  </span>
+                  <ChevronRight size={16} className="shrink-0 text-text-secondary" aria-hidden="true" />
+                </button>
+              );
+            })}
+            {notice ?? (topics.length === 0 && <p className="py-3 text-meta">Тем пока нет.</p>)}
+          </section>
+        )}
       </div>
     </div>
   );
