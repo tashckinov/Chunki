@@ -6,6 +6,9 @@ import { withAiCallLogging } from '../aiLogs/service.js';
 import { resolveEffectiveTariff, resolvePlacementAccess, listUpsellTariffs, type PublicTariff } from '../subscriptionTariffs/service.js';
 import {
   createAttempt,
+  claimTopicAttemptGeneration,
+  releaseTopicAttemptGeneration,
+  findOpenTopicAttempt,
   countPlacementTests,
   findPlacementResult,
   listPlacementTests,
@@ -286,6 +289,7 @@ function redact(items: ExerciseItem[]): RedactedExerciseItem[] {
 
 export type StartAttemptResult =
   | { kind: 'not_found' }
+  | { kind: 'generation_in_progress' }
   | { kind: 'already_mastered' }
   | { kind: 'not_due' }
   | { kind: 'not_allowed'; upsellTariffs: PublicTariff[] }
@@ -304,13 +308,27 @@ export async function startTopicAttempt(userId: string, userTopicId: string): Pr
   const upsellTariffs = await checkProgramAllowed(userId);
   if (upsellTariffs) return { kind: 'not_allowed', upsellTariffs };
 
-  const provider = getGradingProvider();
-  const topic = { ...toTopicIdentity(row), rationale: row.rationale };
-  const items = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: provider.model ?? null, request: row.curriculum ?? topic }, () => provider.generateTopicExercises(topic, row.curriculum ?? undefined));
+  const resume = (attempt: { id: string; items: unknown }): StartAttemptResult => ({
+    kind: 'ok', attemptId: attempt.id, attemptKind, items: redact(attempt.items as ExerciseItem[]),
+  });
+  const existing = await findOpenTopicAttempt(row.id, attemptKind);
+  if (existing) return resume(existing);
 
-  const attempt = await createAttempt(row.id, attemptKind, items);
-  if (!attempt) return { kind: 'not_found' };
-  return { kind: 'ok', attemptId: attempt.id, attemptKind, items: redact(items) };
+  const token = await claimTopicAttemptGeneration(row.id);
+  if (!token) return { kind: 'generation_in_progress' };
+  try {
+    const alreadyCreated = await findOpenTopicAttempt(row.id, attemptKind);
+    if (alreadyCreated) return resume(alreadyCreated);
+    const provider = getGradingProvider();
+    const topic = { ...toTopicIdentity(row), rationale: row.rationale };
+    const items = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: provider.model ?? null, request: row.curriculum ?? topic }, () => provider.generateTopicExercises(topic, row.curriculum ?? undefined));
+
+    const attempt = await createAttempt(row.id, attemptKind, items, token);
+    if (!attempt) return { kind: 'not_found' };
+    return resume(attempt);
+  } finally {
+    await releaseTopicAttemptGeneration(row.id, token).catch(() => {});
+  }
 }
 
 export type SubmitAttemptResult =

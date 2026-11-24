@@ -130,6 +130,8 @@ it('assigns only fixed curriculum IDs, preserves legacy progress, and generates 
     const assigned = first.topics.find(({ curriculumId }) => curriculumId === extension.id)!;
     const attempt = await startTopicAttempt(learner.id, assigned.id);
     if (attempt.kind !== 'ok') throw new Error(attempt.kind);
+    expect(await startTopicAttempt(learner.id, assigned.id)).toEqual(attempt);
+    expect(exercises).toHaveBeenCalledTimes(1);
     expect(exercises.mock.lastCall?.[1]).toMatchObject({ id: extension.id, objective: extension.objective, subtopics: extension.subtopics });
     await expect(submitTopicAttempt(learner.id, assigned.id, attempt.attemptId, {})).resolves.toMatchObject({ kind: 'ok', newTopicsAdded: 0 });
     expect(await submitPlacementTest(learner.id, input)).toMatchObject({ kind: 'ok', result: { topics: [] } });

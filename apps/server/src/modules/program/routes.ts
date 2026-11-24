@@ -194,7 +194,7 @@ export const programRoutes: FastifyPluginAsync = async (app) => {
         reply.code(404);
         return { error: 'not_found' };
       }
-      if (result.kind === 'already_mastered' || result.kind === 'not_due') {
+      if (result.kind === 'already_mastered' || result.kind === 'not_due' || result.kind === 'generation_in_progress') {
         reply.code(409);
         return { error: result.kind };
       }

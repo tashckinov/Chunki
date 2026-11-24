@@ -13,7 +13,7 @@ export function ExercisesScreen() {
     return (
       <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-4 p-8 text-center">
         <div className="text-[19px] font-medium">Готовим упражнения…</div>
-        {s.gradingError && <div className="text-body-secondary">{s.gradingError}</div>}
+        <Button size="sm" variant="secondary" onClick={s.back}>К теме</Button>
       </div>
     );
   }

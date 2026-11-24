@@ -277,12 +277,38 @@ export interface TopicAttemptRow {
   graded_at: Date | null;
 }
 
-export async function createAttempt(userTopicId: string, kind: TopicAttemptKind, items: unknown): Promise<TopicAttemptRow | null> {
+export async function findOpenTopicAttempt(id: string, kind: TopicAttemptKind): Promise<TopicAttemptRow | null> {
+  const { rows: [attempt] } = await pool.query<TopicAttemptRow>(
+    'SELECT * FROM topic_attempts WHERE user_topic_id = $1 AND kind = $2 ORDER BY created_at DESC, id DESC LIMIT 1',
+    [id, kind],
+  );
+  return attempt && !attempt.graded_at ? attempt : null;
+}
+
+export async function claimTopicAttemptGeneration(id: string): Promise<string | undefined> {
+  const { rows: [claim] } = await pool.query<{ attempt_generation_token: string }>(
+    `UPDATE user_topics SET attempt_generation_token = gen_random_uuid(), attempt_generation_expires_at = now() + interval '90 seconds'
+     WHERE id = $1 AND withdrawn_at IS NULL
+       AND (attempt_generation_expires_at IS NULL OR attempt_generation_expires_at <= now())
+     RETURNING attempt_generation_token`, [id],
+  );
+  return claim?.attempt_generation_token;
+}
+
+export async function releaseTopicAttemptGeneration(id: string, token: string) {
+  await pool.query(
+    'UPDATE user_topics SET attempt_generation_token = NULL, attempt_generation_expires_at = NULL WHERE id = $1 AND attempt_generation_token = $2',
+    [id, token],
+  );
+}
+
+export async function createAttempt(userTopicId: string, kind: TopicAttemptKind, items: unknown, token: string): Promise<TopicAttemptRow | null> {
   const { rows } = await pool.query<TopicAttemptRow>(
     `INSERT INTO topic_attempts (user_topic_id, kind, items)
-     SELECT id, $2, $3 FROM user_topics WHERE id = $1 AND withdrawn_at IS NULL FOR UPDATE
+     SELECT id, $2, $3 FROM user_topics WHERE id = $1 AND withdrawn_at IS NULL AND attempt_generation_token = $4
+       AND status = CASE WHEN $2 = 'initial' THEN 'assigned' ELSE 'passed_once' END FOR UPDATE
      RETURNING *`,
-    [userTopicId, kind, JSON.stringify(items)],
+    [userTopicId, kind, JSON.stringify(items), token],
   );
   return rows[0] ?? null;
 }
