@@ -1,6 +1,5 @@
-import { CEFR_LEVELS } from '@app/shared';
-import { rebuildProgram } from '../lib/program';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useLearningProgram } from '../lib/useLearningProgram';
 import { BookOpen, CalendarClock, Check, ChevronLeft, ChevronRight, Clock, List, MessageCircle } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { Button } from '../components/ui/Button';
@@ -95,64 +94,8 @@ function GrammarLevelCard() {
 
 export function ProgramScreen() {
   const s = useAppStore();
-  const current = s.learningTopic?.userId === s.user?.id
-    ? s.programTopics.find(({ id, status }) => id === s.learningTopic?.topicId && status === 'assigned')
-    : undefined;
-  const difficulty = ({ level }: UserTopicSummary) => level ? CEFR_LEVELS.indexOf(level) : CEFR_LEVELS.length;
-  const topics = current
-    ? [...s.programTopics.filter(({ status }) => status !== 'assigned'), current,
-      ...s.programTopics.filter((topic) => topic.status === 'assigned' && topic.id !== current.id)
-        .sort((a, b) => difficulty(a) - difficulty(b))]
-    : s.programTopics;
-  const userId = s.user?.id;
-  const [phase, setPhase] = useState<'loading' | 'building' | 'ready' | 'error'>('loading');
-  const [retry, setRetry] = useState(0);
-
-  useEffect(() => {
-    if (!userId) return;
-    let active = true;
-    const { loadProgram } = useAppStore.getState();
-
-    async function prepare() {
-      setPhase('loading');
-      try {
-        const current = await loadProgram();
-        if (!active) return;
-        if (!current) throw new Error('Program unavailable');
-        if (current.needsProgramBuild) {
-          setPhase('building');
-          const { status } = await rebuildProgram();
-          if (!active) return;
-          if (status === 'building') {
-            // Another tab or a previous visit already holds the build lease.
-            for (let attempt = 0; attempt < 30 && active; attempt += 1) {
-              await new Promise((resolve) => window.setTimeout(resolve, 1500));
-              if (!active) return;
-              const updated = await loadProgram();
-              if (updated && !updated.needsProgramBuild) break;
-              if (attempt === 29) throw new Error('Program build pending');
-            }
-          } else {
-            const updated = await loadProgram();
-            if (!updated || updated.needsProgramBuild) throw new Error('Program build pending');
-          }
-        }
-        if (active) setPhase('ready');
-      } catch {
-        if (active) setPhase('error');
-      }
-    }
-
-    void prepare();
-    return () => { active = false; };
-  }, [retry, userId]);
-  const latest = s.placementOverview?.history[0];
-  const goal = latest?.goal ?? s.to;
-  const mastered = topics.filter((topic) => topic.status === 'mastered').length;
-  const pending = topics.filter((topic) => topic.status === 'passed_once');
-  const now = Date.now();
-  const due = pending.find((topic) => topic.nextReviewAt && Date.parse(topic.nextReviewAt) <= now);
-  const today = due ?? topics.find((topic) => topic.status === 'assigned');
+  const { topics, userId, phase, retryLoading, latest, goal, mastered, pending, now, due: [due], next } = useLearningProgram();
+  const today = due ?? next;
   const reviewGroups = new Map<string, UserTopicSummary[]>();
   const scheduled = pending.flatMap((topic) => {
     const time = topic.nextReviewAt ? Date.parse(topic.nextReviewAt) : NaN;
@@ -168,7 +111,7 @@ export function ProgramScreen() {
   const notice = phase === 'error' ? (
     <div className="space-y-2">
       <p role="alert" className="text-negative">Не удалось загрузить программу.</p>
-      <Button size="sm" variant="secondary" onClick={() => setRetry((value) => value + 1)}>Повторить</Button>
+      <Button size="sm" variant="secondary" onClick={retryLoading}>Повторить</Button>
     </div>
   ) : userId && (phase === 'building' || phase === 'loading') ? (
     <p role="status" className="text-meta">{phase === 'building' ? 'Собираем программу по последнему тесту…' : 'Загружаем программу…'}</p>

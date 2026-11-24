@@ -28,21 +28,21 @@ import { DeckDoneScreen } from './screens/DeckDoneScreen';
 import { RecognitionCheckScreen } from './screens/RecognitionCheckScreen';
 import { ProductionCheckScreen } from './screens/ProductionCheckScreen';
 import { DialogueScreen } from './screens/DialogueScreen';
+import { HomeScreen } from './screens/HomeScreen';
 import { GuestGalleryScreen } from './screens/GuestGalleryScreen';
 import { AdminScreen } from './screens/admin/AdminScreen';
 import { ADMIN_SECTIONS } from './screens/admin/sections';
 
 const SIDEBAR_ITEMS: { label: string; icon: IconName }[] = [
+  { label: 'Главная', icon: 'Today' },
   { label: 'Карточки', icon: 'Stars' },
   { label: 'Комиксы', icon: 'Characters' },
   { label: 'Обучение', icon: 'CheckBox' },
 ];
 
-// Mobile tab bar carries the brand mark on the flashcards tab instead of a
-// separate logo header (there's no room for both on a small screen), and
-// gets its own "Профиль" tab instead of a row at the top of Home.
 const MOBILE_NAV_ITEMS: NavItem[] = [
-  { label: 'Chunki', logo: true },
+  { label: 'Главная', icon: 'Today' },
+  { label: 'Карточки', icon: 'Stars' },
   { label: 'Комиксы', icon: 'Characters' },
   { label: 'Обучение', icon: 'CheckBox' },
   { label: 'Профиль', account: true },
@@ -69,6 +69,8 @@ function CurrentScreen({ onOpenAdminMenu }: { onOpenAdminMenu: () => void }) {
     </>
   );
   switch (screen) {
+    case 'home':
+      return <HomeScreen />;
     case 'profile':
       return <ProfileScreen />;
     case 'goals':
@@ -174,7 +176,7 @@ function SidebarNav({ value, onChange, onClose, compact = false, onToggle }: {
         </button>
       )}
       <div className="shrink-0 border-t border-border pt-3">
-        <AccountRow active={value === 3} compact={compact} onClick={() => { onChange(3); onClose?.(); }} />
+        <AccountRow active={value === 4} compact={compact} onClick={() => { onChange(4); onClose?.(); }} />
       </div>
     </nav>
   );
@@ -204,14 +206,14 @@ function SidebarGesture({ onSwipe }: { onSwipe: () => void }) {
   />;
 }
 
-function navTabForScreen(screen: Screen, checkoutFromProfile: boolean): number {
+function navTabForScreen(screen: Screen, checkoutFromProfile: boolean, homeTopic: boolean, browsingComic: boolean): number {
   switch (screen) {
     case 'comics':
-      return 1;
+      return 2;
     case 'profile':
-      return 3;
+      return 4;
     case 'checkout':
-      return checkoutFromProfile ? 3 : 2;
+      return checkoutFromProfile ? 4 : 3;
     case 'goals':
     case 'test':
     case 'checking':
@@ -219,16 +221,19 @@ function navTabForScreen(screen: Screen, checkoutFromProfile: boolean): number {
     case 'schedule':
     case 'paywall':
     case 'program':
+      return 3;
     case 'topic':
     case 'exercises':
     case 'topicresult':
-      return 2;
+      return homeTopic ? 0 : 3;
+    case 'dialogue':
+      return browsingComic ? 2 : 1;
     case 'cardslib':
     case 'deck':
     case 'deckdone':
     case 'recognitioncheck':
     case 'productioncheck':
-    case 'dialogue':
+      return 1;
     default:
       return 0;
   }
@@ -239,7 +244,7 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const drawerGesture = useRef<{ id: number; x: number; y: number } | null>(null);
   const screen = useAppStore((s) => s.screen);
-  const navTab = useAppStore((s) => navTabForScreen(s.screen, s.checkoutFromProfile));
+  const navTab = useAppStore((s) => navTabForScreen(s.screen, s.checkoutFromProfile, s.topicReturnScreen === 'home', s.dialogueContinuation === 'browse'));
   const setNavTab = useAppStore((s) => s.setNavTab);
   const authChecked = useAppStore((s) => s.authChecked);
   const user = useAppStore((s) => s.user);
@@ -258,7 +263,7 @@ export default function App() {
     && (studyGoal?.introCompleted || completedIntroOwner === user.id);
 
   useEffect(() => {
-    consumeAuthToken();
+    if (consumeAuthToken()) useAppStore.getState().goHome();
     if (consumeAuthErrorFlag()) useAppStore.setState({ authError: true });
     useAppStore.getState().checkAuth();
   }, []);

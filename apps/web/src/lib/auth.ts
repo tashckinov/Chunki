@@ -45,13 +45,14 @@ export function applyAuthToken(token: string): void {
 }
 
 /** Picks up the token the backend left in the URL fragment after Google login. */
-export function consumeAuthToken(): void {
+export function consumeAuthToken(): boolean {
   const match = /(?:^#|&)auth_token=([^&]+)/.exec(window.location.hash);
-  if (!match) return;
+  if (!match) return false;
   setStoredToken(decodeURIComponent(match[1]));
   const url = new URL(window.location.href);
   url.hash = '';
   window.history.replaceState({}, '', url.pathname + url.search);
+  return true;
 }
 
 export interface AuthUser {
