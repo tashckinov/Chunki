@@ -15,6 +15,8 @@ export function ProgramCatalogPanel() {
   const [curriculumError, setCurriculumError] = useState(false);
   const [link, setLink] = useState('');
   const [linkSaved, setLinkSaved] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestionsOffset, setSuggestionsOffset] = useState(0);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState({ q: '', offset: 0 });
   const [data, setData] = useState<Awaited<ReturnType<typeof fetchAdminTopicCatalog>>>();
@@ -138,7 +140,7 @@ export function ProgramCatalogPanel() {
     <section ref={detail} className="flex flex-col gap-4">
       <Button variant="ghost" size="sm" className="self-start" disabled={saving} onClick={() => {
         setKey(undefined); setTopic(undefined); setError(''); setSaved(false);
-      }}>К каталогу</Button>
+      }}>{showSuggestions ? 'К пожеланиям' : 'К каталогу'}</Button>
       {error && <p role="alert" className="text-negative">{error}</p>}
       {!topic && !error && <p className="text-body-secondary">Загрузка темы…</p>}
       {topic && (
@@ -237,9 +239,17 @@ export function ProgramCatalogPanel() {
     </section>
   );
 
+  if (showSuggestions) return (
+    <section className="flex flex-col gap-3">
+      <Button variant="ghost" size="sm" className="self-start" onClick={() => setShowSuggestions(false)}>К каталогу</Button>
+      <TopicSuggestions onOpenTopic={openTopic} initialOffset={suggestionsOffset} onPageChange={setSuggestionsOffset} />
+    </section>
+  );
+
   const nextOffset = data?.nextOffset;
   return (
     <section className="flex flex-col gap-3">
+      <Button variant="secondary" size="sm" className="self-start" onClick={() => setShowSuggestions(true)}>Все пожелания</Button>
       <details className="rounded-xl border border-border px-4 py-3">
         <summary className="cursor-pointer font-medium">Добавить учебную цель CEFR</summary>
         <CurriculumEditor onSaved={onCurriculumSaved} />

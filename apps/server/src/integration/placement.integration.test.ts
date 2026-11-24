@@ -152,6 +152,13 @@ it('assigns only fixed curriculum IDs, preserves legacy progress, and generates 
     expect(await listTopicStudySuggestions(shared.key, 0)).toMatchObject({
       suggestions: [{ userId: learner.id, message: 'Добавьте пример с вопросом' }], nextOffset: null,
     });
+    await pool.query("UPDATE topic_study_suggestions SET updated_at = now() - interval '1 second' WHERE topic_key = $1", [shared.key]);
+    await topicStudySuggestion(learner.id, legacy.id, 'Поясните исключения');
+    const inbox = await listTopicStudySuggestions(null, 0);
+    expect(inbox.suggestions.slice(0, 2)).toMatchObject([
+      { topicKey: legacyKey, message: 'Поясните исключения' },
+      { topicKey: shared.key, title: extension.title, topicNumber: shared.topicNumber, message: 'Добавьте пример с вопросом' },
+    ]);
     expect(await rateTopicStudy(other.id, assigned.id, 'clear')).toBeUndefined();
     expect(await rateTopicStudy(learner.id, assigned.id)).toBeNull();
     await rateTopicStudy(learner.id, assigned.id, 'clear');
