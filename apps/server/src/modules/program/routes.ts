@@ -1,3 +1,4 @@
+import { topicStudySuggestion } from './topicStudySuggestions.js';
 import { rateTopicStudy } from './topicStudyRating.js';
 import type { FastifyPluginAsync } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
@@ -89,6 +90,22 @@ export const programRoutes: FastifyPluginAsync = async (app) => {
       const rating = await rateTopicStudy(request.session!.userId, params.data.id,
         request.method === 'PATCH' && body.success ? body.data?.rating : undefined);
       return rating === undefined ? reply.code(404).send({ error: 'not_found' }) : { rating };
+    },
+  });
+
+  app.route({
+    method: ['GET', 'PATCH'],
+    url: '/topics/:id/study-suggestion',
+    preHandler: requireAuthenticatedSession,
+    handler: async (request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      const params = topicIdParamSchema.safeParse(request.params);
+      if (!params.success) return reply.code(400).send({ error: 'invalid_request' });
+      const body = z.object({ message: z.string().trim().min(1).max(2000) }).safeParse(request.body);
+      if (request.method === 'PATCH' && !body.success) return reply.code(400).send({ error: 'invalid_request' });
+      const message = await topicStudySuggestion(request.session!.userId, params.data.id,
+        request.method === 'PATCH' && body.success ? body.data.message : undefined);
+      return message === undefined ? reply.code(404).send({ error: 'not_found' }) : { message };
     },
   });
 

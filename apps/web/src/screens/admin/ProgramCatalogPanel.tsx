@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { CEFR_LEVELS, TOPIC_CATEGORIES, type TopicIdentity, type CurriculumTopic } from '@app/shared';
 import { Button } from '../../components/ui/Button';
 import { CurriculumEditor } from './CurriculumEditor';
+import { TopicSuggestions } from './TopicSuggestions';
 import { TopicStudyEditor } from './TopicStudyEditor';
 import { ApiError } from '../../lib/collections';
 import { fetchAdminCatalogTopic, fetchAdminTopicCatalog, fetchCurriculumTopics, saveAdminCatalogTopic, setTopicCurriculumLink, setAdminTopicVerification, type AdminCatalogTopic } from '../../lib/admin';
@@ -174,6 +175,7 @@ export function ProgramCatalogPanel() {
               </ul>
             </details>
           )}
+          <TopicSuggestions key={topic.key} topicKey={topic.key} />
           {curriculumLoading ? <p role="status" className="text-body-secondary">Загружаем учебную цель…</p> : (
             <TopicStudyEditor key={topic.key} topic={topic} curriculum={linked} study={topic.study} onStudySaved={(study) => {
               setTopic((current) => current?.key === topic.key ? {

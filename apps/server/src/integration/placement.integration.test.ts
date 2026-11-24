@@ -1,3 +1,4 @@
+import { listTopicStudySuggestions, topicStudySuggestion } from '../modules/program/topicStudySuggestions.js';
 import { rateTopicStudy } from '../modules/program/topicStudyRating.js';
 import { randomUUID } from 'node:crypto';
 import { MockGradingProvider, type PlacementTestSubmission, type CurriculumTopic } from '@app/shared';
@@ -142,6 +143,15 @@ it('assigns only fixed curriculum IDs, preserves legacy progress, and generates 
     expect(shared.key).toBe(assigned.key);
     expect(shared.topicNumber).toBe(assigned.topicNumber);
     expect(await getTopicStudy(learner.id, assigned.id)).toEqual(await getTopicStudy(other.id, shared.id));
+    expect(await topicStudySuggestion(learner.id, assigned.id)).toBeNull();
+    expect(await topicStudySuggestion(other.id, assigned.id, 'Чужая тема')).toBeUndefined();
+    await topicStudySuggestion(learner.id, assigned.id, 'Добавьте пример');
+    await topicStudySuggestion(learner.id, assigned.id, 'Добавьте пример с вопросом');
+    expect(await topicStudySuggestion(other.id, shared.id)).toBeNull();
+    expect(await topicStudySuggestion(learner.id, assigned.id)).toBe('Добавьте пример с вопросом');
+    expect(await listTopicStudySuggestions(shared.key, 0)).toMatchObject({
+      suggestions: [{ userId: learner.id, message: 'Добавьте пример с вопросом' }], nextOffset: null,
+    });
     expect(await rateTopicStudy(other.id, assigned.id, 'clear')).toBeUndefined();
     expect(await rateTopicStudy(learner.id, assigned.id)).toBeNull();
     await rateTopicStudy(learner.id, assigned.id, 'clear');
