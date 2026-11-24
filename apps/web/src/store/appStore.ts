@@ -55,6 +55,7 @@ export type Screen =
   | 'topic'
   | 'exercises'
   | 'topicresult'
+  | 'home'
   | 'cardslib'
   | 'comics'
   | 'deck'
@@ -159,6 +160,7 @@ interface AppState {
   grammarView: 'overview' | 'level' | 'topics';
   activeTopicId: string | null;
   topicMode: 'study' | 'read';
+  topicReturnScreen: 'program' | 'home';
   learningTopic: { userId: string; topicId: string } | null;
   /** Study material cache, keyed by user_topic id — generated once server-side and cached there too, so caching here just avoids a redundant fetch. */
   topicStudyByTopic: Record<string, TopicStudy>;
@@ -326,8 +328,8 @@ let latestAppliedProgramRequest = 0;
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
-      screen: 'cardslib',
-      profileReturnScreen: 'cardslib',
+      screen: 'home',
+      profileReturnScreen: 'home',
       checkoutFromProfile: false,
       adminSection: 'users',
       user: null,
@@ -374,6 +376,7 @@ export const useAppStore = create<AppState>()(
       grammarView: 'overview',
       activeTopicId: null,
       topicMode: 'study',
+      topicReturnScreen: 'program',
       learningTopic: null,
       topicStudyByTopic: {},
       topicStudyError: null,
@@ -444,12 +447,13 @@ export const useAppStore = create<AppState>()(
           return { screen: 'program' };
         }
         if (s.screen === 'topic' && s.topicMode === 'read') return { screen: 'program', grammarView: 'topics' };
+        if (s.screen === 'topic') return { screen: s.topicReturnScreen };
         if (s.screen === 'program' && s.grammarView !== 'overview') return { grammarView: 'overview' };
         return { screen: BACK_MAP[s.screen] ?? 'cardslib' };
       }),
       signIn: () => startGoogleLogin(),
       signOut: async () => {
-        set({ user: null, currentAttempt: null, topicAnswers: {}, exerciseDrafts: {}, learningTopic: null, grading: false, checkingContext: null, screen: 'cardslib', profileReturnScreen: 'cardslib', checkoutFromProfile: false, studyGoal: null, studyGoalChecked: false, isPremium: false, premiumUntil: null, placementResult: null, placementResultOwner: null, placementOverview: null, programTopics: [], collections: [], collectionDetails: {}, collectionsStatus: 'idle', collectionsError: null });
+        set({ user: null, currentAttempt: null, topicAnswers: {}, exerciseDrafts: {}, learningTopic: null, grading: false, checkingContext: null, screen: 'home', profileReturnScreen: 'home', checkoutFromProfile: false, studyGoal: null, studyGoalChecked: false, isPremium: false, premiumUntil: null, placementResult: null, placementResultOwner: null, placementOverview: null, programTopics: [], collections: [], collectionDetails: {}, collectionsStatus: 'idle', collectionsError: null });
         await logout().catch(() => {});
       },
       checkAuth: async () => {
@@ -458,12 +462,13 @@ export const useAppStore = create<AppState>()(
           const resultOwner = get().placementResultOwner;
           set({
             user, authChecked: true,
+            ...(user && get().screen === 'cardslib' ? { screen: 'home' as const } : {}),
             ...(resultOwner && resultOwner !== user?.id ? { placementResult: null, placementResultOwner: null } : {}),
           });
           if (user && get().collectionsError === 'unauthorized') void get().loadCollections();
           void get().refreshStudyGoal();
           void get().refreshPaymentStatus();
-          void get().loadProgram();
+          if (get().screen !== 'home') void get().loadProgram();
         } catch {
           set({ authChecked: true });
         }
@@ -487,10 +492,9 @@ export const useAppStore = create<AppState>()(
         set({ passkeyBusy: true, passkeyError: null });
         try {
           const user = await (mode === 'login' ? authenticatePasskey() : registerPasskey());
-          set({ user, passkeyBusy: false });
+          set({ user, passkeyBusy: false, screen: 'home' });
           void get().refreshStudyGoal();
           void get().refreshPaymentStatus();
-          void get().loadProgram();
           if (get().collectionsError === 'unauthorized') void get().loadCollections();
         } catch {
           set({ passkeyBusy: false, passkeyError: mode === 'login'
@@ -596,7 +600,7 @@ export const useAppStore = create<AppState>()(
       },
       skipPaywall: () => set({ screen: 'program' }),
 
-      goHome: () => set({ screen: 'cardslib' }),
+      goHome: () => set({ screen: 'home' }),
       goProgram: () => set({ screen: 'program', grammarView: 'overview' }),
       goCardsLib: () => set({ screen: 'cardslib' }),
       refreshStudyGoal: async () => {
@@ -717,8 +721,10 @@ export const useAppStore = create<AppState>()(
       openTopic: async (userTopicId, mode = 'study') => {
         const { user, programTopics } = get();
         const learning = mode === 'study' && user && programTopics.some(({ id, status }) => id === userTopicId && status === 'assigned');
+        const previous = get().screen;
+        const topicReturnScreen = previous === 'home' ? 'home' : previous === 'topic' ? get().topicReturnScreen : 'program';
         set({
-          activeTopicId: userTopicId, topicMode: mode, screen: 'topic', topicStudyError: null, gradingError: null,
+          topicReturnScreen, activeTopicId: userTopicId, topicMode: mode, screen: 'topic', topicStudyError: null, gradingError: null,
           ...(learning ? { learningTopic: { userId: user.id, topicId: userTopicId } } : {}),
         });
         if (get().topicStudyByTopic[userTopicId]) return;
@@ -732,8 +738,8 @@ export const useAppStore = create<AppState>()(
         }
       },
       setNavTab: (v) => {
-        const destinations: Screen[] = ['cardslib', 'comics', 'program', 'profile'];
-        get().go(destinations[v] ?? 'cardslib');
+        const destinations: Screen[] = ['home', 'cardslib', 'comics', 'program', 'profile'];
+        get().go(destinations[v] ?? 'home');
       },
       setAdminSection: (s) => set({ adminSection: s }),
 
