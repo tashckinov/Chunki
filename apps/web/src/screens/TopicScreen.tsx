@@ -38,7 +38,7 @@ export function TopicScreen() {
         {!study && s.topicStudyError && (
           <div className="py-8 flex flex-col items-center gap-4 text-center">
             <div className="text-body-secondary">Не получилось загрузить материал.</div>
-            <Button size="sm" onClick={() => void s.openTopic(topic.id)}>
+            <Button size="sm" onClick={() => void s.openTopic(topic.id, s.topicMode)}>
               Повторить
             </Button>
           </div>
@@ -47,12 +47,17 @@ export function TopicScreen() {
         {study && <TopicStudyMaterial key={topic.id} study={study} />}
         {study && <TopicStudyRating key={topic.id + '-rating'} topicId={topic.id} />}
 
-        {topic.status === 'mastered' && <div className="text-body-secondary border-l-2 border-accent pl-4">✓ Тема подтверждена.</div>}
+        {topic.status !== 'assigned' && (
+          <div className="space-y-1 border-l-2 border-accent pl-4">
+            <p className="text-sm font-semibold">Вы уже прошли эту тему</p>
+            <p className="text-body-secondary">Освежите правило и попробуйте применить его в разговоре или письме.</p>
+          </div>
+        )}
         {waitingForReconfirm && topic.nextReviewAt && (
           <div className="text-body-secondary border-l-2 border-border pl-4">Контрольная проверка будет доступна через {daysUntil(topic.nextReviewAt)} дн.</div>
         )}
         {study && <TopicExtraStudy key={topic.id} topicId={topic.id} />}
-        {topic.status !== 'mastered' && !waitingForReconfirm && (
+        {s.topicMode === 'study' && topic.status !== 'mastered' && !waitingForReconfirm && (
           <Button size="lg" onClick={() => void s.goExercises()} className="w-full">
             К упражнениям
           </Button>

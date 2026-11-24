@@ -158,6 +158,7 @@ interface AppState {
   programTopics: UserTopicSummary[];
   grammarView: 'overview' | 'level' | 'topics';
   activeTopicId: string | null;
+  topicMode: 'study' | 'read';
   learningTopic: { userId: string; topicId: string } | null;
   /** Study material cache, keyed by user_topic id — generated once server-side and cached there too, so caching here just avoids a redundant fetch. */
   topicStudyByTopic: Record<string, TopicStudy>;
@@ -282,7 +283,7 @@ interface AppState {
   /** Refetches the program (topic list + statuses) — called by checkAuth() and after grading a topic test. */
   loadProgram: () => Promise<ProgramState | undefined>;
   openPlacementResult: (id: string) => Promise<void>;
-  openTopic: (userTopicId: string) => Promise<void>;
+  openTopic: (userTopicId: string, mode?: 'study' | 'read') => Promise<void>;
   setNavTab: (v: number) => void;
   setAdminSection: (s: AdminSection) => void;
 
@@ -371,6 +372,7 @@ export const useAppStore = create<AppState>()(
       programTopics: [],
       grammarView: 'overview',
       activeTopicId: null,
+      topicMode: 'study',
       learningTopic: null,
       topicStudyByTopic: {},
       topicStudyError: null,
@@ -439,6 +441,7 @@ export const useAppStore = create<AppState>()(
         if ((s.screen === 'test' && s.testFromProgram) || (s.screen === 'result' && s.placementResultSkipSchedule)) {
           return { screen: 'program' };
         }
+        if (s.screen === 'topic' && s.topicMode === 'read') return { screen: 'program', grammarView: 'topics' };
         if (s.screen === 'program' && s.grammarView !== 'overview') return { grammarView: 'overview' };
         return { screen: BACK_MAP[s.screen] ?? 'cardslib' };
       }),
@@ -709,11 +712,11 @@ export const useAppStore = create<AppState>()(
         if (get().user?.id !== userId || get().screen !== 'program') return;
         set({ placementResult: result, placementResultOwner: userId, placementResultGoal: summary.goal, placementResultSkipSchedule: true, screen: 'result' });
       },
-      openTopic: async (userTopicId) => {
+      openTopic: async (userTopicId, mode = 'study') => {
         const { user, programTopics } = get();
-        const learning = user && programTopics.some(({ id, status }) => id === userTopicId && status === 'assigned');
+        const learning = mode === 'study' && user && programTopics.some(({ id, status }) => id === userTopicId && status === 'assigned');
         set({
-          activeTopicId: userTopicId, screen: 'topic', topicStudyError: null,
+          activeTopicId: userTopicId, topicMode: mode, screen: 'topic', topicStudyError: null,
           ...(learning ? { learningTopic: { userId: user.id, topicId: userTopicId } } : {}),
         });
         if (get().topicStudyByTopic[userTopicId]) return;
@@ -733,8 +736,8 @@ export const useAppStore = create<AppState>()(
       setAdminSection: (s) => set({ adminSection: s }),
 
       goExercises: async () => {
-        const topicId = get().activeTopicId;
-        if (!topicId) return;
+        const { activeTopicId: topicId, topicMode } = get();
+        if (!topicId || topicMode === 'read') return;
         set({ screen: 'exercises', topicAnswers: {}, exerciseResult: null, currentAttempt: null });
         try {
           const attempt = await apiStartTopicAttempt(topicId);

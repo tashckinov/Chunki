@@ -266,7 +266,7 @@ export function ProgramScreen() {
                   : review ? 'Проверка ' + SHORT_DATE.format(review) : 'Ожидает проверки'
                   : isToday ? 'Сегодня' : 'Предстоит изучить';
               return (
-                <button key={topic.id} type="button" onClick={() => void s.openTopic(topic.id)}
+                <button key={topic.id} type="button" onClick={() => void s.openTopic(topic.id, 'read')}
                   className="pressable flex w-full items-center gap-3 border-b border-border py-4 text-left">
                   <span className="grid size-5 shrink-0 place-items-center text-accent">
                     {topic.status === 'mastered' ? <Check size={16} aria-hidden="true" /> :
