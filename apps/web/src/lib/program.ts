@@ -7,6 +7,7 @@ export interface UserTopicSummary {
   title: string;
   category: TopicCategory;
   level: CEFRLevel | null;
+  curriculumId?: string | null;
   topicNumber?: number | null;
   rationale: string;
   source: 'placement' | 'discovered';
