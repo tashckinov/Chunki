@@ -15,14 +15,20 @@ interface PatternRow {
   translation: string;
 }
 
+interface FormulaRow {
+  title: string;
+  parts: Array<{ text: string; role?: string }>;
+}
+
 export type LessonBlock =
   | { kind: CalloutKind; body: string }
   | { kind: 'compare'; left: string; right: string; correction: boolean }
   | { kind: 'question'; prompt: string; options: QuestionOption[] }
   | { kind: 'patterns'; rows: PatternRow[] }
+  | { kind: 'formula'; rows: FormulaRow[] }
   | { kind: 'literal'; source: string };
 
-const OPEN = /^:::(tip|note|compare|example|question|patterns)[ \t]*$/;
+const OPEN = /^:::(tip|note|compare|example|question|patterns|formula)[ \t]*$/;
 const CODE_FENCE = /^(`{3,}|~{3,})(.*)$/;
 const OPTION_START = /^[+-][ \t]/;
 // Split at the first unescaped pipe. Markdown handles the escape in each field.
@@ -34,6 +40,26 @@ function readBlock(kind: string, body: string): LessonBlock | null {
   if (kind === 'tip' || kind === 'note' || kind === 'example') return { kind, body };
 
   const lines = body.split('\n').map((line) => line.trim());
+  if (kind === 'formula') {
+    const rows: FormulaRow[] = [];
+    for (const pair of body.trim().split(/\n(?:[ \t]*\n)+/)) {
+      const [title, expression, ...extra] = pair.split('\n').map((line) => line.trim());
+      if (!title || !expression || extra.length) return null;
+      const parts: FormulaRow['parts'] = [];
+      let cursor = 0;
+      for (const match of expression.matchAll(/\[([\p{L}][\p{L}\p{N}_-]*):([^\[\]]+)\]/gu)) {
+        const text = match[2].trim();
+        if (!text) continue;
+        if (match.index > cursor) parts.push({ text: expression.slice(cursor, match.index) });
+        parts.push({ role: match[1], text });
+        cursor = match.index + match[0].length;
+      }
+      if (cursor < expression.length) parts.push({ text: expression.slice(cursor) });
+      rows.push({ title, parts });
+    }
+    return { kind: 'formula', rows };
+  }
+
   if (kind === 'compare') {
     const entries = lines.filter(Boolean);
     if (entries.length !== 2) return null;

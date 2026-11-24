@@ -127,6 +127,21 @@ function StudyBlock({ block }: { block: LessonBlock }) {
       return <p className="chatmd-literal">{block.source}</p>;
     case 'question':
       return <Question block={block} />;
+    case 'formula':
+      return (
+        <dl className="chatmd-formulas">
+          {block.rows.map(({ title, parts }, index) => (
+            <div className="chatmd-formula" key={index}>
+              <dt>{title}</dt>
+              <dd>
+                {parts.map(({ role, text }, part) => role
+                  ? <span className="chatmd-formula-part" data-role={role} key={part}>{text}</span>
+                  : text)}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      );
     case 'patterns':
       return (
         <dl className="chatmd-patterns">

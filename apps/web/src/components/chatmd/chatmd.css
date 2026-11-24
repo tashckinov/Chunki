@@ -192,3 +192,45 @@
   height: 1em;
   vertical-align: -0.125em;
 }
+
+.chatmd-formulas {
+  margin: 0;
+  padding-inline: 0.875rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.chatmd-formula {
+  padding-block: 0.75rem;
+}
+
+.chatmd-formula + .chatmd-formula {
+  border-block-start: 1px solid var(--color-border);
+}
+
+.chatmd-formula dt {
+  font-weight: 650;
+}
+
+.chatmd-formula dd {
+  margin: 0.3rem 0 0;
+  font-size: 0.95em;
+}
+
+.chatmd-formula-part {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0.1em 0.45em;
+  border-radius: 0.35rem;
+  background: var(--color-surface-subtle);
+  font-weight: 600;
+}
+
+.chatmd-formula-part[data-role="aux"] {
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
+}
+
+.chatmd-formula-part[data-role="verb"] {
+  background: var(--color-border);
+}
