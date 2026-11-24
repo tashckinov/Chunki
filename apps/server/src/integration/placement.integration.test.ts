@@ -125,6 +125,27 @@ it('assigns only fixed curriculum IDs, preserves legacy progress, and generates 
     expect(placement.mock.lastCall?.[2]?.catalog).toContainEqual(expect.objectContaining({ id: extension.id, objective: extension.objective }));
     expect(placement.mock.lastCall?.[2]?.assignedKeys).toContain('a2-articles');
     expect(await getTopicStudy(learner.id, legacy.id)).toEqual({ kind: 'ok', study });
+    const { listLearningModules } = await import('../modules/program/learningModules.js');
+    const { importCurriculumModules, deleteCurriculumModule } = await import('../modules/admin/curriculumModules.js');
+    const moduleId = 'fixture-' + randomUUID();
+    try {
+      expect((await importCurriculumModules([{
+        id: moduleId, title: 'Артикли и время', description: 'Повторить основы.',
+        level: 'A2', position: 0, type: 'core', topicIds: ['a2-articles', 'a2-past-continuous'],
+      }], false)).issues).toEqual([]);
+      expect(await listLearningModules(other.id)).toEqual([]);
+      expect(await listLearningModules(learner.id)).toContainEqual(expect.objectContaining({
+        id: moduleId, topics: [
+          expect.objectContaining({ id: 'a2-articles' }),
+          expect.objectContaining({ id: 'a2-past-continuous' }),
+        ],
+      }));
+      const program = await getProgramForUser(learner.id);
+      if (program.status !== 'active') throw new Error('No learning program');
+      expect(program.topics.map(({ curriculumId }) => curriculumId)).not.toContain('a2-past-continuous');
+    } finally {
+      await deleteCurriculumModule(moduleId);
+    }
     expect(lesson).not.toHaveBeenCalled();
 
     const assigned = first.topics.find(({ curriculumId }) => curriculumId === extension.id)!;

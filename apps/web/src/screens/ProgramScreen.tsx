@@ -3,6 +3,7 @@ import { useLearningProgram } from '../lib/useLearningProgram';
 import { BookOpen, CalendarClock, Check, ChevronLeft, ChevronRight, Clock, List, MessageCircle } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { Button } from '../components/ui/Button';
+import { ProgramModules } from './ProgramModules';
 import { LearningCatalog } from './LearningCatalog';
 import type { UserTopicSummary } from '../lib/program';
 
@@ -206,13 +207,13 @@ export function ProgramScreen() {
         {view === 'topics' && (
           <section>
             <p className="text-meta">{latest && latest.level + ' → ' + goal + ' · '}{mastered} из {topics.length} подтверждено</p>
-            {topics.map((topic) => {
+            <ProgramModules topics={topics} userId={userId} renderTopic={(topic) => {
               const isToday = topic.id === today?.id;
               const review = topic.nextReviewAt ? new Date(topic.nextReviewAt) : null;
-              const status = topic.status === 'mastered' ? 'Подтверждено' :
+              const status = topic.status === 'mastered' ? 'Освоено' :
                 topic.status === 'passed_once' ? review && review.getTime() <= now ? 'Можно повторить'
                   : review ? 'Проверка ' + SHORT_DATE.format(review) : 'Ожидает проверки'
-                  : isToday ? 'Сегодня' : 'Предстоит изучить';
+                  : isToday ? 'Рекомендовано · Сегодня' : 'Рекомендовано';
               return (
                 <button key={topic.id} type="button" onClick={() => void s.openTopic(topic.id, 'read')}
                   className="pressable flex w-full items-center gap-3 border-b border-border py-4 text-left">
@@ -228,7 +229,7 @@ export function ProgramScreen() {
                   <ChevronRight size={16} className="shrink-0 text-text-secondary" aria-hidden="true" />
                 </button>
               );
-            })}
+            }} />
             {notice ?? (topics.length === 0 && <p className="py-3 text-meta">Тем пока нет.</p>)}
           </section>
         )}

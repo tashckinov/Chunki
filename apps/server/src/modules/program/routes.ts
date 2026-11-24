@@ -1,3 +1,4 @@
+import { listLearningModules } from './learningModules.js';
 import { listCurriculumTopics } from './topicCatalog.js';
 import { topicStudySuggestion } from './topicStudySuggestions.js';
 import { rateTopicStudy } from './topicStudyRating.js';
@@ -48,6 +49,11 @@ export const programRoutes: FastifyPluginAsync = async (app) => {
   app.get('/', { preHandler: requireAuthenticatedSession }, async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
     return getProgramForUser(request.session!.userId);
+  });
+
+  app.get('/modules', { preHandler: requireAuthenticatedSession }, async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    return { modules: await listLearningModules(request.session!.userId) };
   });
 
   app.get('/catalog', async () => ({
