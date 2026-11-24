@@ -107,3 +107,16 @@ test('recognizes icons inline and leaves escaped syntax and code literal', () =>
   assert.ok(children.some(({ type, content }) => type === 'text' && content.includes('[icon:check]')));
   assert.ok(children.some(({ type, content }) => type === 'code_inline' && content === '[icon:clock]'));
 });
+
+test('parses named formulas with arbitrary grammatical roles', () => {
+  const source = [
+    ':::formula', 'Present Perfect', 'Subject + [aux:have / has] + [verb:V3]', '',
+    'Вопрос', '[частица:ли] + подлежащее', ':::', ':::note', 'Примечание', ':::',
+  ].join('\n');
+  assert.deepEqual(blocks(source)[0], { kind: 'formula', rows: [
+    { title: 'Present Perfect', parts: [{ text: 'Subject + ' }, { role: 'aux', text: 'have / has' }, { text: ' + ' }, { role: 'verb', text: 'V3' }] },
+    { title: 'Вопрос', parts: [{ role: 'частица', text: 'ли' }, { text: ' + подлежащее' }] },
+  ] });
+  assert.equal(blocks(source)[1].kind, 'note');
+  assert.equal(blocks(':::formula\nТолько название\n:::')[0].kind, 'literal');
+});

@@ -1,5 +1,5 @@
 import { useId, useState } from 'react';
-import { topicStudyInstructions, topicStudySchema, type CurriculumTopic, type TopicIdentity, type TopicStudyContent } from '@app/shared';
+import { CHATMD_TABLE_INSTRUCTION, topicStudyInstructions, topicStudySchema, type CurriculumTopic, type TopicIdentity, type TopicStudyContent } from '@app/shared';
 import { TopicStudyMaterial } from '../../components/chatmd/TopicStudyMaterial';
 import { Button } from '../../components/ui/Button';
 import { saveAdminTopicStudy } from '../../lib/admin';
@@ -26,6 +26,7 @@ export function TopicStudyEditor({ topic, curriculum, study, onStudySaved }: {
 
   async function copyPrompt() {
     const prompt = [
+      CHATMD_TABLE_INSTRUCTION,
       topicStudyInstructions(topic, curriculum),
       'Return only a valid JSON object. Preserve this structure and encode line breaks inside explanation as JSON escapes:',
       JSON.stringify({ ...emptyStudy, explanation: 'Объяснение темы\n\n**English example** — перевод.' }, null, 2),
