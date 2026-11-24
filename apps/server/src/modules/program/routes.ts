@@ -36,6 +36,14 @@ const topicIdParamSchema = z.object({ id: z.string().uuid() });
 const attemptParamSchema = z.object({ id: z.string().uuid(), attemptId: z.string().uuid() });
 const attemptSubmitBodySchema = z.object({ answers: boundedRecord(20, 2000) });
 
+const CATALOG_PREVIEW_IDS = {
+  A1: ['a1-verb-to-be', 'a1-core-functions-greetings', 'a1-present-simple', 'a1-food-drink', 'a1-core-functions-directions'],
+  A2: ['a2-articles', 'a2-requests', 'a2-past-continuous', 'a2-core-functions-suggestions', 'a2-core-vocabulary-travel-services'],
+  B1: ['b1-present-perfect-past-simple', 'b1-opinions', 'b1-core-vocabulary-collocations', 'b1-core-functions-managing-interaction', 'b1-second-conditional'],
+  B2: ['b2-mixed-conditionals', 'b2-core-functions-speculation', 'b2-core-vocabulary-colloquial', 'b2-core-functions-argument', 'b2-core-functions-reviews'],
+  C1: ['c1-negative-inversion', 'c1-core-vocabulary-false-friends', 'c1-core-functions-hedged-opinions', 'c1-core-vocabulary-idioms', 'c1-core-functions-defending-views'],
+} as const;
+
 export const programRoutes: FastifyPluginAsync = async (app) => {
   app.get('/', { preHandler: requireAuthenticatedSession }, async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
@@ -45,6 +53,19 @@ export const programRoutes: FastifyPluginAsync = async (app) => {
   app.get('/catalog', async () => ({
     topics: (await listCurriculumTopics()).map(({ id, title, level, objective }) => ({ id, title, level, objective })),
   }));
+
+  app.get('/catalog-preview', async () => {
+    const topics = await listCurriculumTopics();
+    const byId = new Map(topics.map((topic) => [topic.id, topic]));
+    const levels = Object.entries(CATALOG_PREVIEW_IDS).map(([level, ids]) => ({
+      level,
+      topics: ids.flatMap((id) => {
+        const topic = byId.get(id);
+        return topic && topic.level.replace('+', '') === level ? [{ id, title: topic.title }] : [];
+      }),
+    }));
+    return { total: topics.length, levels };
+  });
 
   app.get('/placement-results/:id', { preHandler: requireAuthenticatedSession }, async (request, reply) => {
     reply.header('Cache-Control', 'no-store');

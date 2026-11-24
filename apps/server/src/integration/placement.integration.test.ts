@@ -419,6 +419,17 @@ it('exposes curriculum topics before sign-in or placement', async () => {
     expect(topics).toContainEqual({
       id: 'a1-verb-to-be', level: 'A1', title: expect.any(String), objective: expect.any(String),
     });
+    const preview = await app.inject('/api/program/catalog-preview');
+    expect(preview.statusCode).toBe(200);
+    const { total: previewTotal, levels } = preview.json();
+    expect(previewTotal).toBe(total.count);
+    expect(levels.map(({ level }: { level: string }) => level)).toEqual(['A1', 'A2', 'B1', 'B2', 'C1']);
+    for (const group of levels) {
+      expect(group.topics).toHaveLength(5);
+      for (const { id, title } of group.topics) {
+        expect(topics).toContainEqual(expect.objectContaining({ id, title, level: group.level }));
+      }
+    }
   } finally {
     await app.close();
   }
