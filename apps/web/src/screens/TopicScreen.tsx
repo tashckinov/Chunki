@@ -57,6 +57,7 @@ export function TopicScreen() {
           <div className="text-body-secondary border-l-2 border-border pl-4">Контрольная проверка будет доступна через {daysUntil(topic.nextReviewAt)} дн.</div>
         )}
         {study && <TopicExtraStudy key={topic.id} topicId={topic.id} />}
+        {s.gradingError && <p role="alert" className="text-negative">{s.gradingError}</p>}
         {s.topicMode === 'study' && topic.status !== 'mastered' && !waitingForReconfirm && (
           <Button size="lg" onClick={() => void s.goExercises()} className="w-full">
             К упражнениям

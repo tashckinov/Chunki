@@ -166,6 +166,7 @@ interface AppState {
   topicStudyError: string | null;
   currentAttempt: TopicAttempt | null;
   topicAnswers: Record<number, string>;
+  exerciseDrafts: Record<string, Record<number, string>>;
   exerciseResult: ExercisesGradeResult | null;
   newTopicsAddedLastResult: number;
 
@@ -378,6 +379,7 @@ export const useAppStore = create<AppState>()(
       topicStudyError: null,
       currentAttempt: null,
       topicAnswers: {},
+      exerciseDrafts: {},
       exerciseResult: null,
       newTopicsAddedLastResult: 0,
 
@@ -447,7 +449,7 @@ export const useAppStore = create<AppState>()(
       }),
       signIn: () => startGoogleLogin(),
       signOut: async () => {
-        set({ user: null, learningTopic: null, grading: false, checkingContext: null, screen: 'cardslib', profileReturnScreen: 'cardslib', checkoutFromProfile: false, studyGoal: null, studyGoalChecked: false, isPremium: false, premiumUntil: null, placementResult: null, placementResultOwner: null, placementOverview: null, programTopics: [], collections: [], collectionDetails: {}, collectionsStatus: 'idle', collectionsError: null });
+        set({ user: null, currentAttempt: null, topicAnswers: {}, exerciseDrafts: {}, learningTopic: null, grading: false, checkingContext: null, screen: 'cardslib', profileReturnScreen: 'cardslib', checkoutFromProfile: false, studyGoal: null, studyGoalChecked: false, isPremium: false, premiumUntil: null, placementResult: null, placementResultOwner: null, placementOverview: null, programTopics: [], collections: [], collectionDetails: {}, collectionsStatus: 'idle', collectionsError: null });
         await logout().catch(() => {});
       },
       checkAuth: async () => {
@@ -716,7 +718,7 @@ export const useAppStore = create<AppState>()(
         const { user, programTopics } = get();
         const learning = mode === 'study' && user && programTopics.some(({ id, status }) => id === userTopicId && status === 'assigned');
         set({
-          activeTopicId: userTopicId, topicMode: mode, screen: 'topic', topicStudyError: null,
+          activeTopicId: userTopicId, topicMode: mode, screen: 'topic', topicStudyError: null, gradingError: null,
           ...(learning ? { learningTopic: { userId: user.id, topicId: userTopicId } } : {}),
         });
         if (get().topicStudyByTopic[userTopicId]) return;
@@ -736,17 +738,31 @@ export const useAppStore = create<AppState>()(
       setAdminSection: (s) => set({ adminSection: s }),
 
       goExercises: async () => {
-        const { activeTopicId: topicId, topicMode } = get();
-        if (!topicId || topicMode === 'read') return;
-        set({ screen: 'exercises', topicAnswers: {}, exerciseResult: null, currentAttempt: null });
+        const { activeTopicId: topicId, topicMode, user, screen, currentAttempt, topicAnswers } = get();
+        if (!user || !topicId || topicMode === 'read' || screen === 'exercises') return;
+        set((state) => ({
+          screen: 'exercises', topicAnswers: {}, exerciseResult: null, currentAttempt: null, gradingError: null,
+          ...(currentAttempt && !state.exerciseResult && Object.keys(topicAnswers).length
+            ? { exerciseDrafts: { ...state.exerciseDrafts, [currentAttempt.attemptId]: topicAnswers } } : {}),
+        }));
+        const stillOpen = () => get().user?.id === user.id && get().screen === 'exercises' && get().activeTopicId === topicId;
         try {
           const attempt = await apiStartTopicAttempt(topicId);
-          set({ currentAttempt: attempt });
+          if (stillOpen()) set({ currentAttempt: attempt, topicAnswers: get().exerciseDrafts[attempt.attemptId] ?? {} });
         } catch (err) {
-          set({ screen: 'topic', gradingError: programErrorMessage(err) });
+          if (stillOpen()) set({
+            screen: 'topic',
+            gradingError: err instanceof ApiError && err.status === 409
+              ? 'Упражнения пока готовятся или уже завершены. Попробуйте открыть тему ещё раз.'
+              : programErrorMessage(err),
+          });
         }
       },
-      setTopicAnswer: (itemIndex, value) => set((s) => ({ topicAnswers: { ...s.topicAnswers, [itemIndex]: value } })),
+      setTopicAnswer: (itemIndex, value) => set((s) => {
+        if (!s.currentAttempt) return s;
+        const topicAnswers = { ...s.topicAnswers, [itemIndex]: value };
+        return { topicAnswers, exerciseDrafts: { ...s.exerciseDrafts, [s.currentAttempt.attemptId]: topicAnswers } };
+      }),
 
       exPrimary: async () => {
         const s = get();
@@ -756,7 +772,9 @@ export const useAppStore = create<AppState>()(
         set({ screen: 'checking', grading: true, gradingError: null, checkingContext: 'exercise' });
         try {
           const { result, newTopicsAdded } = await apiSubmitTopicAttempt(topicId, attempt.attemptId, s.topicAnswers);
-          set({ exerciseResult: result, newTopicsAddedLastResult: newTopicsAdded, grading: false, screen: 'topicresult' });
+          const exerciseDrafts = { ...get().exerciseDrafts };
+          delete exerciseDrafts[attempt.attemptId];
+          set({ exerciseDrafts, exerciseResult: result, newTopicsAddedLastResult: newTopicsAdded, grading: false, screen: 'topicresult' });
           void get().loadProgram();
         } catch (err) {
           set({ grading: false, gradingError: programErrorMessage(err), screen: 'exercises' });
