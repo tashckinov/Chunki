@@ -1,3 +1,5 @@
+import { curriculumModuleIdSchema, curriculumModuleImportSchema } from '@app/shared';
+import { deleteCurriculumModule, importCurriculumModules, listCurriculumModules } from './curriculumModules.js';
 import { listTopicStudySuggestions } from '../program/topicStudySuggestions.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -400,6 +402,25 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     objective: z.string().trim().min(1).max(800),
     subtopics: z.array(z.string().trim().min(1).max(160)).max(12).default([]),
   });
+  app.get('/curriculum-modules', async () => ({ modules: await listCurriculumModules() }));
+
+  app.post('/curriculum-modules/import', async (request, reply) => {
+    const query = z.object({ mode: z.enum(['preview', 'apply', 'create']) }).safeParse(request.query);
+    if (!query.success) return reply.code(400).send({ error: 'invalid_request' });
+    const body = curriculumModuleImportSchema.safeParse(request.body);
+    if (!body.success) {
+      return { changes: [], issues: body.error.issues.map(({ path, message }) => path.join('.') + ' — ' + message) };
+    }
+    return importCurriculumModules(body.data.modules, query.data.mode === 'preview', query.data.mode === 'create');
+  });
+
+  app.delete('/curriculum-modules/:id', async (request, reply) => {
+    const params = z.object({ id: curriculumModuleIdSchema }).safeParse(request.params);
+    if (!params.success) return reply.code(400).send({ error: 'invalid_request' });
+    if (!await deleteCurriculumModule(params.data.id)) return reply.code(404).send({ error: 'not_found' });
+    return { ok: true };
+  });
+
   app.get('/curriculum-topics', async () => ({ topics: await listCurriculumTopics() }));
   app.post('/curriculum-topics', async (request, reply) => {
     const parsed = curriculumTopicSchema.extend({ id: curriculumIdSchema }).safeParse(request.body);
