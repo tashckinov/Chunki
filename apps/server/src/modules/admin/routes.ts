@@ -4,9 +4,8 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyPluginAsync } from 'fastify';
 import multipart from '@fastify/multipart';
 import { z } from 'zod';
-import { CEFR_LEVELS, CURRICULUM_CATEGORIES, TOPIC_CATEGORIES, TOPIC_STUDY_LEVELS, topicStudySchema } from '@app/shared';
-import { createCurriculumTopic, findCurriculumTopic, getTopicForReview, linkCurriculumTopic, listCurriculumTopics, listTopicsForReview, updateCurriculumTopic, updateTopicForReview, updateTopicStudyForReview, setTopicVerification } from '../program/topicCatalog.js';
-import { generateTopicLevelStudy, readTopicLevelStudy, saveTopicLevelStudy } from '../program/topicLevelStudy.js';
+import { CEFR_LEVELS, CURRICULUM_CATEGORIES, TOPIC_CATEGORIES, topicStudySchema } from '@app/shared';
+import { createCurriculumTopic, getTopicForReview, linkCurriculumTopic, listCurriculumTopics, listTopicsForReview, updateCurriculumTopic, updateTopicForReview, updateTopicStudyForReview, setTopicVerification } from '../program/topicCatalog.js';
 import { rebuildProgramFromLastTest } from '../program/service.js';
 import { listProductionModelStats } from '../aiLogs/repository.js';
 import { createTimecode, listTimecodes } from '../timecodes/service.js';
@@ -467,38 +466,6 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     if (!params.success || !body.success) return reply.code(400).send({ error: 'invalid_request' });
     const topic = await setTopicVerification(params.data.key, body.data.verified, body.data.verified ? body.data.study : undefined);
     return topic ?? reply.code(409).send({ error: 'study_changed' });
-  });
-
-  const levelStudyParams = catalogTopicParams.extend({ level: z.enum(TOPIC_STUDY_LEVELS) });
-  app.route({
-    method: ['GET', 'PATCH', 'POST'],
-    url: '/topic-catalog/:key/level-study/:level',
-    handler: async (request, reply) => {
-      const params = levelStudyParams.safeParse(request.params);
-      if (!params.success) return reply.code(400).send({ error: 'invalid_request' });
-      reply.header('Cache-Control', 'no-store');
-      const { key, level } = params.data;
-      const topic = await getTopicForReview(key);
-      if (!topic) return reply.code(404).send({ error: 'not_found' });
-
-      if (request.method === 'GET') return readTopicLevelStudy(key, level);
-      if (request.method === 'PATCH') {
-        const body = topicStudySchema.safeParse(request.body);
-        if (!body.success) return reply.code(400).send({ error: 'invalid_request' });
-        await saveTopicLevelStudy(key, level, body.data);
-        return { level, study: body.data, generating: false };
-      }
-
-      try {
-        const curriculum = topic.curriculumId ? await findCurriculumTopic(topic.curriculumId) : undefined;
-        const identity = { key, title: topic.title, category: topic.category, level: topic.level };
-        const material = await generateTopicLevelStudy(request.session!.userId, identity, level, curriculum);
-        return reply.code(material.generating ? 202 : 200).send(material);
-      } catch (err) {
-        request.log.error({ message: err instanceof Error ? err.message : String(err) }, 'Admin level study generation failed');
-        return reply.code(502).send({ error: 'generation_failed' });
-      }
-    },
   });
 
   app.patch('/topic-catalog/:key', async (request, reply) => {

@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import { Ajv } from 'ajv';
-import { scoreMcq, TOPIC_ENGLISH_INSTRUCTION, topicScope, topicStudyInstructions, type TopicStudyLevel } from '@app/shared';
+import { scoreMcq, TOPIC_ENGLISH_INSTRUCTION, topicScope, topicStudyInstructions } from '@app/shared';
 import type { Env } from '../config/env.js';
 import type {
   ExerciseItem,
@@ -363,7 +363,7 @@ export class OpenRouterGradingProvider implements GradingProvider {
     };
   }
 
-  async generateTopicStudy(topic: TopicIdentity, curriculum?: CurriculumTopic, learnerLevel?: TopicStudyLevel): Promise<TopicStudyContent> {
+  async generateTopicStudy(topic: TopicIdentity, curriculum?: CurriculumTopic): Promise<TopicStudyContent> {
     const schema = {
       type: 'object',
       properties: {
@@ -388,8 +388,7 @@ export class OpenRouterGradingProvider implements GradingProvider {
 
     return this.#callTool<TopicStudyContent>({
       system: 'You teach English as a foreign language to Russian speakers. Always respond only via the provided tool.',
-      user: topicStudyInstructions(topic, curriculum, learnerLevel),
-      maxTokens: learnerLevel ? 3500 : undefined,
+      user: topicStudyInstructions(topic, curriculum),
       toolName: 'submit_topic_study',
       toolDescription: 'Submit structured study material for one topic.',
       schema,

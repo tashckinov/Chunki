@@ -1,5 +1,3 @@
-import type { TopicStudyLevel } from './topicStudy.js';
-
 export const CEFR_LEVELS = ['A1', 'A2', 'A2+', 'B1', 'B1+', 'B2', 'B2+', 'C1'] as const;
 export type CEFRLevel = typeof CEFR_LEVELS[number];
 
@@ -183,7 +181,7 @@ export interface GradingProvider {
   gradePlacementTest(input: PlacementTestSubmission, definition?: PlacementTestDefinition, plan?: TopicPlanContext): Promise<PlacementAssessment>;
   recommendProgramTopics(evidence: ProgramBuildEvidence, plan: TopicPlanContext): Promise<TopicRecommendation[]>;
   gradeExercises(input: ExercisesSubmission, plan?: TopicPlanContext): Promise<ExercisesAssessment>;
-  generateTopicStudy(topic: TopicIdentity, curriculum?: CurriculumTopic, learnerLevel?: TopicStudyLevel): Promise<TopicStudyContent>;
+  generateTopicStudy(topic: TopicIdentity, curriculum?: CurriculumTopic): Promise<TopicStudyContent>;
   generateTopicExercises(topic: ExercisesSubmission['topic'], curriculum?: CurriculumTopic): Promise<ExerciseItem[]>;
 }
 

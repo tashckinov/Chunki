@@ -1,17 +1,16 @@
 import { useId, useState } from 'react';
-import { topicStudyInstructions, topicStudySchema, type CurriculumTopic, type TopicIdentity, type TopicStudyContent, type TopicStudyLevel } from '@app/shared';
+import { topicStudyInstructions, topicStudySchema, type CurriculumTopic, type TopicIdentity, type TopicStudyContent } from '@app/shared';
 import { TopicStudyMaterial } from '../../components/chatmd/TopicStudyMaterial';
 import { Button } from '../../components/ui/Button';
-import { generateAdminLevelStudy, saveAdminLevelStudy, saveAdminTopicStudy } from '../../lib/admin';
+import { saveAdminTopicStudy } from '../../lib/admin';
 
 const field = 'w-full rounded-xl border border-border bg-surface px-3 py-2 text-text';
 const emptyStudy: TopicStudyContent = { explanation: '', keyPoints: [], contrastExamples: [], exampleChunks: [] };
 
-export function TopicStudyEditor({ topic, curriculum, study, level, onStudySaved }: {
+export function TopicStudyEditor({ topic, curriculum, study, onStudySaved }: {
   topic: TopicIdentity;
   curriculum?: CurriculumTopic;
   study: TopicStudyContent | null;
-  level?: TopicStudyLevel;
   onStudySaved?: (study: TopicStudyContent) => void;
 }) {
   const explanationId = useId();
@@ -25,31 +24,9 @@ export function TopicStudyEditor({ topic, curriculum, study, level, onStudySaved
   const [saveError, setSaveError] = useState('');
   const [jsonEdited, setJsonEdited] = useState(false);
 
-  const [published, setPublished] = useState(!!study);
-  const [generating, setGenerating] = useState(false);
-  const busy = saving || generating;
-
-  async function generate() {
-    if (!level) return;
-    setGenerating(true);
-    setSaveError('');
-    try {
-      const material = await generateAdminLevelStudy(topic.key, level);
-      if (!material.study) throw new Error('Missing study content');
-      setDraft(material.study);
-      setJson(JSON.stringify(material.study, null, 2));
-      setPublished(true);
-      setSaved(true);
-    } catch {
-      setSaveError('Не удалось сгенерировать объяснение. Попробуйте ещё раз.');
-    } finally {
-      setGenerating(false);
-    }
-  }
-
   async function copyPrompt() {
     const prompt = [
-      topicStudyInstructions(topic, curriculum, level),
+      topicStudyInstructions(topic, curriculum),
       'Return only a valid JSON object. Preserve this structure and encode line breaks inside explanation as JSON escapes:',
       JSON.stringify({ ...emptyStudy, explanation: 'Объяснение темы\n\n**English example** — перевод.' }, null, 2),
     ].join('\n\n');
@@ -95,10 +72,7 @@ export function TopicStudyEditor({ topic, curriculum, study, level, onStudySaved
     setSaving(true);
     setSaveError('');
     try {
-      const updated = level
-        ? (await saveAdminLevelStudy(topic.key, level, result.data)).study ?? result.data
-        : await saveAdminTopicStudy(topic.key, result.data);
-      setPublished(true);
+      const updated = await saveAdminTopicStudy(topic.key, result.data);
       onStudySaved?.(updated);
       setDraft(updated);
       setJson(JSON.stringify(updated, null, 2));
@@ -112,16 +86,10 @@ export function TopicStudyEditor({ topic, curriculum, study, level, onStudySaved
 
   return (
     <section className="flex flex-col gap-4 rounded-xl border border-border p-4">
-      <h2 className="text-section-title">{level ? 'Объяснение для ' + level : 'Редактирование урока'}</h2>
-      {level && !published && (
-        <Button size="sm" variant="secondary" className="self-start" disabled={busy || jsonEdited || !!draft.explanation.trim()}
-          onClick={() => void generate()}>
-          {generating ? 'Готовим объяснение…' : 'Сгенерировать и сохранить'}
-        </Button>
-      )}
+      <h2 className="text-section-title">Редактирование урока</h2>
       <div className="flex flex-col gap-1">
-        <label htmlFor={explanationId} className="text-meta">{level ? 'Текст объяснения (ChatMD)' : 'Текст урока (ChatMD)'}</label>
-        <textarea id={explanationId} rows={9} className={field} maxLength={16000} value={draft.explanation} disabled={busy || jsonEdited}
+        <label htmlFor={explanationId} className="text-meta">Текст урока (ChatMD)</label>
+        <textarea id={explanationId} rows={9} className={field} maxLength={16000} value={draft.explanation} disabled={saving || jsonEdited}
           onChange={(event) => {
             const next = { ...draft, explanation: event.target.value };
             setDraft(next); setJson(JSON.stringify(next, null, 2)); setSaved(false); setSaveError('');
@@ -129,7 +97,7 @@ export function TopicStudyEditor({ topic, curriculum, study, level, onStudySaved
       </div>
       <details className="rounded-xl border border-border p-3">
         <summary className="cursor-pointer font-medium">Промпт и импорт из ИИ-чата</summary>
-        <fieldset className="mt-3 flex flex-col gap-3" disabled={busy}>
+        <fieldset className="mt-3 flex flex-col gap-3" disabled={saving}>
           <p className="text-body-secondary">Вставьте промпт в ИИ-чат, перенесите ответ сюда и проверьте урок перед сохранением.</p>
           <Button size="sm" variant="secondary" className="self-start" onClick={() => void copyPrompt()}>
             {copied ? 'Скопировано' : 'Скопировать промпт'}
@@ -142,7 +110,7 @@ export function TopicStudyEditor({ topic, curriculum, study, level, onStudySaved
               onChange={(event) => { setJson(event.target.value); setJsonEdited(true); setImportError(''); setSaved(false); }} />
           </label>
           {importError && <p role="alert" className="text-negative">{importError}</p>}
-          <Button size="sm" variant="secondary" className="self-start" disabled={busy || !jsonEdited || !json.trim()} onClick={importStudy}>
+          <Button size="sm" variant="secondary" className="self-start" disabled={saving || !jsonEdited || !json.trim()} onClick={importStudy}>
             Открыть в редакторе
           </Button>
           {jsonEdited && <Button size="sm" variant="ghost" className="self-start" onClick={() => {
@@ -156,8 +124,8 @@ export function TopicStudyEditor({ topic, curriculum, study, level, onStudySaved
           <TopicStudyMaterial study={draft} />
         </section>
       )}
-      <Button size="sm" className="self-start" disabled={busy || jsonEdited || !draft.explanation.trim()} onClick={() => void save()}>{level ? 'Сохранить объяснение' : 'Сохранить урок'}</Button>
-      {saved && <p role="status" className="text-positive">{level ? 'Объяснение сохранено.' : 'Урок сохранён.'}</p>}
+      <Button size="sm" className="self-start" disabled={saving || jsonEdited || !draft.explanation.trim()} onClick={() => void save()}>Сохранить урок</Button>
+      {saved && <p role="status" className="text-positive">Урок сохранён.</p>}
       {saveError && <p role="alert" className="text-negative">{saveError}</p>}
     </section>
   );

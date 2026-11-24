@@ -1,5 +1,4 @@
-import type { CurriculumTopic, TopicIdentity, TopicLevelStudy, TopicStudyContent, TopicStudyLevel } from '@app/shared';
-import { requestTopicLevelStudy } from './topicLevelStudy';
+import type { CurriculumTopic, TopicIdentity, TopicStudyContent } from '@app/shared';
 import { getJson, postJson, patchJson, deleteJson, postFormData, type ChunkSentence, type SituationPrompt } from './collections';
 
 export interface AdminUser {
@@ -289,22 +288,6 @@ export function setAdminTopicVerification(key: string, verified: boolean, study:
 
 export async function saveAdminTopicStudy(key: string, study: TopicStudyContent) {
   return (await patchJson<{ study: TopicStudyContent }>(`/api/admin/topic-catalog/${encodeURIComponent(key)}/study`, study)).study;
-}
-
-function adminLevelStudyPath(key: string, level: TopicStudyLevel) {
-  return `/api/admin/topic-catalog/${encodeURIComponent(key)}/level-study/${level}`;
-}
-
-export function fetchAdminLevelStudy(key: string, level: TopicStudyLevel) {
-  return getJson<TopicLevelStudy>(adminLevelStudyPath(key, level));
-}
-
-export function generateAdminLevelStudy(key: string, level: TopicStudyLevel) {
-  return requestTopicLevelStudy(adminLevelStudyPath(key, level));
-}
-
-export function saveAdminLevelStudy(key: string, level: TopicStudyLevel, study: TopicStudyContent) {
-  return patchJson<TopicLevelStudy>(adminLevelStudyPath(key, level), study);
 }
 
 export function setTopicCurriculumLink(key: string, curriculumId: string | null) {
