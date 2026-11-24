@@ -433,10 +433,18 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   });
 
   const catalogTopicParams = z.object({ key: z.string().min(1).max(100).regex(SLUG_REGEX) });
+  const suggestionsQuery = z.object({ offset: z.coerce.number().int().min(0).max(2147483647).default(0) });
+  app.get('/topic-suggestions', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const query = suggestionsQuery.safeParse(request.query);
+    if (!query.success) return reply.code(400).send({ error: 'invalid_request' });
+    return listTopicStudySuggestions(null, query.data.offset);
+  });
+
   app.get('/topic-catalog/:key/suggestions', async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
     const params = catalogTopicParams.safeParse(request.params);
-    const query = z.object({ offset: z.coerce.number().int().min(0).max(2147483647).default(0) }).safeParse(request.query);
+    const query = suggestionsQuery.safeParse(request.query);
     if (!params.success || !query.success) return reply.code(400).send({ error: 'invalid_request' });
     return listTopicStudySuggestions(params.data.key, query.data.offset);
   });
