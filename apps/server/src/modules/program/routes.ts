@@ -1,3 +1,4 @@
+import { listCurriculumTopics } from './topicCatalog.js';
 import { topicStudySuggestion } from './topicStudySuggestions.js';
 import { rateTopicStudy } from './topicStudyRating.js';
 import type { FastifyPluginAsync } from 'fastify';
@@ -40,6 +41,10 @@ export const programRoutes: FastifyPluginAsync = async (app) => {
     reply.header('Cache-Control', 'no-store');
     return getProgramForUser(request.session!.userId);
   });
+
+  app.get('/catalog', async () => ({
+    topics: (await listCurriculumTopics()).map(({ id, title, level, objective }) => ({ id, title, level, objective })),
+  }));
 
   app.get('/placement-results/:id', { preHandler: requireAuthenticatedSession }, async (request, reply) => {
     reply.header('Cache-Control', 'no-store');

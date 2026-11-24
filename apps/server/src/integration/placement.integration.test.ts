@@ -404,3 +404,22 @@ it('keeps the current lesson ahead of newly assigned easier topics', async () =>
     await pool.query('DELETE FROM users WHERE id = $1', [learner.id]);
   }
 });
+
+it('exposes curriculum topics before sign-in or placement', async () => {
+  const { default: Fastify } = await import('fastify');
+  const { programRoutes } = await import('../modules/program/routes.js');
+  const app = Fastify();
+  try {
+    await app.register(programRoutes, { prefix: '/api/program' });
+    const response = await app.inject('/api/program/catalog');
+    expect(response.statusCode).toBe(200);
+    const { rows: [total] } = await pool.query<{ count: number }>('SELECT count(*)::int AS count FROM curriculum_topics');
+    const { topics } = response.json();
+    expect(topics).toHaveLength(total.count);
+    expect(topics).toContainEqual({
+      id: 'a1-verb-to-be', level: 'A1', title: expect.any(String), objective: expect.any(String),
+    });
+  } finally {
+    await app.close();
+  }
+});

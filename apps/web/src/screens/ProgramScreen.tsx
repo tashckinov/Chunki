@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { BookOpen, CalendarClock, Check, ChevronLeft, ChevronRight, Clock, List, MessageCircle } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { Button } from '../components/ui/Button';
+import { LearningCatalog } from './LearningCatalog';
 import type { UserTopicSummary } from '../lib/program';
 
 const SHORT_DATE = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' });
@@ -178,10 +179,10 @@ export function ProgramScreen() {
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-5 pb-6 pt-4">
         {view !== 'overview' && (
           <button type="button" className="flex min-h-9 items-center gap-1 self-start text-sm text-accent"
-            onClick={() => selectView('overview')}><ChevronLeft size={16} aria-hidden="true" /> Грамматика</button>
+            onClick={() => selectView('overview')}><ChevronLeft size={16} aria-hidden="true" /> Обучение</button>
         )}
         <header className="flex items-center justify-between gap-3">
-          <h1 className="text-page-title">{view === 'overview' ? 'Грамматика' : view === 'level' ? 'Мой уровень' : 'Моя программа'}</h1>
+          <h1 className="text-page-title">{view === 'overview' ? 'Обучение' : view === 'level' ? 'Мой уровень' : 'Моя программа'}</h1>
           {view === 'overview' && (
             <Button size="sm" variant="secondary" className="bg-accent-subtle text-accent" onClick={() => selectView('level')}>
               {latest?.level ?? 'Мой уровень'} <ChevronRight size={14} aria-hidden="true" />
@@ -189,7 +190,12 @@ export function ProgramScreen() {
           )}
         </header>
         {view === 'level' && <GrammarLevelCard />}
-        {view === 'overview' && (
+        {view === 'overview' && !latest && (
+          !userId || s.placementOverview || phase === 'ready'
+            ? <LearningCatalog />
+            : notice
+        )}
+        {view === 'overview' && latest && (
           <>
             {latest && (
               <section className="space-y-1.5 border-b border-border pb-5">
@@ -227,8 +233,7 @@ export function ProgramScreen() {
                   <Button className="w-full" onClick={() => void s.openTopic(today.id)}>{due ? 'Начать повторение' : 'Начать обучение'}</Button>
                 </div>
               ) : !notice && (
-                latest ? <p className="text-body-secondary">На сегодня тем к изучению и повторению нет.</p>
-                  : <Button onClick={() => selectView('level')}>Определить уровень</Button>
+                <p className="text-body-secondary">На сегодня тем к изучению и повторению нет.</p>
               )}
               {notice}
             </section>
