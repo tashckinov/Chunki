@@ -444,3 +444,35 @@ it('serializes generation for the same topic and level and preserves a concurren
     await pool.query('DELETE FROM users WHERE id = $1', [user.id]);
   }
 });
+
+
+it('keeps the current lesson ahead of newly assigned easier topics', async () => {
+  const { rows: [learner] } = await pool.query<{ id: string }>('INSERT INTO users DEFAULT VALUES RETURNING id');
+  const input: PlacementTestSubmission = { fromLevel: 'A1', toLevel: 'B1', purpose: [], mcqAnswers: {}, open9: '', open10: '', essay: '' };
+  const provider = getGradingProvider();
+  const assessment = await provider.gradePlacementTest(input);
+  const grade = vi.spyOn(provider, 'gradePlacementTest');
+  try {
+    const setPicks = (ids: string[]) => grade.mockResolvedValueOnce({
+      ...assessment, overallLevel: 'A1', topics: ids.map((key) => ({ key, rationale: 'Практика' })),
+    });
+    setPicks(['b1-second-conditional', 'a2-articles']);
+    const first = await submitPlacementTest(learner.id, input);
+    if (first.kind !== 'ok') throw new Error(first.kind);
+    expect(first.topics.map(({ curriculumId }) => curriculumId)).toEqual(['a2-articles', 'b1-second-conditional']);
+    const [completed, current] = first.topics;
+    await pool.query("UPDATE user_topics SET status = 'mastered' WHERE id = $1", [completed.id]);
+    expect((await startTopicAttempt(learner.id, current.id)).kind).toBe('ok');
+
+    await pool.query("UPDATE placement_tests SET created_at = created_at - interval '1 month' WHERE user_id = $1", [learner.id]);
+    setPicks(['a2-requests', 'a1-verb-to-be']);
+    const second = await submitPlacementTest(learner.id, input);
+    if (second.kind !== 'ok') throw new Error(second.kind);
+    expect(second.topics.map(({ curriculumId }) => curriculumId)).toEqual([
+      'a2-articles', 'b1-second-conditional', 'a1-verb-to-be', 'a2-requests',
+    ]);
+  } finally {
+    grade.mockRestore();
+    await pool.query('DELETE FROM users WHERE id = $1', [learner.id]);
+  }
+});

@@ -1,3 +1,4 @@
+import { CEFR_LEVELS } from '@app/shared';
 import { rebuildProgram } from '../lib/program';
 import { useEffect, useState } from 'react';
 import { BookOpen, CalendarClock, Check, ChevronLeft, ChevronRight, Clock, List, MessageCircle } from 'lucide-react';
@@ -93,7 +94,15 @@ function GrammarLevelCard() {
 
 export function ProgramScreen() {
   const s = useAppStore();
-  const topics = s.programTopics;
+  const current = s.learningTopic?.userId === s.user?.id
+    ? s.programTopics.find(({ id, status }) => id === s.learningTopic?.topicId && status === 'assigned')
+    : undefined;
+  const difficulty = ({ level }: UserTopicSummary) => level ? CEFR_LEVELS.indexOf(level) : CEFR_LEVELS.length;
+  const topics = current
+    ? [...s.programTopics.filter(({ status }) => status !== 'assigned'), current,
+      ...s.programTopics.filter((topic) => topic.status === 'assigned' && topic.id !== current.id)
+        .sort((a, b) => difficulty(a) - difficulty(b))]
+    : s.programTopics;
   const userId = s.user?.id;
   const [phase, setPhase] = useState<'loading' | 'building' | 'ready' | 'error'>('loading');
   const [retry, setRetry] = useState(0);
