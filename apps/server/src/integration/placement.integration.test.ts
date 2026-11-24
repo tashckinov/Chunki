@@ -434,3 +434,31 @@ it('exposes curriculum topics before sign-in or placement', async () => {
     await app.close();
   }
 });
+
+it('previews and atomically imports module links without changing curriculum topics', async () => {
+  const { importCurriculumModules, listCurriculumModules, deleteCurriculumModule } = await import('../modules/admin/curriculumModules.js');
+  const id = 'fixture-' + randomUUID();
+  const module = {
+    id, title: 'Знакомство', description: 'Представиться.', level: 'A1',
+    type: 'core', position: 10, topicIds: ['a1-core-functions-greetings', 'a1-verb-to-be'],
+  } as const;
+  const input = { ...module, topicIds: [...module.topicIds] };
+
+  try {
+    expect(await importCurriculumModules([input], true)).toMatchObject({ issues: [], changes: [{ action: 'create' }] });
+    expect((await listCurriculumModules()).find((entry) => entry.id === id)).toBeUndefined();
+    const rejected = await importCurriculumModules([input, { ...input, id: id + '-invalid', topicIds: ['missing-topic', 'b1-opinions', 'b1-opinions'] }], false);
+    expect(rejected.issues).toHaveLength(4);
+    expect((await listCurriculumModules()).find((entry) => entry.id === id)).toBeUndefined();
+    expect((await importCurriculumModules([input], false)).issues).toEqual([]);
+    expect((await listCurriculumModules()).find((entry) => entry.id === id)).toEqual(input);
+    const revised = { ...input, topicIds: ['a1-verb-to-be'] };
+    expect(await importCurriculumModules([revised], false)).toMatchObject({ issues: [], changes: [{ action: 'update' }] });
+    expect((await listCurriculumModules()).find((entry) => entry.id === id)).toEqual(revised);
+    expect(await deleteCurriculumModule(id)).toBe(true);
+    const { rows } = await pool.query('SELECT id FROM curriculum_topics WHERE id = ANY($1::text[])', [input.topicIds]);
+    expect(rows).toHaveLength(2);
+  } finally {
+    await deleteCurriculumModule(id);
+  }
+});

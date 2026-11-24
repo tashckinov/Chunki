@@ -8,3 +8,5 @@ export * from './studyGoal.js';
 export * from './grammarTestSchema.js';
 
 export * from './topicStudy.js';
+
+export * from './curriculumModules.js';
