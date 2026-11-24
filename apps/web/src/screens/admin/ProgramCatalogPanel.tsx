@@ -4,7 +4,6 @@ import { CEFR_LEVELS, TOPIC_CATEGORIES, type TopicIdentity, type CurriculumTopic
 import { Button } from '../../components/ui/Button';
 import { CurriculumEditor } from './CurriculumEditor';
 import { TopicStudyEditor } from './TopicStudyEditor';
-import { TopicLevelStudyPanel } from './TopicLevelStudyPanel';
 import { ApiError } from '../../lib/collections';
 import { fetchAdminCatalogTopic, fetchAdminTopicCatalog, fetchCurriculumTopics, saveAdminCatalogTopic, setTopicCurriculumLink, setAdminTopicVerification, type AdminCatalogTopic } from '../../lib/admin';
 
@@ -25,7 +24,6 @@ export function ProgramCatalogPanel() {
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const detail = useRef<HTMLElement>(null);
-  const levelsSection = useRef<HTMLDivElement>(null);
   const curriculumSection = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -157,7 +155,6 @@ export function ProgramCatalogPanel() {
             </div>
             {topic.ratings && <p className="text-meta">Понятно: {topic.ratings.clear} · Непонятно: {topic.ratings.unclear}</p>}
             <div className="flex flex-wrap gap-2">
-              <Button variant="secondary" size="sm" disabled={curriculumLoading} onClick={() => levelsSection.current?.scrollIntoView({ block: 'start' })}>Объяснения по уровням</Button>
               <Button variant="secondary" size="sm" onClick={() => curriculumSection.current?.scrollIntoView({ block: 'start' })}>Настройки темы</Button>
             </div>
           </header>
@@ -178,18 +175,13 @@ export function ProgramCatalogPanel() {
             </details>
           )}
           {curriculumLoading ? <p role="status" className="text-body-secondary">Загружаем учебную цель…</p> : (
-            <>
-              <TopicStudyEditor key={topic.key} topic={topic} curriculum={linked} study={topic.study} onStudySaved={(study) => {
-                setTopic((current) => current?.key === topic.key ? {
-                  ...current, study,
-                  verified: current.verified && JSON.stringify(current.study) === JSON.stringify(study),
-                } : current);
-                loadPage(page.q, page.offset);
-              }} />
-              <div ref={levelsSection} className="scroll-mt-4">
-                <TopicLevelStudyPanel key={topic.key + '-levels'} topic={topic} curriculum={linked} />
-              </div>
-            </>
+            <TopicStudyEditor key={topic.key} topic={topic} curriculum={linked} study={topic.study} onStudySaved={(study) => {
+              setTopic((current) => current?.key === topic.key ? {
+                ...current, study,
+                verified: current.verified && JSON.stringify(current.study) === JSON.stringify(study),
+              } : current);
+              loadPage(page.q, page.offset);
+            }} />
           )}
           <div ref={curriculumSection} className="flex scroll-mt-4 flex-col gap-4">
             {!topic.curriculumSlot && <form onSubmit={(event) => { event.preventDefault(); void save(); }} className="flex flex-col gap-3 rounded-xl border border-border p-4">

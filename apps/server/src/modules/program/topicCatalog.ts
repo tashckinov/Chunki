@@ -18,11 +18,6 @@ export async function listCurriculumTopics(target?: CEFRLevel): Promise<Curricul
   return rows;
 }
 
-export async function findCurriculumTopic(id: string): Promise<CurriculumTopic | undefined> {
-  const { rows: [topic] } = await pool.query<CurriculumTopic>('SELECT * FROM curriculum_topics WHERE id = $1', [id]);
-  return topic;
-}
-
 const PROGRAM_CATEGORY: Record<CurriculumTopic['category'], TopicCategory> = {
   Grammar: 'Грамматика', Vocabulary: 'Лексика', Functions: 'Использование языка',
   Discourse: 'Использование языка', Reading: 'Понимание', Writing: 'Письмо',

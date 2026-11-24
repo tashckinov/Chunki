@@ -1,5 +1,4 @@
 import type { CEFRLevel, ExercisesGradeResult, PlacementGradeResult, PlacementOverview, PlacementResultSummary, PlacementTestSubmission, PlacementTestVariant, TopicCategory, TopicStudyContent } from '@app/shared';
-import { requestTopicLevelStudy } from './topicLevelStudy';
 import { getJson, postJson } from './collections';
 
 export interface UserTopicSummary {
@@ -44,10 +43,6 @@ export type TopicStudy = TopicStudyContent;
 export async function fetchTopicStudy(userTopicId: string): Promise<TopicStudy> {
   const data = await getJson<{ study: TopicStudy }>(`/api/program/topics/${userTopicId}/study`);
   return data.study;
-}
-
-export function fetchLearnerLevelStudy(userTopicId: string) {
-  return requestTopicLevelStudy(`/api/program/topics/${encodeURIComponent(userTopicId)}/level-study`);
 }
 
 export type RedactedExerciseItem = { type: 'choice'; q: string; options: string[] } | { type: 'write'; q: string; rows: number; placeholder: string };

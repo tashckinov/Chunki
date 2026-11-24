@@ -1,5 +1,5 @@
 import { CEFR_LEVELS } from '@app/shared';
-import type { CEFRLevel, ExerciseItem, ExercisesGradeResult, PlacementGradeResult, PlacementOverview, PlacementQuota, PlacementResultSummary, PlacementTestSubmission, TopicStudyContent, TopicIdentity, TopicPlanContext, TopicLevelStudy, TopicStudyLevel } from '@app/shared';
+import type { CEFRLevel, ExerciseItem, ExercisesGradeResult, PlacementGradeResult, PlacementOverview, PlacementQuota, PlacementResultSummary, PlacementTestSubmission, TopicStudyContent, TopicIdentity, TopicPlanContext } from '@app/shared';
 import { findGrammarTest } from '../grammarTests/repository.js';
 import { getGradingProvider } from '../../grading/index.js';
 import { withAiCallLogging } from '../aiLogs/service.js';
@@ -28,7 +28,6 @@ import {
   type UserTopicSource,
   type UserTopicStatus,
 } from './repository.js';
-import { generateTopicLevelStudy, readTopicLevelStudy } from './topicLevelStudy.js';
 import { buildPlacementReview } from './placementReview.js';
 import { listCurriculumTopics, saveCatalogStudy, topicLevels } from './topicCatalog.js';
 
@@ -261,24 +260,6 @@ export async function getTopicStudy(userId: string, userTopicId: string): Promis
   const study = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: provider.model ?? null, request: row.curriculum ?? topic }, () => provider.generateTopicStudy(topic, row.curriculum ?? undefined));
 
   return { kind: 'ok', study: await saveCatalogStudy(topic, study, row.curriculum?.id ?? null) };
-}
-
-export async function getLearnerTopicLevelStudy(userId: string, userTopicId: string, generate: boolean): Promise<
-  | { kind: 'not_found' }
-  | { kind: 'not_allowed' }
-  | { kind: 'ok'; material: TopicLevelStudy }
-> {
-  const row = await findUserTopic(userId, userTopicId);
-  if (!row) return { kind: 'not_found' };
-
-  const [latest] = await listPlacementTests(userId);
-  const currentLevel = latest?.overall_level ?? row.curriculum?.level ?? row.level ?? 'A1';
-  const level = currentLevel.replace('+', '') as TopicStudyLevel;
-  const material = await readTopicLevelStudy(row.catalog_key, level);
-  if (!generate || material.study || material.generating) return { kind: 'ok', material };
-  if (await checkProgramAllowed(userId)) return { kind: 'not_allowed' };
-
-  return { kind: 'ok', material: await generateTopicLevelStudy(userId, toTopicIdentity(row), level, row.curriculum ?? undefined) };
 }
 
 export type RedactedExerciseItem = { type: 'choice'; q: string; options: string[] } | { type: 'write'; q: string; rows: number; placeholder: string };
