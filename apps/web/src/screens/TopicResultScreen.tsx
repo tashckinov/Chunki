@@ -40,6 +40,28 @@ export function TopicResultScreen() {
       {reviewLabel && <div className="text-[14.5px] text-text-secondary">Контрольная проверка через {result.nextReviewInDays} дн. — {reviewLabel}</div>}
       {!result.passed && <div className="text-[14.5px] text-text-secondary">Тема нуждается в повторном изучении — вернитесь к материалу и попробуйте ещё раз.</div>}
 
+      {!!result.corrections?.length && (
+        <section aria-labelledby="exercise-corrections">
+          <h2 id="exercise-corrections" className="text-section-title mb-2">Разбор ошибок</h2>
+          <ul className="divide-y divide-border">
+            {result.corrections.map(({ questionNumber, prompt, answer, correction, explanation }) => (
+              <li key={questionNumber}>
+                <details className="py-3">
+                  <summary className="cursor-pointer text-sm font-semibold wrap-anywhere">
+                    №{questionNumber}. {prompt}
+                  </summary>
+                  <dl className="mt-3 space-y-2 text-sm wrap-anywhere">
+                    <div><dt className="text-meta">Ваш ответ</dt><dd className="whitespace-pre-wrap">{answer.trim() ? answer : 'Без ответа'}</dd></div>
+                    {correction && <div><dt className="text-meta">Подходящий ответ</dt><dd className="whitespace-pre-wrap">{correction}</dd></div>}
+                    <div><dt className="text-meta">Объяснение</dt><dd>{explanation}</dd></div>
+                  </dl>
+                </details>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {result.notes.length > 0 && (
         <div>
           <div className="text-section-title mb-3">Заметки</div>

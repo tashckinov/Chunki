@@ -1,6 +1,7 @@
 import { BUILTIN_PLACEMENT_TEST } from '../content.js';
 import type {
   ExerciseItem,
+  ExerciseCorrection,
   ExercisesSubmission,
   GradeDetail,
   GradingProvider,
@@ -103,16 +104,21 @@ export class MockGradingProvider implements GradingProvider {
   async gradeExercises(input: ExercisesSubmission, plan?: TopicPlanContext): Promise<ExercisesAssessment> {
     let correct = 0;
     let total = 0;
-    const writeGrades: GradeDetail[] = [];
+    const corrections: ExerciseCorrection[] = [];
 
     input.items.forEach((item, i) => {
       const answer = input.answers[i] ?? '';
       if (item.type === 'choice') {
         total += 1;
         if (answer === item.answer) correct += 1;
+        else corrections.push({ questionNumber: i + 1, prompt: item.q, answer, correction: item.answer,
+          explanation: 'По ключу упражнения подходит вариант «' + item.answer + '».' });
       } else {
         const grade = gradeFreeText(answer, 8);
-        writeGrades.push(grade);
+        if (grade.correctness !== 'correct') {
+          corrections.push({ questionNumber: i + 1, prompt: item.q, answer,
+            correction: grade.suggestedAnswer, explanation: grade.feedback });
+        }
         total += 1;
         correct += grade.score;
       }
@@ -124,6 +130,7 @@ export class MockGradingProvider implements GradingProvider {
       scoreOutOf10,
       passed: scoreOutOf10 >= 7,
       verdictLabel: verdictFor(scoreOutOf10),
+      corrections,
       notes: ['Мок-проверка: качественные заметки появятся при использовании LLM-провайдера.'],
       discoveredTopics: scoreOutOf10 < 6 ? pickTopics(plan, 1) : [],
       nextReviewInDays: 3,

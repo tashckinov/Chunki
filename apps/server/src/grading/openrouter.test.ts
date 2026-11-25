@@ -126,3 +126,43 @@ describe('OpenRouter grammar grading', () => {
 
 
 });
+
+describe('topic exercise corrections', () => {
+  const topic = { key: 'present-simple', title: 'Present Simple', category: 'Грамматика', level: 'A2', rationale: 'Практика' } as const;
+  const choice = { type: 'choice' as const, q: 'She ___ every day.', options: ['run', 'runs'], answer: 'runs' };
+  const written = { type: 'write' as const, q: 'Describe her routine.', rows: 2, placeholder: 'Your answer' };
+  const feedback = 'После she в Present Simple к глаголу добавляется -s.';
+
+  it('returns wrong and partial answers in the original exercise order', async () => {
+    create.mockResolvedValue(completion({
+      writeGrades: [{ ...grade, itemIndex: 1, correctness: 'partial', score: 0.5, feedback, suggestedAnswer: 'She runs every day.' }],
+      choiceExplanations: [{ itemIndex: 2, explanation: feedback }],
+      notes: [], discoveredTopics: [],
+    }, 'tool_calls', 'submit_exercise_grade'));
+
+    const result = await grader.gradeExercises({
+      topic, items: [choice, written, choice], answers: { 0: 'runs', 1: 'She run every day', 2: 'run' },
+    });
+
+    expect(result.scoreOutOf10).toBe(5);
+    expect(result.corrections).toEqual([
+      { questionNumber: 2, prompt: written.q, answer: 'She run every day', correction: 'She runs every day.', explanation: feedback },
+      { questionNumber: 3, prompt: choice.q, answer: 'run', correction: 'runs', explanation: feedback },
+    ]);
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it('explains an unanswered choice and skips the model when every choice is correct', async () => {
+    create.mockResolvedValue(completion({
+      writeGrades: [], choiceExplanations: [{ itemIndex: 0, explanation: feedback }], notes: [], discoveredTopics: [],
+    }, 'tool_calls', 'submit_exercise_grade'));
+
+    await expect(grader.gradeExercises({ topic, items: [choice], answers: {} })).resolves.toMatchObject({
+      corrections: [{ questionNumber: 1, answer: '', correction: 'runs', explanation: feedback }],
+    });
+    await expect(grader.gradeExercises({ topic, items: [choice], answers: { 0: 'runs' } })).resolves.toMatchObject({
+      scoreOutOf10: 10, corrections: [],
+    });
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+});
