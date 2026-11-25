@@ -157,6 +157,14 @@ export interface PlacementGradeResult {
   topics: TopicSuggestion[];
 }
 
+export interface ExerciseCorrection {
+  questionNumber: number;
+  prompt: string;
+  answer: string;
+  correction: string;
+  explanation: string;
+}
+
 export interface ExercisesGradeResult {
   scoreOutOf10: number;
   passed: boolean;
@@ -165,6 +173,7 @@ export interface ExercisesGradeResult {
   /** New weak spots the grader noticed in these answers, distinct from the topic being tested. */
   discoveredTopics: TopicSuggestion[];
   nextReviewInDays: number;
+  corrections?: ExerciseCorrection[];
 }
 
 export type ProgramBuildEvidence = Pick<PlacementGradeResult, 'skills' | 'mcqScore' | 'belowLevel'> & {

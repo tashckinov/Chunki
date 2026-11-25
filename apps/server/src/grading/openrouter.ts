@@ -4,6 +4,7 @@ import { scoreMcq, CHATMD_TABLE_INSTRUCTION, TOPIC_ENGLISH_INSTRUCTION, topicSco
 import type { Env } from '../config/env.js';
 import type {
   ExerciseItem,
+  ExerciseCorrection,
   ExercisesSubmission,
   GradeDetail,
   GradingProvider,
@@ -87,20 +88,6 @@ interface ToolRequest {
   toolDescription: string;
   schema: Record<string, unknown>;
   maxTokens?: number;
-}
-
-/** Scores the deterministic (multiple-choice) items locally — no need to ask
- * the model to re-grade something with one correct answer. Only free-text
- * ("write") items go to the LLM. */
-function scoreChoiceItems(items: ExerciseItem[], answers: Record<number, string>): { correct: number; total: number } {
-  let correct = 0;
-  let total = 0;
-  items.forEach((item, i) => {
-    if (item.type !== 'choice') return;
-    total += 1;
-    if (answers[i] === item.answer) correct += 1;
-  });
-  return { correct, total };
 }
 
 export class OpenRouterGradingProvider implements GradingProvider {
@@ -290,13 +277,14 @@ export class OpenRouterGradingProvider implements GradingProvider {
   }
 
   async gradeExercises(input: ExercisesSubmission, plan?: TopicPlanContext): Promise<ExercisesAssessment> {
-    const choiceScore = scoreChoiceItems(input.items, input.answers);
-    const writeItems = input.items
-      .map((item, i) => ({ item, i }))
-      .filter((x): x is { item: Extract<ExerciseItem, { type: 'write' }>; i: number } => x.item.type === 'write');
+    const writeItems = input.items.flatMap((item, i) => item.type === 'write' ? [{ item, i }] : []);
+    const missedChoices = input.items.flatMap((item, i) =>
+      item.type === 'choice' && input.answers[i] !== item.answer ? [{ item, i }] : [],
+    );
 
     type ToolOutput = {
       writeGrades: (GradeDetail & { itemIndex: number })[];
+      choiceExplanations: { itemIndex: number; explanation: string }[];
       notes: string[];
       discoveredTopics: TopicRecommendation[];
     };
@@ -308,11 +296,24 @@ export class OpenRouterGradingProvider implements GradingProvider {
           type: 'array',
           minItems: writeItems.length,
           maxItems: writeItems.length,
-          items: {
+          items: writeItems.length ? {
             type: 'object',
             properties: { itemIndex: { type: 'integer', enum: writeItems.map(({ i }) => i) }, ...GRADE_DETAIL_SCHEMA.properties },
             required: ['itemIndex', ...GRADE_DETAIL_SCHEMA.required],
-          },
+          } : false,
+        },
+        choiceExplanations: {
+          type: 'array',
+          minItems: missedChoices.length,
+          maxItems: missedChoices.length,
+          items: missedChoices.length ? {
+            type: 'object',
+            properties: {
+              itemIndex: { type: 'integer', enum: missedChoices.map(({ i }) => i) },
+              explanation: { type: 'string', minLength: 1, description: 'In Russian, explain the rule that makes the expected answer fit and, if answered, why the chosen option does not fit.' },
+            },
+            required: ['itemIndex', 'explanation'],
+          } : false,
         },
         notes: { type: 'array', items: { type: 'string' }, description: '2-3 short Russian sentences on patterns noticed across the answers.' },
         discoveredTopics: {
@@ -321,12 +322,16 @@ export class OpenRouterGradingProvider implements GradingProvider {
           description: 'All distinct new weak spots noticed in THESE answers that are clearly different from the topic being tested (e.g. wrong article usage while testing modals) — empty array if none.',
         },
       },
-      required: ['writeGrades', 'notes', 'discoveredTopics'],
+      required: ['writeGrades', 'choiceExplanations', 'notes', 'discoveredTopics'],
     };
 
     const user = [
       `Topic being tested: "${input.topic.title}" (${input.topic.category}, CEFR ${input.topic.level ?? 'unknown'}). ${input.topic.rationale}`,
-      'Grade each free-text answer below for correctness, grammar, and natural phrasing at the appropriate CEFR level.',
+      'Grade each free-text answer for correctness, grammar, and natural phrasing at the appropriate CEFR level. For a wrong or partial answer, use feedback to explain the specific mistake and the applicable rule in Russian. Give a correct English example for incorrect, partial or omitted answers.',
+      'The multiple-choice items below were already marked wrong or unanswered. Keep the supplied answer key and explain the rule in Russian for each item.',
+      ...missedChoices.map(({ item, i }) => JSON.stringify({
+        itemIndex: i, question: item.q, learnerAnswer: input.answers[i] ?? '', expectedAnswer: item.answer,
+      })),
       '',
       ...writeItems.map(({ item, i }) => `[#${i}] Q: ${item.q}\nA: """${input.answers[i] || '(no answer)'}"""`),
       '',
@@ -334,30 +339,45 @@ export class OpenRouterGradingProvider implements GradingProvider {
       topicPlanInstructions(plan, plan?.currentLevel ?? input.topic.level ?? 'the learner’s current level'),
     ].join('\n\n');
 
-    const out = writeItems.length
+    const out = writeItems.length || missedChoices.length
       ? await this.#callTool<ToolOutput>({
           system: 'You are an expert CEFR English tutor grading exercise answers for a Russian-speaking learner. Always respond only via the provided tool.',
           user,
           toolName: 'submit_exercise_grade',
           maxTokens: 4096,
-          toolDescription: 'Submit structured grades for free-text exercise answers.',
+          toolDescription: 'Submit free-text grades and explanations for missed multiple-choice items.',
           schema,
         })
-      : { writeGrades: [], notes: [], discoveredTopics: [] };
+      : { writeGrades: [], choiceExplanations: [], notes: [], discoveredTopics: [] };
 
-    if (new Set(out.writeGrades.map(({ itemIndex }) => itemIndex)).size !== writeItems.length) {
-      throw new Error('OpenRouter grammar assessment returned duplicate exercise grades.');
+    const written = new Map(out.writeGrades.map((grade) => [grade.itemIndex, grade]));
+    const choices = new Map(out.choiceExplanations.map(({ itemIndex, explanation }) => [itemIndex, explanation]));
+    if (written.size !== writeItems.length || choices.size !== missedChoices.length) {
+      throw new Error('OpenRouter grammar assessment returned duplicate exercise feedback.');
     }
-    const writeCorrect = out.writeGrades.reduce((sum, g) => sum + g.score, 0);
-    const totalCorrect = choiceScore.correct + writeCorrect;
-    const totalPossible = choiceScore.total + writeItems.length || 1;
-    const scoreOutOf10 = Math.round((totalCorrect / totalPossible) * 10);
+
+    const corrections = input.items.flatMap((item, i): ExerciseCorrection[] => {
+      const answer = input.answers[i] ?? '';
+      const base = { questionNumber: i + 1, prompt: item.q, answer };
+      if (item.type === 'choice') {
+        const explanation = choices.get(i);
+        return explanation ? [{ ...base, correction: item.answer, explanation }] : [];
+      }
+      const grade = written.get(i);
+      if (!grade || (answer.trim() && grade.correctness === 'correct')) return [];
+      return [{ ...base, correction: grade.suggestedAnswer, explanation: grade.feedback }];
+    });
+
+    const totalCorrect = input.items.length - writeItems.length - missedChoices.length +
+      out.writeGrades.reduce((sum, grade) => sum + grade.score, 0);
+    const scoreOutOf10 = Math.round((totalCorrect / (input.items.length || 1)) * 10);
 
     return {
       scoreOutOf10,
       passed: scoreOutOf10 >= 7,
       verdictLabel: verdictFor(scoreOutOf10),
       notes: out.notes,
+      corrections,
       discoveredTopics: out.discoveredTopics,
       nextReviewInDays: 3,
     };
