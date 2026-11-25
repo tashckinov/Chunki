@@ -1,6 +1,7 @@
+import { DailyPlanCard } from './DailyPlanCard';
 import { useState } from 'react';
 import { useLearningProgram } from '../lib/useLearningProgram';
-import { BookOpen, CalendarClock, Check, ChevronLeft, ChevronRight, Clock, List, MessageCircle } from 'lucide-react';
+import { BookOpen, CalendarClock, Check, ChevronLeft, ChevronRight, Clock, List } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { Button } from '../components/ui/Button';
 import { ProgramModules } from './ProgramModules';
@@ -95,8 +96,8 @@ function GrammarLevelCard() {
 
 export function ProgramScreen() {
   const s = useAppStore();
-  const { topics, userId, phase, retryLoading, latest, goal, mastered, pending, now, due: [due], next } = useLearningProgram();
-  const today = due ?? next;
+  const { topics, userId, phase, retryLoading, latest, goal, mastered, pending, now, recommendedCount, dailyPlan, planError } = useLearningProgram();
+  const today = dailyPlan?.steps.find(({ kind, done }) => kind === 'new' && !done)?.topic;
   const reviewGroups = new Map<string, UserTopicSummary[]>();
   const scheduled = pending.flatMap((topic) => {
     const time = topic.nextReviewAt ? Date.parse(topic.nextReviewAt) : NaN;
@@ -109,7 +110,7 @@ export function ProgramScreen() {
   const view = s.grammarView;
   const selectView = (grammarView: typeof view) => useAppStore.setState({ grammarView });
 
-  const notice = phase === 'error' ? (
+  const notice = phase === 'error' || planError ? (
     <div className="space-y-2">
       <p role="alert" className="text-negative">Не удалось загрузить программу.</p>
       <Button size="sm" variant="secondary" onClick={retryLoading}>Повторить</Button>
@@ -126,7 +127,7 @@ export function ProgramScreen() {
             onClick={() => selectView('overview')}><ChevronLeft size={16} aria-hidden="true" /> Обучение</button>
         )}
         <header className="flex items-center justify-between gap-3">
-          <h1 className="text-page-title">{view === 'overview' ? 'Обучение' : view === 'level' ? 'Мой уровень' : 'Моя программа'}</h1>
+          <h1 className="text-page-title">{view === 'overview' ? 'Обучение' : view === 'level' ? 'Мой уровень' : view === 'independent' ? 'Самостоятельное обучение' : 'Моя программа'}</h1>
           {view === 'overview' && (
             <Button size="sm" variant="secondary" className="bg-accent-subtle text-accent" onClick={() => selectView('level')}>
               {latest?.level ?? 'Мой уровень'} <ChevronRight size={14} aria-hidden="true" />
@@ -144,43 +145,16 @@ export function ProgramScreen() {
             {latest && (
               <section className="space-y-1.5 border-b border-border pb-5">
                 <div className="flex items-center justify-between gap-2">
-                  <h2 className="text-sm font-semibold">На пути к {goal}</h2>
-                  <span className="text-meta">{mastered} из {topics.length}</span>
+                  <h2 className="text-sm font-semibold">Прогресс персональной программы</h2>
+                  <span className="text-meta">{mastered} из {recommendedCount}</span>
                 </div>
-                <progress aria-label="Подтверждено тем" max={Math.max(topics.length, 1)} value={mastered}
+                <progress aria-label="Подтверждено тем" max={Math.max(recommendedCount, 1)} value={mastered}
                   className="block h-1.5 w-full overflow-hidden rounded-full bg-surface-subtle [&::-webkit-progress-bar]:bg-surface-subtle [&::-webkit-progress-value]:bg-accent [&::-moz-progress-bar]:bg-accent" />
                 {pending.length > 0 && <p className="text-meta">Ожидают проверки · {topicCount(pending.length)}</p>}
               </section>
             )}
-            <section className="space-y-3">
-              <div>
-                <h2 className="text-section-title">На сегодня</h2>
-                <p className="text-meta">{SHORT_DATE.format(new Date())}{today && (due ? ' · Около 5–10 минут' : ' · Около 15 минут')}</p>
-              </div>
-              {today ? (
-                <div className="space-y-3 rounded-2xl border border-border p-3">
-                  <div className="flex items-center gap-3">
-                    <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-accent-subtle text-accent">
-                      {due ? <Clock size={17} aria-hidden="true" /> : <BookOpen size={17} aria-hidden="true" />}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold">{due ? 'Повторение' : 'Новая тема'}</p>
-                      <p className="text-meta wrap-anywhere">{today.title}</p>
-                    </div>
-                  </div>
-                  {!due && (
-                    <div className="flex items-center gap-3 border-t border-border pt-3">
-                      <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-accent-subtle text-accent"><MessageCircle size={17} aria-hidden="true" /></span>
-                      <div><p className="text-sm font-semibold">Практика</p><p className="text-meta">Упражнения по новой теме</p></div>
-                    </div>
-                  )}
-                  <Button className="w-full" onClick={() => void s.openTopic(today.id)}>{due ? 'Начать повторение' : 'Начать обучение'}</Button>
-                </div>
-              ) : !notice && (
-                <p className="text-body-secondary">На сегодня тем к изучению и повторению нет.</p>
-              )}
-              {notice}
-            </section>
+            {dailyPlan && !notice ? <DailyPlanCard plan={dailyPlan} /> : notice ??
+              <p role="status" className="text-meta">{dailyPlan === null ? 'План пока недоступен.' : 'Загружаем план занятий…'}</p>}
             {reviewGroups.size > 0 && (
               <section className="border-b border-border pb-3">
                 <h2 className="text-section-title">Ближайшие повторения</h2>
@@ -199,23 +173,23 @@ export function ProgramScreen() {
             <button type="button" onClick={() => selectView('topics')}
               className="pressable flex w-full items-center gap-3 border-b border-border py-4 text-left">
               <List size={18} className="shrink-0 text-accent" aria-hidden="true" />
-              <span className="flex-1"><span className="block font-medium">Моя программа</span><span className="block text-meta">{topicCount(topics.length)} · прогресс по темам</span></span>
+              <span className="flex-1"><span className="block font-medium">Моя программа</span><span className="block text-meta">{topicCount(recommendedCount)} · прогресс по темам</span></span>
               <ChevronRight size={16} aria-hidden="true" />
             </button>
           </>
         )}
-        {view === 'topics' && (
+        {(view === 'topics' || view === 'independent') && (
           <section>
-            <p className="text-meta">{latest && latest.level + ' → ' + goal + ' · '}{mastered} из {topics.length} подтверждено</p>
+            <p className="text-meta">{latest && latest.level + ' → ' + goal + ' · '}{mastered} из {recommendedCount} подтверждено</p>
             <ProgramModules topics={topics} userId={userId} renderTopic={(topic) => {
               const isToday = topic.id === today?.id;
               const review = topic.nextReviewAt ? new Date(topic.nextReviewAt) : null;
               const status = topic.status === 'mastered' ? 'Освоено' :
                 topic.status === 'passed_once' ? review && review.getTime() <= now ? 'Можно повторить'
                   : review ? 'Проверка ' + SHORT_DATE.format(review) : 'Ожидает проверки'
-                  : isToday ? 'Рекомендовано · Сегодня' : 'Рекомендовано';
+                  : topic.source === 'self' ? 'Самостоятельно' : isToday ? 'Рекомендовано · Сегодня' : 'Рекомендовано';
               return (
-                <button key={topic.id} type="button" onClick={() => void s.openTopic(topic.id, 'read')}
+                <button key={topic.id} type="button" onClick={() => void s.openTopic(topic.id, view === 'independent' || topic.source === 'self' ? 'study' : 'read')}
                   className="pressable flex w-full items-center gap-3 border-b border-border py-4 text-left">
                   <span className="grid size-5 shrink-0 place-items-center text-accent">
                     {topic.status === 'mastered' ? <Check size={16} aria-hidden="true" /> :

@@ -483,3 +483,63 @@ it('previews and atomically imports module links without changing curriculum top
     await deleteCurriculumModule(id);
   }
 });
+
+it('keeps a daily plan fixed, runs due reviews first, and leaves independent study outside it', async () => {
+  const { getDailyLearningPlan } = await import('../modules/program/dailyLearningPlan.js');
+  const { startIndependentTopic } = await import('../modules/program/service.js');
+  const { rows: [learner] } = await pool.query<{ id: string }>('INSERT INTO users (is_admin) VALUES (true) RETURNING id');
+  const { id } = learner;
+  const input: PlacementTestSubmission = {
+    fromLevel: 'A2', toLevel: 'B1', purpose: [], mcqAnswers: {}, open9: '', open10: '', essay: '',
+  };
+  const provider = getGradingProvider();
+  const grade = await provider.gradePlacementTest(input);
+  const placement = vi.spyOn(provider, 'gradePlacementTest').mockResolvedValue({
+    ...grade, overallLevel: 'A2',
+    topics: ['a2-articles', 'a2-past-continuous', 'b1-second-conditional'].map((key) => ({ key, rationale: 'Рекомендация' })),
+  });
+  const exercises = vi.spyOn(provider, 'gradeExercises').mockResolvedValue({
+    scoreOutOf10: 10, passed: true, verdictLabel: 'Отлично', notes: [],
+    discoveredTopics: [{ key: 'b1-core-grammar-simple-passive', rationale: 'Дополнительная рекомендация' }], nextReviewInDays: 1,
+  });
+  async function finish(topicId: string) {
+    const attempt = await startTopicAttempt(id, topicId);
+    if (attempt.kind !== 'ok') throw new Error(attempt.kind);
+    return submitTopicAttempt(id, topicId, attempt.attemptId, {});
+  }
+
+  const load = () => getDailyLearningPlan(id, 'Europe/Moscow');
+  try {
+    expect(await load()).toBeNull();
+    const result = await submitPlacementTest(id, input);
+    if (result.kind !== 'ok') throw new Error(result.kind);
+    const [review, lesson, queued] = ['a2-articles', 'a2-past-continuous', 'b1-second-conditional']
+      .map((curriculumId) => result.topics.find((topic) => topic.curriculumId === curriculumId)!);
+    await pool.query(
+      "UPDATE user_topics SET status = 'passed_once', passed_once_at = now(), next_review_at = now() - interval '1 hour' WHERE id = $1",
+      [review.id],
+    );
+    const plan = await load();
+    expect(plan?.steps).toEqual([
+      { kind: 'review', done: false, topic: expect.objectContaining({ id: review.id }) },
+      { kind: 'new', done: false, topic: expect.objectContaining({ id: lesson.id }) },
+    ]);
+
+    const independent = await startIndependentTopic(id, 'a1-verb-to-be');
+    if (independent.kind !== 'ok') throw new Error(independent.kind);
+    expect(await startIndependentTopic(id, 'a1-verb-to-be')).toEqual(independent);
+    await expect(finish(independent.topicId)).resolves.toMatchObject({ kind: 'ok', newTopicsAdded: 0 });
+    expect(await load()).toEqual(plan);
+
+    await finish(review.id);
+    await finish(lesson.id);
+    expect((await load())?.steps.map(({ topic, done }) => [topic.id, done])).toEqual([[review.id, true], [lesson.id, true]]);
+    expect((await getProgramForUser(id))).toMatchObject({
+      topics: expect.arrayContaining([expect.objectContaining({ id: queued.id, status: 'assigned' })]),
+    });
+  } finally {
+    placement.mockRestore();
+    exercises.mockRestore();
+    await pool.query('DELETE FROM users WHERE id = $1', [id]);
+  }
+});

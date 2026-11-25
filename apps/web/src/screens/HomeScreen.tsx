@@ -1,3 +1,4 @@
+import { DailyPlanCard } from './DailyPlanCard';
 import { BookOpen, CalendarClock, ChevronRight, Layers } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { useLearningProgram } from '../lib/useLearningProgram';
@@ -6,12 +7,11 @@ import { useAppStore } from '../store/appStore';
 const date = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' });
 
 export function HomeScreen() {
-  const { go, openTopic, placementOverview, user, testDraftOwner, testVariant, testStarting, testStartError, startTest } = useAppStore();
-  const { topics, latest, phase, retryLoading, goal, mastered, pending, now, due, next } = useLearningProgram();
-  const today = due[0] ?? next;
+  const { go, placementOverview, user, testDraftOwner, testVariant, testStarting, testStartError, startTest } = useAppStore();
+  const { latest, phase, retryLoading, mastered, pending, now, recommendedCount, dailyPlan, planError } = useLearningProgram();
   const reviews = pending.flatMap((topic) => {
     const time = topic.nextReviewAt ? Date.parse(topic.nextReviewAt) : NaN;
-    return Number.isFinite(time) ? [{ topic, time }] : [];
+    return time > now ? [{ topic, time }] : [];
   }).sort((a, b) => a.time - b.time);
   const quota = placementOverview?.quota;
   const hasDraft = !!user && testDraftOwner === user.id && !!testVariant;
@@ -24,20 +24,14 @@ export function HomeScreen() {
           <h1 className="text-page-title">Главная</h1>
           {latest && <span className="rounded-full bg-accent-subtle px-3 py-1 text-sm font-semibold text-accent">Уровень {latest.level}</span>}
         </header>
-        <section className="space-y-3 rounded-2xl bg-accent-subtle p-5">
+        {dailyPlan && !planError && phase === 'ready' ? <DailyPlanCard plan={dailyPlan} /> : <section className="space-y-3 rounded-2xl bg-accent-subtle p-5">
           <h2 className="text-section-title">Что изучать сегодня</h2>
-          {today ? (
-            <>
-              <p className="text-meta">{due.length ? 'Повторение' : 'Следующая тема'}{today.level ? ' · ' + today.level : ''}</p>
-              <h3 className="text-xl font-semibold wrap-anywhere">{today.title}</h3>
-              <Button onClick={() => void openTopic(today.id)}>{due.length ? 'Начать повторение' : 'Открыть тему'}</Button>
-            </>
-          ) : phase === 'error' ? (
+          {phase === 'error' || planError ? (
             <>
               <p role="alert" className="text-body-secondary">Не удалось загрузить программу.</p>
               <Button onClick={retryLoading}>Повторить загрузку</Button>
             </>
-          ) : phase !== 'ready' ? (
+          ) : phase !== 'ready' || (latest && dailyPlan === undefined) ? (
             <p role="status" className="text-body-secondary">{phase === 'building' ? 'Собираем персональную программу…' : 'Загружаем план занятий…'}</p>
           ) : !latest && (!placementBlocked || hasDraft) ? (
             <>
@@ -53,29 +47,28 @@ export function HomeScreen() {
               <Button onClick={() => go('cardslib')}>Открыть карточки</Button>
             </>
           )}
-        </section>
+        </section>}
 
         {latest && (
           <section className="space-y-2 border-b border-border pb-5">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h2 className="text-section-title">На пути к {goal}</h2>
-              <span className="text-meta">{mastered} из {topics.length} подтверждено</span>
+              <h2 className="text-section-title">Прогресс персональной программы</h2>
+              <span className="text-meta">{mastered} из {recommendedCount} подтверждено</span>
             </div>
-            <progress aria-label="Подтверждено тем" max={Math.max(1, topics.length)} value={mastered}
+            <progress aria-label="Подтверждено тем" max={Math.max(1, recommendedCount)} value={mastered}
               className="block h-1.5 w-full overflow-hidden rounded-full bg-surface-subtle [&::-webkit-progress-bar]:bg-surface-subtle [&::-webkit-progress-value]:bg-accent [&::-moz-progress-bar]:bg-accent" />
-            {due.length > 0 && next && <p className="text-meta">Следующая новая тема · {next.title}</p>}
           </section>
         )}
 
         {reviews.length > 0 && (
           <section className="space-y-2">
-            <h2 className="text-section-title">Повторения</h2>
+            <h2 className="text-section-title">Ближайшие повторения</h2>
             <ul className="divide-y divide-border">
               {reviews.slice(0, 3).map(({ topic, time }) => (
                 <li key={topic.id} className="flex items-center gap-3 py-2.5">
                   <CalendarClock className="shrink-0 text-accent" size={17} aria-hidden="true" />
                   <span className="min-w-0 flex-1 text-sm wrap-anywhere">{topic.title}</span>
-                  <span className="shrink-0 text-meta">{time <= now ? 'Пора повторить' : date.format(time)}</span>
+                  <span className="shrink-0 text-meta">{date.format(time)}</span>
                 </li>
               ))}
             </ul>

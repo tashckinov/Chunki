@@ -157,7 +157,7 @@ interface AppState {
   time: string;
 
   programTopics: UserTopicSummary[];
-  grammarView: 'overview' | 'level' | 'topics';
+  grammarView: 'overview' | 'level' | 'topics' | 'independent';
   activeTopicId: string | null;
   topicMode: 'study' | 'read';
   topicReturnScreen: 'program' | 'home';
@@ -290,7 +290,7 @@ interface AppState {
   setNavTab: (v: number) => void;
   setAdminSection: (s: AdminSection) => void;
 
-  goExercises: () => Promise<void>;
+  goExercises: (independentTopicId?: string) => Promise<void>;
   setTopicAnswer: (itemIndex: number, value: string) => void;
   exPrimary: () => Promise<void>;
 
@@ -446,6 +446,7 @@ export const useAppStore = create<AppState>()(
         if ((s.screen === 'test' && s.testFromProgram) || (s.screen === 'result' && s.placementResultSkipSchedule)) {
           return { screen: 'program' };
         }
+        if (s.screen === 'exercises' && s.activeTopicId && !s.topicStudyByTopic[s.activeTopicId]) return { screen: s.topicReturnScreen };
         if (s.screen === 'topic' && s.topicMode === 'read') return { screen: 'program', grammarView: 'topics' };
         if (s.screen === 'topic') return { screen: s.topicReturnScreen };
         if (s.screen === 'program' && s.grammarView !== 'overview') return { grammarView: 'overview' };
@@ -720,7 +721,7 @@ export const useAppStore = create<AppState>()(
       },
       openTopic: async (userTopicId, mode = 'study') => {
         const { user, programTopics } = get();
-        const learning = mode === 'study' && user && programTopics.some(({ id, status }) => id === userTopicId && status === 'assigned');
+        const learning = mode === 'study' && user && programTopics.some(({ id, status, source }) => id === userTopicId && status === 'assigned' && source !== 'self');
         const previous = get().screen;
         const topicReturnScreen = previous === 'home' ? 'home' : previous === 'topic' ? get().topicReturnScreen : 'program';
         set({
@@ -743,14 +744,22 @@ export const useAppStore = create<AppState>()(
       },
       setAdminSection: (s) => set({ adminSection: s }),
 
-      goExercises: async () => {
-        const { activeTopicId: topicId, topicMode, user, screen, currentAttempt, topicAnswers } = get();
-        if (!user || !topicId || topicMode === 'read' || screen === 'exercises') return;
+      goExercises: async (independentTopicId) => {
+        const { activeTopicId, topicMode, user, screen, currentAttempt, topicAnswers } = get();
+        const topicId = independentTopicId ?? activeTopicId;
+        if (!user || !topicId || (!independentTopicId && topicMode === 'read') || screen === 'exercises') return;
+        const grammarView = get().grammarView;
+        const independentAttempt = independentTopicId ? await apiStartTopicAttempt(topicId) : null;
+        if (independentAttempt && (get().user?.id !== user.id || get().screen !== 'program' ||
+          get().grammarView !== grammarView)) return;
         set((state) => ({
-          screen: 'exercises', topicAnswers: {}, exerciseResult: null, currentAttempt: null, gradingError: null,
+          screen: 'exercises', exerciseResult: null, currentAttempt: independentAttempt, gradingError: null,
+          topicAnswers: independentAttempt ? state.exerciseDrafts[independentAttempt.attemptId] ?? {} : {},
+          ...(independentTopicId ? { activeTopicId: topicId, topicMode: 'study', topicReturnScreen: 'program' } : {}),
           ...(currentAttempt && !state.exerciseResult && Object.keys(topicAnswers).length
             ? { exerciseDrafts: { ...state.exerciseDrafts, [currentAttempt.attemptId]: topicAnswers } } : {}),
         }));
+        if (independentAttempt) return;
         const stillOpen = () => get().user?.id === user.id && get().screen === 'exercises' && get().activeTopicId === topicId;
         try {
           const attempt = await apiStartTopicAttempt(topicId);

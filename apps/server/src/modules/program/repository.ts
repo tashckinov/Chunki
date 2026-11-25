@@ -1,11 +1,12 @@
 import type { PoolClient } from 'pg';
+import { CEFR_LEVELS } from '@app/shared';
 import type { CEFRLevel, PlacementGradeResult, TopicCategory, TopicSuggestion, TopicStudyContent, TopicRecommendation, CurriculumTopic } from '@app/shared';
 import { pool } from '../../db/pool.js';
 import { buildValuesClause } from '../../db/bulkInsert.js';
 import { resolveTopics } from './topicCatalog.js';
 
 export type UserTopicStatus = 'assigned' | 'passed_once' | 'mastered';
-export type UserTopicSource = 'placement' | 'discovered';
+export type UserTopicSource = 'placement' | 'discovered' | 'self';
 export type TopicAttemptKind = 'initial' | 'reconfirm';
 
 export interface UserTopicRow {
@@ -219,6 +220,27 @@ async function insertNewUserTopics(
   );
   const insertedKeys = new Set(inserted.map(({ catalog_key }) => catalog_key));
   return topics.filter(({ key }) => insertedKeys.has(key));
+}
+
+export async function addIndependentTopic(userId: string, curriculumId: string): Promise<string | null> {
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    await insertNewUserTopics(userId, [{ key: curriculumId, rationale: 'Выбрано для самостоятельного изучения.' }],
+      CEFR_LEVELS, 'self', db);
+    const { rows: [row] } = await db.query<{ id: string }>(
+      `SELECT u.id FROM user_topics u JOIN program_topics p ON p.key = u.catalog_key
+       WHERE u.user_id = $1 AND p.curriculum_id = $2 AND u.withdrawn_at IS NULL
+       ORDER BY u.created_at, u.id LIMIT 1`, [userId, curriculumId],
+    );
+    await db.query('COMMIT');
+    return row?.id ?? null;
+  } catch (error) {
+    await db.query('ROLLBACK');
+    throw error;
+  } finally {
+    db.release();
+  }
 }
 
 const USER_TOPIC_SELECT = `SELECT t.*, c.title AS catalog_title, c.category AS catalog_category, c.level,

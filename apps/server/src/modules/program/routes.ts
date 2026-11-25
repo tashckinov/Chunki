@@ -1,3 +1,4 @@
+import { getDailyLearningPlan } from './dailyLearningPlan.js';
 import { listLearningModules } from './learningModules.js';
 import { listCurriculumTopics } from './topicCatalog.js';
 import { topicStudySuggestion } from './topicStudySuggestions.js';
@@ -8,7 +9,7 @@ import { z } from 'zod';
 import { chooseGrammarTest } from '../grammarTests/repository.js';
 import { grammarTestIdSchema } from '../grammarTests/schema.js';
 import { requireAuthenticatedSession } from '../auth/requireAuth.js';
-import { getPlacementQuota, getPlacementResult, getProgramForUser, getTopicStudy, rebuildProgramFromLastTest, startTopicAttempt, submitPlacementTest, submitTopicAttempt } from './service.js';
+import { getPlacementQuota, getPlacementResult, getProgramForUser, getTopicStudy, rebuildProgramFromLastTest, startIndependentTopic, startTopicAttempt, submitPlacementTest, submitTopicAttempt } from './service.js';
 
 const CEFR_LEVELS = ['A1', 'A2', 'A2+', 'B1', 'B1+', 'B2', 'B2+', 'C1'] as const;
 
@@ -49,6 +50,24 @@ export const programRoutes: FastifyPluginAsync = async (app) => {
   app.get('/', { preHandler: requireAuthenticatedSession }, async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
     return getProgramForUser(request.session!.userId);
+  });
+
+  app.post('/daily-plan', { preHandler: requireAuthenticatedSession }, async (request, reply) => {
+    const input = z.object({ timeZone: z.string().min(1).max(64).refine((value) => {
+      try { new Intl.DateTimeFormat('en', { timeZone: value }); return true; } catch { return false; }
+    }) }).safeParse(request.body);
+    if (!input.success) return reply.code(400).send({ error: 'invalid_request' });
+    reply.header('Cache-Control', 'no-store');
+    return { plan: await getDailyLearningPlan(request.session!.userId, input.data.timeZone) };
+  });
+
+  app.post('/independent-topic', { preHandler: requireAuthenticatedSession }, async (request, reply) => {
+    const input = z.object({ curriculumId: z.string().min(1).max(72).regex(/^[a-z0-9]+(-[a-z0-9]+)*$/) }).safeParse(request.body);
+    if (!input.success) return reply.code(400).send({ error: 'invalid_request' });
+    const result = await startIndependentTopic(request.session!.userId, input.data.curriculumId);
+    if (result.kind === 'not_allowed') return reply.code(403).send({ error: result.kind });
+    if (result.kind === 'not_found') return reply.code(404).send({ error: result.kind });
+    return { topicId: result.topicId };
   });
 
   app.get('/modules', { preHandler: requireAuthenticatedSession }, async (request, reply) => {

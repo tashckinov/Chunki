@@ -10,7 +10,7 @@ const STATUS_COPY: Record<string, { label: string; className: string }> = {
   mastered: { label: 'Подтверждено', className: 'text-positive' },
 };
 
-const SOURCE_COPY: Record<string, string> = { placement: 'тест', discovered: 'найдено ИИ' };
+const SOURCE_COPY: Record<string, string> = { placement: 'тест', discovered: 'найдено ИИ', self: 'самостоятельно' };
 
 export function ProgramSection({ onOpenMenu }: { onOpenMenu: () => void }) {
   const [topics, setTopics] = useState<AdminProgramTopic[] | null>(null);
