@@ -6,6 +6,7 @@ import { withAiCallLogging } from '../aiLogs/service.js';
 import { resolveEffectiveTariff, resolvePlacementAccess, listUpsellTariffs, type PublicTariff } from '../subscriptionTariffs/service.js';
 import {
   createAttempt,
+  addIndependentTopic,
   claimTopicAttemptGeneration,
   releaseTopicAttemptGeneration,
   findOpenTopicAttempt,
@@ -67,12 +68,12 @@ function toTopicIdentity(row: UserTopicRow): TopicIdentity {
 function visibleTopics(topics: UserTopicRow[], current: CEFRLevel | null, target: CEFRLevel | null): UserTopicSummary[] {
   const levels = current && target ? topicLevels(current, target) : null;
   const upToTarget = target ? topicLevels('A1', target) : null;
-  const visible = topics.filter((topic) => !levels || !topic.level ||
+  const visible = topics.filter((topic) => topic.source === 'self' || !levels || !topic.level ||
     (topic.status === 'mastered' ? upToTarget ?? levels : levels).includes(topic.level));
   const history = visible.filter(({ status }) => status !== 'assigned');
   const queue = visible.filter(({ status }) => status === 'assigned');
   const currentTopic = queue.reduce<UserTopicRow | undefined>((latest, topic) =>
-    topic.last_attempt_at && (!latest?.last_attempt_at || topic.last_attempt_at > latest.last_attempt_at) ? topic : latest, undefined);
+    topic.source !== 'self' && topic.last_attempt_at && (!latest?.last_attempt_at || topic.last_attempt_at > latest.last_attempt_at) ? topic : latest, undefined);
   const difficulty = (topic: UserTopicRow) => topic.level ? CEFR_LEVELS.indexOf(topic.level) : CEFR_LEVELS.length;
 
   queue.sort((a, b) => difficulty(a) - difficulty(b));
@@ -246,6 +247,12 @@ export async function rebuildProgramFromLastTest(
 
 export type TopicStudyResult = { kind: 'not_found' } | { kind: 'not_allowed'; upsellTariffs: PublicTariff[] } | { kind: 'ok'; study: TopicStudyContent };
 
+export async function startIndependentTopic(userId: string, curriculumId: string) {
+  if (await checkProgramAllowed(userId)) return { kind: 'not_allowed' } as const;
+  const topicId = await addIndependentTopic(userId, curriculumId);
+  return topicId ? { kind: 'ok', topicId } as const : { kind: 'not_found' } as const;
+}
+
 export async function getTopicStudy(userId: string, userTopicId: string): Promise<TopicStudyResult> {
   const row = await findUserTopic(userId, userTopicId);
   if (!row) return { kind: 'not_found' };
@@ -334,7 +341,7 @@ export async function submitTopicAttempt(userId: string, userTopicId: string, at
   const topic = { ...toTopicIdentity(row), rationale: row.rationale };
   const gradeInput = { topic, items, answers };
   const [latest] = await listPlacementTests(userId);
-  const plan = latest ? await topicPlan(userId, latest.overall_level, latest.to_level) : undefined;
+  const plan = latest && row.source !== 'self' ? await topicPlan(userId, latest.overall_level, latest.to_level) : undefined;
 
   const provider = getGradingProvider();
   const result = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: provider.model ?? null, request: gradeInput }, () => provider.gradeExercises(gradeInput, plan));
@@ -352,7 +359,7 @@ export async function submitTopicAttempt(userId: string, userTopicId: string, at
       : { status: 'mastered', passedOnceAt: row.passed_once_at, masteredAt: now };
   }
   const inserted = await saveTopicGrade(userId, attempt,
-    { answers, scoreOutOf10: result.scoreOutOf10, passed: result.passed, notes: result.notes, discoveredTopics: result.discoveredTopics },
+    { answers, scoreOutOf10: result.scoreOutOf10, passed: result.passed, notes: result.notes, discoveredTopics: row.source === 'self' ? [] : result.discoveredTopics },
     progress, levels);
   if (!inserted) return { kind: 'already_graded' };
   return { kind: 'ok', result: { ...result, discoveredTopics: inserted }, newTopicsAdded: inserted.length };

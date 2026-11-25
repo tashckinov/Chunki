@@ -1,7 +1,7 @@
 import { CEFR_LEVELS } from '@app/shared';
 import { useEffect, useState } from 'react';
 import { useAppStore } from '../store/appStore';
-import { rebuildProgram, type UserTopicSummary } from './program';
+import { loadDailyLearningPlan, rebuildProgram, type DailyLearningPlan, type UserTopicSummary } from './program';
 
 export function useLearningProgram() {
   const s = useAppStore();
@@ -58,10 +58,48 @@ export function useLearningProgram() {
   }, [retry, userId]);
   const latest = s.placementOverview?.history[0];
   const goal = latest?.goal ?? s.to;
-  const mastered = topics.filter((topic) => topic.status === 'mastered').length;
-  const pending = topics.filter((topic) => topic.status === 'passed_once');
-  const now = Date.now();
-  const due = pending.filter((topic) => topic.nextReviewAt && Date.parse(topic.nextReviewAt) <= now);
-  const next = topics.find((topic) => topic.status === 'assigned');
-  return { topics, userId, phase, retryLoading: () => setRetry((value) => value + 1), latest, goal, mastered, pending, now, due, next };
+  const [daily, setDaily] = useState<{ userId: string; placementId: string; plan: DailyLearningPlan | null }>();
+  const [failedPlanOwner, setFailedPlanOwner] = useState<string>();
+  const latestId = latest?.id;
+  useEffect(() => {
+    if (!userId || !latestId || phase !== 'ready') return;
+    const owner = userId;
+    const placementId = latestId;
+    let active = true;
+    let request = 0;
+    async function refresh() {
+      const id = ++request;
+      try {
+        const { plan } = await loadDailyLearningPlan();
+        if (active && id === request) {
+          setDaily({ userId: owner, placementId, plan });
+          setFailedPlanOwner(undefined);
+        }
+      } catch {
+        if (active && id === request) setFailedPlanOwner(owner);
+      }
+    }
+    let day = new Date().toDateString();
+    const timer = window.setInterval(() => {
+      const today = new Date().toDateString();
+      if (day === today) return;
+      day = today;
+      void refresh();
+    }, 60_000);
+    void refresh();
+    window.addEventListener('focus', refresh);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [userId, latestId, phase, retry]);
+
+  const recommended = topics.filter(({ source }) => source !== 'self');
+  const mastered = recommended.filter(({ status }) => status === 'mastered').length;
+  const pending = recommended.filter(({ status }) => status === 'passed_once');
+  return { topics, userId, phase, retryLoading: () => setRetry((value) => value + 1), latest, goal, mastered,
+    pending, now: Date.now(), recommendedCount: recommended.length,
+    dailyPlan: daily && daily.userId === userId && daily.placementId === latestId ? daily.plan : undefined,
+    planError: !!userId && failedPlanOwner === userId };
 }

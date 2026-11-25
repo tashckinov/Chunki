@@ -1,8 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { CurriculumModule } from '@app/shared';
 import { Button } from '../components/ui/Button';
-import { getJson } from '../lib/collections';
-import type { UserTopicSummary } from '../lib/program';
+import { ApiError, getJson } from '../lib/collections';
+import { startIndependentTopic, type UserTopicSummary } from '../lib/program';
+import { useAppStore } from '../store/appStore';
 
 type LearningModule = Pick<CurriculumModule, 'id' | 'title' | 'description' | 'level' | 'type'> & {
   topics: { id: string; title: string }[];
@@ -16,6 +17,35 @@ export function ProgramModules({ topics, userId, renderTopic }: {
   const [catalog, setCatalog] = useState<{ userId: string; modules: LearningModule[] }>();
   const [failed, setFailed] = useState(false);
   const [retry, setRetry] = useState(0);
+  const [opening, setOpening] = useState<string>();
+  const [actionError, setActionError] = useState<string>();
+
+  async function openIndependent(curriculumId: string, check: boolean) {
+    const view = useAppStore.getState().grammarView;
+    setOpening(curriculumId);
+    setActionError(undefined);
+    try {
+      const { topicId } = await startIndependentTopic(curriculumId);
+      const program = await useAppStore.getState().loadProgram();
+      const state = useAppStore.getState();
+      if (state.user?.id !== userId || state.screen !== 'program' || state.grammarView !== view) return;
+      if (program?.status !== 'active' || !program.topics.some(({ id }) => id === topicId)) {
+        throw new Error('Topic unavailable');
+      }
+      if (check) {
+        await state.goExercises(topicId);
+      } else {
+        await state.openTopic(topicId);
+      }
+    } catch (error) {
+      setActionError(error instanceof ApiError && error.status === 403
+        ? 'Занятия по темам недоступны на вашем тарифе.'
+        : 'Не удалось открыть тему. Попробуйте ещё раз.');
+    } finally {
+      setOpening(undefined);
+    }
+  }
+
   const assignmentKey = topics.map(({ id, curriculumId }) => id + ':' + (curriculumId ?? '')).sort().join(',');
 
   useEffect(() => {
@@ -46,21 +76,38 @@ export function ProgramModules({ topics, userId, renderTopic }: {
         <p role="alert" className="text-meta">Не удалось загрузить учебные модули.</p>
         <Button size="sm" variant="ghost" onClick={() => { setFailed(false); setRetry((value) => value + 1); }}>Повторить</Button>
       </div>}
+      {actionError && <p role="alert" className="text-negative">{actionError}</p>}
       {modules.map((module) => {
         const assigned = module.topics.flatMap(({ id }) => assignedById.get(id) ?? []);
-        const mastered = assigned.filter(({ status }) => status === 'mastered').length;
+        const recommended = assigned.filter(({ source }) => source !== 'self');
+        const unchecked = module.topics.filter(({ id }) => {
+          const entries = assignedById.get(id);
+          return !entries || entries.every(({ source, status }) => source === 'self' && status === 'assigned');
+        });
+        const uncheckedIds = new Set(unchecked.map(({ id }) => id));
+        const mastered = recommended.filter(({ status }) => status === 'mastered').length;
         return (
           <section key={module.id} className="border-b border-border py-3">
             <h2 className="text-section-title">{module.title}</h2>
             <p className="text-meta">{module.level} · {module.type === 'core' ? 'Основной модуль' : 'Дополнительный модуль'}</p>
             <p className="mt-1 text-body-secondary">{module.description}</p>
-            <p className="mt-2 text-sm font-medium">Освоено {mastered} из {assigned.length} рекомендованных тем</p>
-            <div>{assigned.map(renderTopic)}</div>
-            {module.topics.some(({ id }) => !assignedById.has(id)) && (
+            <p className="mt-2 text-sm font-medium">Освоено {mastered} из {recommended.length} рекомендованных тем</p>
+            <div>{assigned.filter(({ curriculumId }) => !curriculumId || !uncheckedIds.has(curriculumId)).map(renderTopic)}</div>
+            {unchecked.length > 0 && (
               <details className="py-3">
                 <summary className="cursor-pointer text-sm font-medium">Темы, по которым знания ещё не проверены</summary>
-                <ul className="mt-2 space-y-2 text-body-secondary">
-                  {module.topics.filter(({ id }) => !assignedById.has(id)).map(({ id, title }) => <li key={id}>{title}</li>)}
+                <ul className="mt-2 divide-y divide-border">
+                  {unchecked.map(({ id, title }) => (
+                    <li key={id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                      <span className="min-w-0 text-body-secondary wrap-anywhere">{title}</span>
+                      <div className="flex flex-wrap gap-2">
+                        <Button size="sm" variant="secondary" disabled={!!opening} onClick={() => void openIndependent(id, false)}>Изучить</Button>
+                        <Button size="sm" variant="ghost" disabled={!!opening} onClick={() => void openIndependent(id, true)}>
+                          {opening === id ? 'Открываем…' : 'Проверить знания'}
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
                 </ul>
               </details>
             )}

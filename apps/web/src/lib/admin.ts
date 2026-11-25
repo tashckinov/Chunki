@@ -222,7 +222,7 @@ export interface AdminProgramTopic {
   title: string;
   category: string;
   status: 'assigned' | 'passed_once' | 'mastered';
-  source: 'placement' | 'discovered';
+  source: 'placement' | 'discovered' | 'self';
   nextReviewAt: string | null;
   updatedAt: string;
 }

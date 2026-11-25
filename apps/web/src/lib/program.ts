@@ -10,10 +10,23 @@ export interface UserTopicSummary {
   curriculumId?: string | null;
   topicNumber?: number | null;
   rationale: string;
-  source: 'placement' | 'discovered';
+  source: 'placement' | 'discovered' | 'self';
   status: 'assigned' | 'passed_once' | 'mastered';
   nextReviewAt: string | null;
   masteredAt: string | null;
+}
+
+export interface DailyLearningPlan {
+  day: string;
+  steps: { topic: UserTopicSummary; kind: 'review' | 'new'; done: boolean }[];
+}
+
+export function loadDailyLearningPlan(): Promise<{ plan: DailyLearningPlan | null }> {
+  return postJson('/api/program/daily-plan', { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone });
+}
+
+export function startIndependentTopic(curriculumId: string): Promise<{ topicId: string }> {
+  return postJson('/api/program/independent-topic', { curriculumId });
 }
 
 export type ProgramState = ({ status: 'none' } | { status: 'active'; topics: UserTopicSummary[] }) & { placement?: PlacementOverview; needsProgramBuild?: boolean };
