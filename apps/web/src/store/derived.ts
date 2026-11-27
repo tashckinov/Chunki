@@ -1,7 +1,6 @@
 import { BUILTIN_PLACEMENT_TEST, type CEFRLevel } from '@app/shared';
 import { useAppStore } from './appStore';
 import { plural } from '../lib/plural';
-import { DAY_LABELS } from '../lib/schedule';
 
 const LEVELS_FROM: CEFRLevel[] = ['A1', 'A2', 'A2+', 'B1', 'B1+', 'B2'];
 const LEVELS_TO: CEFRLevel[] = ['A1', 'A2', 'B1', 'B1+', 'B2', 'C1'];
@@ -48,12 +47,10 @@ export function useTestView() {
 
 export function useScheduleView() {
   const s = useAppStore();
-  const dayPicks = DAY_LABELS.map((label, i) => ({ label, selected: s.days.includes(i), pick: () => s.toggleDay(i) }));
-  const timePicks = ['08:00', '13:00', '19:00', '21:30'].map((t) => ({ label: t, selected: s.time === t, pick: () => s.setTime(t) }));
   const perWeek = s.days.length * s.minutes;
   const weeks = Math.max(4, Math.round((14 * 45) / Math.max(30, perWeek)));
-  const scheduleSummary = `${s.days.length} ${plural(s.days.length, 'занятие', 'занятия', 'занятий')} в неделю по ${s.minutes} минут — программа до ${s.to} закроется примерно за ${weeks} ${plural(weeks, 'неделю', 'недели', 'недель')}. Напоминание в ${s.time}.`;
-  return { dayPicks, timePicks, scheduleSummary };
+  const scheduleSummary = `${s.days.length} ${plural(s.days.length, 'занятие', 'занятия', 'занятий')} в неделю по ${s.minutes} минут — программа до ${s.to} закроется примерно за ${weeks} ${plural(weeks, 'неделю', 'недели', 'недель')}.`;
+  return { scheduleSummary };
 }
 
 /** Segments a per-chunk SegmentedRing shows, by chunk_progress.state. Full ring (4) gets the "mastered" checkmark treatment. */

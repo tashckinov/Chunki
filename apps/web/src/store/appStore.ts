@@ -154,7 +154,6 @@ interface AppState {
 
   days: number[]; // 0=Пн .. 6=Вс
   minutes: number;
-  time: string;
 
   programTopics: UserTopicSummary[];
   grammarView: 'overview' | 'level' | 'topics' | 'independent';
@@ -272,9 +271,8 @@ interface AppState {
   submitTest: () => Promise<void>;
 
   goSchedule: () => void;
-  toggleDay: (i: number) => void;
+  setStudyDays: (days: number[]) => void;
   setMinutes: (v: number) => void;
-  setTime: (t: string) => void;
   finishSchedule: () => Promise<void>;
   skipPaywall: () => void;
 
@@ -370,7 +368,6 @@ export const useAppStore = create<AppState>()(
 
       days: [1, 3, 5],
       minutes: 25,
-      time: '19:00',
 
       programTopics: [],
       grammarView: 'overview',
@@ -588,10 +585,8 @@ export const useAppStore = create<AppState>()(
       },
 
       goSchedule: () => set({ screen: 'schedule' }),
-      toggleDay: (i) =>
-        set((s) => ({ days: s.days.includes(i) ? s.days.filter((x) => x !== i) : [...s.days, i].sort() })),
+      setStudyDays: (days) => set({ days }),
       setMinutes: (v) => set({ minutes: Math.round(v) }),
-      setTime: (t) => set({ time: t }),
       finishSchedule: async () => {
         const userId = get().user?.id;
         if (!userId) return;
