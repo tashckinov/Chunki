@@ -1,3 +1,4 @@
+import { neighboringTopic } from './topicAccess.js';
 import type { PoolClient } from 'pg';
 import { CEFR_LEVELS, type CEFRLevel, type CurriculumTopic, type TopicCategory, type TopicIdentity, type TopicRecommendation, type TopicStudyContent, type TopicSuggestion } from '@app/shared';
 import { pool } from '../../db/pool.js';
@@ -25,7 +26,7 @@ const PROGRAM_CATEGORY: Record<CurriculumTopic['category'], TopicCategory> = {
 };
 
 export async function resolveTopics(
-  db: PoolClient, userId: string, candidates: TopicRecommendation[], levels: readonly CEFRLevel[],
+  db: PoolClient, userId: string, candidates: TopicRecommendation[], levels: readonly CEFRLevel[], independent = false,
 ): Promise<TopicSuggestion[]> {
   if (!candidates.length || !levels.length) return [];
   // Includes linked legacy assignments. Their progress satisfies this same
@@ -36,8 +37,9 @@ export async function resolveTopics(
        AND NOT EXISTS (
          SELECT 1 FROM user_topics u JOIN program_topics p ON p.key = u.catalog_key
          WHERE u.user_id = $3 AND u.withdrawn_at IS NULL AND p.curriculum_id = c.id
+           AND ($4::bool OR u.source <> 'self' OR ${neighboringTopic('$3', 'p.curriculum_id')})
        )`,
-    [candidates.map(({ key }) => key), levels, userId],
+    [candidates.map(({ key }) => key), levels, userId, independent],
   );
   const available = new Map(rows.map((topic) => [topic.id, topic]));
   const selected = candidates.flatMap(({ key, rationale }) => {

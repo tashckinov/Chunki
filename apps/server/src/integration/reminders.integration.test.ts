@@ -57,7 +57,7 @@ it('sends once on a selected day and skips empty, finished and unscheduled plans
     // A repeat save does not create another opt-in. A changed schedule does.
     await pool.query('UPDATE study_reminders SET days = days, local_time = local_time WHERE user_id = $1', [waiting.id]);
     await pool.query("UPDATE study_reminders SET local_time = local_time + interval '1 minute' WHERE user_id = $1", [waiting.id]);
-    const events = await pool.query('SELECT name FROM product_events WHERE user_id = $1 ORDER BY occurred_at', [waiting.id]);
+    const events = await pool.query("SELECT name FROM product_events WHERE user_id = $1 AND name IN ('reminder_enabled', 'reminder_schedule_changed') ORDER BY occurred_at", [waiting.id]);
     expect(events.rows).toEqual([{ name: 'reminder_enabled' }, { name: 'reminder_schedule_changed' }]);
 
     await pool.query(`UPDATE study_reminders SET last_sent_on = NULL, local_time = (now() AT TIME ZONE 'UTC')::time

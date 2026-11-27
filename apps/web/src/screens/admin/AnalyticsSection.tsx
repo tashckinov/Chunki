@@ -1,3 +1,4 @@
+import { CurriculumObjectives } from './CurriculumObjectives';
 import { useAppStore } from '../../store/appStore';
 import { useEffect, useState } from 'react';
 import { getJson } from '../../lib/collections';
@@ -9,7 +10,7 @@ const labels: Record<string, string> = {
   app_opened: 'Открыл приложение', registered: 'Регистрация', placement_started: 'Начал тест уровня',
   placement_completed: 'Завершил тест уровня', placement_result_viewed: 'Открыл результат теста',
   program_prepared: 'Получил программу', program_opened: 'Открыл программу', topic_opened: 'Открыл тему',
-  topic_study_started: 'Перешёл от урока к упражнениям', topic_check_started: 'Начал проверку по теме',
+  topic_assigned: 'Назначена тема', topic_study_started: 'Перешёл от урока к упражнениям', topic_check_started: 'Начал проверку по теме',
   topic_check_completed: 'Завершил проверку по теме', collection_opened: 'Открыл коллекцию',
   deck_started: 'Начал карточки', card_viewed: 'Увидел карточку', card_reviewed: 'Ответил по карточке',
   card_first_mastered: 'Впервые подтвердил карточку', deck_completed: 'Завершил карточки',
@@ -27,10 +28,10 @@ const zone = 'Europe/Moscow';
 const formatTime = new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeStyle: 'short', timeZone: zone });
 const ratio = (count: number, total: number) => total ? `${count} из ${total} · ${Math.round(100 * count / total)}%` : 'Нет выборки';
 type Timeline = { rows: { event_id: string; name: string; user_id: string; email: string | null; occurred_at: string;
-  title: string | null; content_id: string | null; source: string; properties: Record<string, unknown> }[]; more: boolean };
+  title: string | null; content_id: string | null; curriculum_objective_id: string | null; assignment_id: string | null; source: string; properties: Record<string, unknown> }[]; more: boolean };
 type Report = {
   totals: Record<string, number>;
-  cohort: { total: number; started: number; tested: number; first_lesson: number; activated: number;
+  cohort: { total: number; started: number; observed_starts: number; tested: number; first_lesson: number; activated: number;
     retention: { day: number; eligible: number; returned: number }[] };
   events: { name: string; segment: string; events: number; users: number }[];
   content: { content_type: string; content_id: string; title: string; users: number; opens: number; actions: number; finishes: number; returning: number }[];
@@ -98,22 +99,22 @@ export function AnalyticsSection({ onOpenMenu }: { onOpenMenu: () => void }) {
         <Stats items={[
           ['Зарегистрировано всего', report.totals.registered], ['Новые за период', report.totals.new_users],
           ['Активны сегодня', report.totals.active_1], ['Активны за 7 дней', report.totals.active_7],
-          ['Активны за 30 дней', report.totals.active_30], ['Ученики с учебным действием', report.totals.learners],
+          ['Активны за 30 дней', report.totals.active_30], ['Уникальные ученики с учебным действием', report.totals.learners],
           ['Завершённые учебные действия', report.totals.learning_actions],
           ['Действий на активного ученика', report.totals.learners ? (report.totals.learning_actions / report.totals.learners).toFixed(1) : '—'],
-          ['Начато тестов', report.events.filter(({ name }) => name === 'placement_started').reduce((sum, row) => sum + row.events, 0)],
-          ['Завершено тестов', report.events.find(({ name }) => name === 'placement_completed')?.events ?? 0],
+          ['Зафиксировано запусков теста', report.events.filter(({ name }) => name === 'placement_started').reduce((sum, row) => sum + row.events, 0)],
+          ['Завершено попыток теста', report.events.find(({ name }) => name === 'placement_completed')?.events ?? 0],
           ['Активация новых пользователей', ratio(report.cohort.activated, report.cohort.total)],
         ]} />
         <h2 className="text-section-title">Возвращаемость новых пользователей</h2>
         <Stats items={report.cohort.retention.map(({ day, eligible, returned }) => [`День ${day}`, ratio(returned, eligible)])} />
-        <p className="text-meta">Учитываются наблюдаемые действия. Открытия экранов и комиксов доступны с момента запуска сбора.</p>
+        <p className="text-meta">Активность включает посещения и открытия. Учебные действия считаются отдельно за выбранный период. Запуски тестов и открытия доступны с момента запуска сбора.</p>
       </>}
       {report && tab === 'Обучение' && <>
         <h2 className="text-section-title">От регистрации до первого урока</h2>
         <Stats items={[
-          ['Зарегистрировались', report.cohort.total], ['Приступили к тесту', report.cohort.started],
-          ['Завершили тест', report.cohort.tested], ['Сдали упражнения по рекомендованной теме после теста', report.cohort.first_lesson],
+          ['Зарегистрировались', report.cohort.total], ['Дошли до теста, включая завершивших без записи запуска', report.cohort.started], ['Есть запись запуска теста', report.cohort.observed_starts],
+          ['Уникальные пользователи, завершившие тест', report.cohort.tested], ['Сдали упражнения по рекомендованной теме после теста', report.cohort.first_lesson],
         ]} />
         <h2 className="text-section-title">Действия по типам</h2>
         <Stats items={[[ 'Успешные первые проверки рекомендованных тем', report.totals.recommended_passes ]]} />
@@ -124,12 +125,14 @@ export function AnalyticsSection({ onOpenMenu }: { onOpenMenu: () => void }) {
         <h2 className="text-section-title">Завершение начатых занятий</h2>
         <Stats items={report.completion.map(({ name, finished, started }) => [labels[name], ratio(finished, started)])} />
       </>}
+      {report && tab === 'Контент' && <CurriculumObjectives query={query} />}
+      {report && tab === 'Контент' && <p className="text-meta">Открытия считаются с начала сбора. Сохранённые попытки доступны за более ранние даты.</p>}
       {report && tab === 'Контент' && Object.entries(category).map(([type, title]) => <section key={type}>
         <h2 className="text-section-title">{title}</h2>
         <ul className="divide-y divide-border">
           {report.content.filter(({ content_type }) => content_type === type).map((item) => <li key={item.content_id} className="py-3">
             <p className="font-medium">{item.title}</p>
-            <p className="text-meta">Учеников {item.users} · открытий {item.opens} · действий {item.actions} · завершений {item.finishes} · вернулись {item.returning}</p>
+            <p className="text-meta">Учеников {item.users} · зафиксировано открытий {item.opens} · действий {item.actions} · завершений {item.finishes} · вернулись {item.returning}</p>
           </li>)}
         </ul>
       </section>)}
@@ -170,7 +173,7 @@ export function AnalyticsSection({ onOpenMenu }: { onOpenMenu: () => void }) {
               <button type="button" className="my-2 text-sm text-accent" onClick={() => { setOffset(0); setFilter({ ...filter, user: row.user_id }); }}>
                 {row.email ?? row.user_id}
               </button>
-              <pre className="whitespace-pre-wrap wrap-anywhere text-meta">{JSON.stringify({ source: row.source, content: row.content_id, ...row.properties }, null, 2)}</pre>
+              <pre className="whitespace-pre-wrap wrap-anywhere text-meta">{JSON.stringify({ source: row.source, content: row.content_id, objective: row.curriculum_objective_id, assignment: row.assignment_id, ...row.properties }, null, 2)}</pre>
             </details>
           </li>)}
         </ul>

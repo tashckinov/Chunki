@@ -1,3 +1,4 @@
+import { neighboringTopic } from './topicAccess.js';
 import type { PoolClient } from 'pg';
 import { CEFR_LEVELS } from '@app/shared';
 import type { CEFRLevel, PlacementGradeResult, TopicCategory, TopicSuggestion, TopicStudyContent, TopicRecommendation, CurriculumTopic } from '@app/shared';
@@ -206,7 +207,7 @@ async function insertNewUserTopics(
   db: PoolClient,
 ): Promise<TopicSuggestion[]> {
   if (candidates.length === 0 || levels.length === 0) return [];
-  const topics = await resolveTopics(db, userId, candidates, levels);
+  const topics = await resolveTopics(db, userId, candidates, levels, source === 'self');
   const rows = buildValuesClause(topics.map((topic) => [userId, topic.key, topic.key, topic.title, topic.category, topic.rationale, source]));
   if (!rows) return [];
   const { rows: inserted } = await db.query<{ catalog_key: string }>(
@@ -214,7 +215,7 @@ async function insertNewUserTopics(
      VALUES ${rows.placeholders}
      ON CONFLICT (user_id, catalog_key) DO UPDATE SET withdrawn_at = NULL, rationale = EXCLUDED.rationale,
        source = EXCLUDED.source, updated_at = now()
-     WHERE user_topics.withdrawn_at IS NOT NULL
+     WHERE user_topics.withdrawn_at IS NOT NULL OR (user_topics.source = 'self' AND EXCLUDED.source <> 'self')
      RETURNING catalog_key`,
     rows.values,
   );
@@ -226,6 +227,16 @@ export async function addIndependentTopic(userId: string, curriculumId: string):
   const db = await pool.connect();
   try {
     await db.query('BEGIN');
+    const eligible = await db.query(
+      `SELECT 1 WHERE ${neighboringTopic('$1', '$2')}
+        OR EXISTS (SELECT 1 FROM user_topics u JOIN program_topics p ON p.key = u.catalog_key
+          WHERE u.user_id = $1 AND p.curriculum_id = $2 AND u.withdrawn_at IS NULL AND u.source <> 'self')`,
+      [userId, curriculumId],
+    );
+    if (!eligible.rowCount) {
+      await db.query('ROLLBACK');
+      return null;
+    }
     await insertNewUserTopics(userId, [{ key: curriculumId, rationale: 'Выбрано для самостоятельного изучения.' }],
       CEFR_LEVELS, 'self', db);
     const { rows: [row] } = await db.query<{ id: string }>(
@@ -252,6 +263,7 @@ export async function listAssignedTopicKeys(userId: string, replaceUnstarted = f
   const { rows } = await pool.query<{ curriculum_id: string }>(
     `SELECT DISTINCT p.curriculum_id FROM user_topics u JOIN program_topics p ON p.key = u.catalog_key
      WHERE u.user_id = $1 AND p.curriculum_id IS NOT NULL AND u.withdrawn_at IS NULL
+       AND (u.source <> 'self' OR ${neighboringTopic('$1', 'p.curriculum_id')})
        AND (NOT $2::boolean OR NOT (${REPLACEABLE_PLACEMENT_TOPIC}))`,
     [userId, replaceUnstarted],
   );
@@ -260,7 +272,7 @@ export async function listAssignedTopicKeys(userId: string, replaceUnstarted = f
 
 export async function findUserTopics(userId: string): Promise<UserTopicRow[]> {
   const { rows } = await pool.query<UserTopicRow>(`SELECT topics.*, attempts.last_attempt_at FROM (${USER_TOPIC_SELECT}
-       WHERE t.user_id = $1 AND t.withdrawn_at IS NULL) topics
+       WHERE t.user_id = $1 AND t.withdrawn_at IS NULL AND (t.source <> 'self' OR ${neighboringTopic('$1', 'c.curriculum_id')})) topics
      LEFT JOIN LATERAL (
        SELECT max(a.created_at) AS last_attempt_at FROM topic_attempts a
        WHERE a.user_topic_id = topics.id AND topics.status = 'assigned'
@@ -272,6 +284,7 @@ export async function findUserTopics(userId: string): Promise<UserTopicRow[]> {
 export async function findUserTopic(userId: string, id: string): Promise<UserTopicRow | null> {
   const { rows } = await pool.query<UserTopicRow>(
     `${USER_TOPIC_SELECT} WHERE t.user_id = $1 AND t.withdrawn_at IS NULL
+     AND (t.source <> 'self' OR ${neighboringTopic('$1', 'c.curriculum_id')})
      AND t.id = COALESCE((SELECT topic_id FROM user_topic_redirects WHERE old_id = $2), $2)`,
     [userId, id],
   );
