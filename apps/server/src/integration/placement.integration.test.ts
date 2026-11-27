@@ -486,6 +486,8 @@ it('previews and atomically imports module links without changing curriculum top
 
 it('keeps a daily plan fixed, runs due reviews first, and leaves independent study outside it', async () => {
   const { getDailyLearningPlan } = await import('../modules/program/dailyLearningPlan.js');
+  const { importCurriculumModules, deleteCurriculumModule } = await import('../modules/admin/curriculumModules.js');
+  const moduleId = 'fixture-daily-' + randomUUID();
   const { startIndependentTopic } = await import('../modules/program/service.js');
   const { rows: [learner] } = await pool.query<{ id: string }>('INSERT INTO users (is_admin) VALUES (true) RETURNING id');
   const { id } = learner;
@@ -525,9 +527,13 @@ it('keeps a daily plan fixed, runs due reviews first, and leaves independent stu
       { kind: 'new', done: false, topic: expect.objectContaining({ id: lesson.id }) },
     ]);
 
-    const independent = await startIndependentTopic(id, 'a1-verb-to-be');
+    await importCurriculumModules([{
+      id: moduleId, title: 'Пример модуля', description: 'Модуль для соседней темы.',
+      level: 'A2', position: 0, type: 'core', topicIds: ['a2-articles', 'a2-requests'],
+    }], false);
+    const independent = await startIndependentTopic(id, 'a2-requests');
     if (independent.kind !== 'ok') throw new Error(independent.kind);
-    expect(await startIndependentTopic(id, 'a1-verb-to-be')).toEqual(independent);
+    expect(await startIndependentTopic(id, 'a2-requests')).toEqual(independent);
     await expect(finish(independent.topicId)).resolves.toMatchObject({ kind: 'ok', newTopicsAdded: 0 });
     expect(await load()).toEqual(plan);
 
@@ -538,8 +544,78 @@ it('keeps a daily plan fixed, runs due reviews first, and leaves independent stu
       topics: expect.arrayContaining([expect.objectContaining({ id: queued.id, status: 'assigned' })]),
     });
   } finally {
+    await deleteCurriculumModule(moduleId);
     placement.mockRestore();
     exercises.mockRestore();
+    await pool.query('DELETE FROM users WHERE id = $1', [id]);
+  }
+});
+
+it('enforces module access for direct assignment, study and knowledge checks without deleting progress', async () => {
+  const { fastify } = await import('fastify');
+  const { default: cookie } = await import('@fastify/cookie');
+  const { createSession } = await import('../modules/auth/session.js');
+  const { programRoutes } = await import('../modules/program/routes.js');
+  const { listLearningModules } = await import('../modules/program/learningModules.js');
+  const { importCurriculumModules, deleteCurriculumModule } = await import('../modules/admin/curriculumModules.js');
+  const app = fastify();
+  const { rows: [{ id }] } = await pool.query<{ id: string }>('INSERT INTO users (is_admin) VALUES (true) RETURNING id');
+  const moduleA = 'access-a-' + randomUUID();
+  const moduleB = 'access-b-' + randomUUID();
+  const recommended = 'a2-articles';
+  const neighbor = 'a2-past-continuous';
+  const restricted = 'a2-requests';
+  async function seed(curriculum: string, source: 'placement' | 'self') {
+    const { rows: [row] } = await pool.query<{ id: string }>(
+      `INSERT INTO user_topics (user_id, key, catalog_key, title, category, rationale, source, status)
+       SELECT $1, key, key, title, category, 'Fixture', $3, 'assigned' FROM program_topics
+       WHERE curriculum_id = $2 AND curriculum_slot RETURNING id`, [id, curriculum, source],
+    );
+    return row.id;
+  }
+  try {
+    await app.register(cookie);
+    await app.register(programRoutes, { prefix: '/api/program' });
+    const { token } = await createSession(id, null);
+    const headers = { authorization: 'Bearer ' + token };
+    const assign = (curriculumId: string) => app.inject({
+      method: 'POST', url: '/api/program/independent-topic', headers, payload: { curriculumId },
+    });
+    const write = (suffix: string, payload = {}) => app.inject({ method: 'POST', url: '/api/program/' + suffix, headers, payload });
+    const read = (topic: string) => app.inject({ url: '/api/program/topics/' + topic + '/study', headers });
+
+    expect((await importCurriculumModules([
+      { id: moduleA, title: 'Первый', description: 'Доступен по рекомендации.', level: 'A2', position: 0, type: 'core', topicIds: [recommended, neighbor] },
+      { id: moduleB, title: 'Второй', description: 'Соседняя тема не открывает этот модуль.', level: 'A2', position: 1, type: 'core', topicIds: [neighbor, restricted] },
+    ], false)).issues).toEqual([]);
+
+    const assigned = await seed(recommended, 'placement');
+    expect((await read(assigned)).statusCode).toBe(200);
+    expect((await write(`topics/${assigned}/attempts`)).statusCode).toBe(200);
+    const result = await assign(neighbor);
+    expect(result.statusCode).toBe(200);
+    const adjacent = result.json().topicId;
+    expect((await read(adjacent)).statusCode).toBe(200);
+    const check = await write(`topics/${adjacent}/attempts`);
+    expect(check.statusCode).toBe(200);
+    expect((await listLearningModules(id)).map((module) => module.id)).toEqual([moduleA]);
+
+    expect((await assign(restricted)).statusCode).toBe(404);
+    const legacy = await seed(restricted, 'self');
+    await pool.query("UPDATE user_topics SET status = 'mastered', mastered_at = now() WHERE id = $1", [legacy]);
+    expect((await read(legacy)).statusCode).toBe(404);
+    expect((await write(`topics/${legacy}/attempts`)).statusCode).toBe(404);
+
+    await deleteCurriculumModule(moduleA);
+    expect((await write(`topics/${adjacent}/attempts/${check.json().attemptId}/submit`, { answers: {} })).statusCode).toBe(404);
+    const saved = await pool.query('SELECT status, mastered_at FROM user_topics WHERE id = $1', [legacy]);
+    expect(saved.rows).toEqual([{ status: 'mastered', mastered_at: expect.any(Date) }]);
+    expect((await pool.query('SELECT 1 FROM topic_attempts WHERE id = $1 AND graded_at IS NULL', [check.json().attemptId])).rowCount).toBe(1);
+    expect((await read(assigned)).statusCode).toBe(200);
+  } finally {
+    await app.close();
+    await deleteCurriculumModule(moduleA);
+    await deleteCurriculumModule(moduleB);
     await pool.query('DELETE FROM users WHERE id = $1', [id]);
   }
 });

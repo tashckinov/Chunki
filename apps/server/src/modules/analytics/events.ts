@@ -23,10 +23,10 @@ const contentTypes: Partial<Record<z.infer<typeof clientEvent>['name'], string>>
 export async function recordClientEvents(userId: string, events: z.infer<typeof clientEvent>[]) {
   const records = events.map((event) => ({ ...event, contentType: contentTypes[event.name] }));
   await pool.query(`
-    INSERT INTO product_events (user_id, event_id, name, occurred_at, content_type, content_id, journey_id, source, properties)
+    INSERT INTO product_events (user_id, event_id, name, occurred_at, content_type, content_id, journey_id, source, properties, curriculum_objective_id, assignment_id)
     SELECT $1, e.id, e.name, least(e.at, now()), e."contentType",
       CASE WHEN e."contentType" = 'topic' THEN t.catalog_key ELSE e."contentId" END,
-      e."journeyId", 'client', jsonb_strip_nulls(jsonb_build_object('context', e.context))
+      e."journeyId", 'client', jsonb_strip_nulls(jsonb_build_object('context', e.context)), t.curriculum_objective_id, t.id
     FROM jsonb_to_recordset($2::jsonb)
       AS e(id uuid, name text, at timestamptz, "contentType" text, "contentId" text, "journeyId" uuid, context text)
     LEFT JOIN user_topics t ON e."contentType" = 'topic' AND t.id::text = e."contentId" AND t.user_id = $1

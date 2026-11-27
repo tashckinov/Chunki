@@ -4,6 +4,7 @@ import { pool } from '../../db/pool.js';
 import { requireAdmin, requireAuthenticatedSession } from '../auth/requireAuth.js';
 import { clientEvent, recordClientEvents } from './events.js';
 import { analyticsReport, activityTimeline } from './report.js';
+import { objectiveReport } from './objectives.js';
 
 export const analyticsRoutes: FastifyPluginAsync = async (app) => {
   app.addHook('preHandler', requireAuthenticatedSession);
@@ -38,6 +39,11 @@ export const adminAnalyticsRoutes: FastifyPluginAsync = async (app) => {
     const input = querySchema.safeParse(request.query);
     if (!input.success) return reply.code(400).send({ error: 'invalid_period' });
     return analyticsReport(input.data.days, input.data.zone);
+  });
+  app.get('/objectives', async (request, reply) => {
+    const input = querySchema.safeParse(request.query);
+    if (!input.success) return reply.code(400).send({ error: 'invalid_period' });
+    return objectiveReport(input.data.days, input.data.zone);
   });
   app.get('/activity', async (request, reply) => {
     const input = querySchema.extend({
