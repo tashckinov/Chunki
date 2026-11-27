@@ -1,3 +1,4 @@
+import { useProductAnalytics } from './lib/useProductAnalytics';
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import { Dialog } from '@base-ui/react/dialog';
 import { useAppStore, type Screen } from './store/appStore';
@@ -249,6 +250,7 @@ export default function App() {
   const authChecked = useAppStore((s) => s.authChecked);
   const user = useAppStore((s) => s.user);
   const loggedOut = !user;
+  useProductAnalytics(user?.id);
   const inAdmin = screen === 'admin' && user?.isAdmin;
   const dialogueContinuation = useAppStore((state) => state.dialogueContinuation);
   const studying = screen === 'deck' || screen === 'deckdone' || screen === 'recognitioncheck'

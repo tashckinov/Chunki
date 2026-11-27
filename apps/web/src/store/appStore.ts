@@ -1,3 +1,4 @@
+import { track } from '../lib/productAnalytics';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { INTRO_CHUNK_COUNT } from '@app/shared';
@@ -106,7 +107,7 @@ const BACK_MAP: Partial<Record<Screen, Screen>> = {
   admin: 'cardslib',
 };
 
-export type AdminSection = 'users' | 'content' | 'characters' | 'program' | 'curriculumModules' | 'grammarTests' | 'payments' | 'timecodes' | 'chunkGroups' | 'aiLogs';
+export type AdminSection = 'analytics' | 'users' | 'content' | 'characters' | 'program' | 'curriculumModules' | 'grammarTests' | 'payments' | 'timecodes' | 'chunkGroups' | 'aiLogs';
 
 interface AppState {
   screen: Screen;
@@ -114,6 +115,7 @@ interface AppState {
   checkoutFromProfile: boolean;
   /** Which admin sidebar/menu item is active — only meaningful while screen === 'admin'. */
   adminSection: AdminSection;
+  analyticsUser: string | null;
   /** Null until the initial /api/auth/me check resolves, or when signed out. */
   user: AuthUser | null;
   authChecked: boolean;
@@ -175,6 +177,8 @@ interface AppState {
   studyGoal: StudyGoalStatus | null;
   studyGoalChecked: boolean;
   introDeckOwner: string | null;
+  analyticsDeckId: string | null;
+  analyticsComicId: string | null;
   deckCursorKey: string | null;
   lastDeckChunkByScope: Record<string, string>;
   completedIntroOwner: string | null;
@@ -330,6 +334,7 @@ export const useAppStore = create<AppState>()(
       profileReturnScreen: 'home',
       checkoutFromProfile: false,
       adminSection: 'users',
+      analyticsUser: null,
       user: null,
       authChecked: false,
       authError: false,
@@ -387,6 +392,8 @@ export const useAppStore = create<AppState>()(
       studyGoal: null,
       studyGoalChecked: false,
       introDeckOwner: null,
+      analyticsDeckId: null,
+      analyticsComicId: null,
       deckCursorKey: null,
       lastDeckChunkByScope: {},
       completedIntroOwner: null,
@@ -521,9 +528,11 @@ export const useAppStore = create<AppState>()(
           const fromProgram = state.screen === 'program';
           const variant = await fetchPlacementVariant(state.lastTestVariantId ?? last?.variantId);
           if (get().user?.id !== userId || get().screen !== state.screen) return;
+          const submissionId = globalThis.crypto?.randomUUID?.();
+          track(userId, 'placement_started', { contentId: variant.id, journeyId: submissionId, context: last ? 'retest' : 'first' }, submissionId);
           set({
             screen: 'test', testVariant: variant, testDraftOwner: userId, lastTestVariantId: variant.id,
-            testSubmissionId: null, testFromProgram: fromProgram || (state.screen === 'test' && state.testFromProgram),
+            testSubmissionId: submissionId ?? null, testFromProgram: fromProgram || (state.screen === 'test' && state.testFromProgram),
             ...(fromProgram && last ? { from: last.level, to: last.goal, purpose: last.purpose } : {}),
             testPart: 1, qi: 0, mcqAnswers: {}, open9: '', open10: '', essay: '',
             gradingError: null, placementResult: null,
@@ -563,6 +572,7 @@ export const useAppStore = create<AppState>()(
             variantId: testVariant.id, submissionId, fromLevel: from, toLevel: to, purpose, mcqAnswers, open9, open10, essay,
           });
           if (get().user?.id !== user.id) return;
+          track(user.id, 'placement_result_viewed', { contentId: testVariant.id, journeyId: submissionId });
           set({
             placementResult: result, placementResultOwner: user.id, placementResultGoal: to, placementResultSkipSchedule: testFromProgram,
             grading: false, checkingContext: null, screen: 'result', programTopics: topics,
@@ -633,6 +643,7 @@ export const useAppStore = create<AppState>()(
           set({ screen: 'cardslib' });
           return;
         }
+        if (collectionSlug) track(user.id, 'collection_opened', { contentId: collectionSlug });
         const eligible = (chunks ?? flattenChunks(Object.values(s.collectionDetails))).filter((c) => !s.blockedChunkIds[c.id]);
         if (!eligible.length) return;
         const scope = collectionSlug ? `collection:${collectionSlug}` : 'all';
@@ -641,8 +652,10 @@ export const useAppStore = create<AppState>()(
         const start = (eligible.findIndex((chunk) => chunk.id === lastChunk) + 1) % eligible.length;
         const size = introCompleted ? s.studyGoal?.dailyCardGoal ?? INTRO_CHUNK_COUNT : INTRO_CHUNK_COUNT;
         const resolved = [...eligible.slice(start), ...eligible.slice(0, start)].slice(0, size);
+        const analyticsDeckId = globalThis.crypto?.randomUUID?.() ?? null;
+        track(user.id, 'deck_started', { contentId: collectionSlug, journeyId: analyticsDeckId ?? undefined });
         set({
-          screen: 'deck',
+          screen: 'deck', analyticsDeckId,
           introDeckOwner: introCompleted ? null : user.id,
           deckCursorKey: cursorKey,
           activeDeckChunks: resolved,
@@ -712,11 +725,18 @@ export const useAppStore = create<AppState>()(
         if (!userId) return;
         const { summary, result } = await fetchPlacementResult(id);
         if (get().user?.id !== userId || get().screen !== 'program') return;
+        track(userId, 'placement_result_viewed', { contentId: summary.variantId, journeyId: id });
         set({ placementResult: result, placementResultOwner: userId, placementResultGoal: summary.goal, placementResultSkipSchedule: true, screen: 'result' });
       },
       openTopic: async (userTopicId, mode = 'study') => {
         const { user, programTopics } = get();
         const learning = mode === 'study' && user && programTopics.some(({ id, status, source }) => id === userTopicId && status === 'assigned' && source !== 'self');
+        const topic = programTopics.find(({ id }) => id === userTopicId);
+        if (topic && (get().screen !== 'topic' || get().activeTopicId !== userTopicId)) {
+          const context = mode === 'read' ? 'read' : topic.source === 'self' ? 'independent' :
+            topic.status === 'passed_once' ? 'review' : 'recommended';
+          track(user?.id, 'topic_opened', { contentId: userTopicId, context });
+        }
         const previous = get().screen;
         const topicReturnScreen = previous === 'home' ? 'home' : previous === 'topic' ? get().topicReturnScreen : 'program';
         set({
@@ -737,7 +757,7 @@ export const useAppStore = create<AppState>()(
         const destinations: Screen[] = ['home', 'cardslib', 'comics', 'program', 'profile'];
         get().go(destinations[v] ?? 'home');
       },
-      setAdminSection: (s) => set({ adminSection: s }),
+      setAdminSection: (s) => set({ adminSection: s, analyticsUser: null }),
 
       goExercises: async (independentTopicId) => {
         const { activeTopicId, topicMode, user, screen, currentAttempt, topicAnswers } = get();
@@ -925,6 +945,13 @@ export const useAppStore = create<AppState>()(
           productionChunkId: null,
           screen: finished ? 'deckdone' : 'deck',
         });
+        if (finished && s.analyticsDeckId && cursorKey?.startsWith(`${s.user?.id}:`)) {
+          const scope = cursorKey.slice((s.user?.id.length ?? 0) + 1);
+          track(s.user?.id, 'deck_completed', {
+            contentId: scope.startsWith('collection:') ? scope.slice('collection:'.length) : undefined,
+            journeyId: s.analyticsDeckId,
+          }, s.analyticsDeckId);
+        }
         if (introFinished) void postStudyIntro().catch(() => {}); // Retried when the learner saves their goal.
       },
 
@@ -962,12 +989,16 @@ export const useAppStore = create<AppState>()(
       // directly with the user, no suppression/viewed-tracking of any kind
       // here (unlike the production-check gate below).
       handleDontKnow: async (chunkId) => {
+        const owner = get().user?.id;
         const dialogue = await get().ensureLearnerDialogue(chunkId);
+        if (get().user?.id !== owner) return;
         const alreadyAttempted = get().recognitionAttemptedThisSession[chunkId];
         if (dialogue) {
+          const journeyId = globalThis.crypto?.randomUUID?.();
+          track(get().user?.id, 'comic_opened', { contentId: chunkId, journeyId, context: 'deck' });
           if (!alreadyAttempted) set((st) => ({ recognitionAttemptedThisSession: { ...st.recognitionAttemptedThisSession, [chunkId]: true } }));
           set({
-            screen: 'dialogue',
+            screen: 'dialogue', analyticsComicId: journeyId ?? null,
             dialogueChunkId: chunkId,
             dialogueContinuation: alreadyAttempted ? 'advance' : 'recognitioncheck',
             learnerDialogue: dialogue,
@@ -994,9 +1025,12 @@ export const useAppStore = create<AppState>()(
       // Browse mode hasn't pre-fetched the dialogue — await it before
       // switching screens, so DialogueScreen never renders a blank interim state.
       openDialogueFromBrowse: async (chunkId, targetText, signal) => {
+        const owner = get().user?.id;
         const dialogue = await get().ensureLearnerDialogue(chunkId);
-        if (!dialogue || signal.aborted || get().screen !== 'comics') return;
-        set({ screen: 'dialogue', dialogueChunkId: chunkId, dialogueContinuation: 'browse', learnerDialogue: { ...dialogue, targetText } });
+        if (!dialogue || signal.aborted || get().user?.id !== owner || get().screen !== 'comics') return;
+        const journeyId = globalThis.crypto?.randomUUID?.();
+        track(get().user?.id, 'comic_opened', { contentId: chunkId, journeyId, context: 'browse' });
+        set({ screen: 'dialogue', analyticsComicId: journeyId ?? null, dialogueChunkId: chunkId, dialogueContinuation: 'browse', learnerDialogue: { ...dialogue, targetText } });
       },
 
       startRecognitionCheck: async (chunkId) => {

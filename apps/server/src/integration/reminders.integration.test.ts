@@ -44,8 +44,32 @@ it('sends once on a selected day and skips empty, finished and unscheduled plans
     await dispatchDueReminders(app.log, vapid);
 
     expect(sendNotification).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ endpoint: prefix + waiting.id }), '{}', expect.anything(),
+      expect.objectContaining({ endpoint: prefix + waiting.id }), expect.stringContaining('deliveryId'), expect.anything(),
     );
+    const accepted = await pool.query(
+      'SELECT user_id, attempted_at, accepted_at, failed_at, clicked_at FROM notification_deliveries WHERE user_id = ANY($1::uuid[])',
+      [rows.map(({ id }) => id)],
+    );
+    expect(accepted.rows).toEqual([{
+      user_id: waiting.id, attempted_at: expect.any(Date), accepted_at: expect.any(Date), failed_at: null, clicked_at: null,
+    }]);
+
+    // A repeat save does not create another opt-in. A changed schedule does.
+    await pool.query('UPDATE study_reminders SET days = days, local_time = local_time WHERE user_id = $1', [waiting.id]);
+    await pool.query("UPDATE study_reminders SET local_time = local_time + interval '1 minute' WHERE user_id = $1", [waiting.id]);
+    const events = await pool.query('SELECT name FROM product_events WHERE user_id = $1 ORDER BY occurred_at', [waiting.id]);
+    expect(events.rows).toEqual([{ name: 'reminder_enabled' }, { name: 'reminder_schedule_changed' }]);
+
+    await pool.query(`UPDATE study_reminders SET last_sent_on = NULL, local_time = (now() AT TIME ZONE 'UTC')::time
+      WHERE user_id = $1`, [waiting.id]);
+    vi.mocked(sendNotification).mockRejectedValueOnce({ statusCode: 410 });
+    await dispatchDueReminders(app.log, vapid);
+    const failed = await pool.query(
+      'SELECT failed_at, failure_code, accepted_at FROM notification_deliveries WHERE user_id = $1 AND failed_at IS NOT NULL',
+      [waiting.id],
+    );
+    expect(failed.rows).toEqual([{ failed_at: expect.any(Date), failure_code: '410', accepted_at: null }]);
+    expect((await pool.query('SELECT 1 FROM study_reminders WHERE user_id = $1', [waiting.id])).rowCount).toBe(0);
   } finally {
     await pool.query('DELETE FROM users WHERE id = ANY($1::uuid[])', [rows.map(({ id }) => id)]);
     await app.close();

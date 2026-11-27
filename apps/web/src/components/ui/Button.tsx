@@ -20,6 +20,7 @@ export function Button({
   disabled,
   children,
   className = '',
+  "aria-pressed": ariaPressed,
 }: {
   type?: 'button' | 'submit';
   variant?: 'primary' | 'secondary' | 'ghost';
@@ -28,11 +29,13 @@ export function Button({
   disabled?: boolean;
   children: ReactNode;
   className?: string;
+  "aria-pressed"?: boolean;
 }) {
   return (
     <button
       type={type}
       disabled={disabled}
+      aria-pressed={ariaPressed}
       onClick={onClick}
       className={`inline-flex items-center justify-center rounded-[var(--radius-md)] py-2 text-center font-medium leading-tight transition-colors duration-150 disabled:cursor-default ${SIZE[size]} ${VARIANT[variant]} ${className}`}
     >

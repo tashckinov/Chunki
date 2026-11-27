@@ -1,3 +1,5 @@
+import { track } from '../../lib/productAnalytics';
+import { useAppStore } from '../../store/appStore';
 import { useEffect, useState } from 'react';
 import { Bell } from 'lucide-react';
 import { getJson, postJson } from '../../lib/collections';
@@ -77,9 +79,12 @@ export function StudyReminderSetting({ studyDays, onStudyDaysChange, finishSched
         setEnabled(false);
       } else if (nextEnabled && publicKey) {
         // Ask immediately from the checkbox gesture; Safari blocks prompts after an async network call.
-        const permission = Notification.permission === 'default'
-          ? await Notification.requestPermission()
-          : Notification.permission;
+        const shouldAsk = Notification.permission === 'default';
+        const user = useAppStore.getState().user?.id;
+        const permission = shouldAsk ? await Notification.requestPermission() : Notification.permission;
+        if (shouldAsk && permission !== 'default') {
+          track(user, permission === 'granted' ? 'notification_permission_granted' : 'notification_permission_denied');
+        }
         if (permission !== 'granted') {
           setMessage('Разрешите уведомления для Chunki в настройках браузера или устройства.');
           return false;

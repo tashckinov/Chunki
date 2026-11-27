@@ -72,7 +72,10 @@ export const reminderRoutes: FastifyPluginAsync<{ publicKey?: string }> = async 
   app.post('/disable', async (request, reply) => {
     const body = deviceSchema.safeParse(request.body);
     if (!body.success) return reply.code(400).send({ error: 'invalid_subscription' });
-    await pool.query('DELETE FROM study_reminders WHERE user_id = $1 AND endpoint = $2',
+    await pool.query(`WITH removed AS (
+      DELETE FROM study_reminders WHERE user_id = $1 AND endpoint = $2 RETURNING user_id
+    ) INSERT INTO product_events (user_id, event_id, name, occurred_at, source)
+    SELECT user_id, gen_random_uuid(), 'reminder_disabled', now(), 'server' FROM removed`,
       [request.session!.userId, body.data.endpoint]);
     return { ok: true };
   });
