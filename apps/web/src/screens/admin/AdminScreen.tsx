@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { UsersSection } from './UsersSection';
+import { AnalyticsSection } from './AnalyticsSection';
 import { ContentSection } from './ContentSection';
 import { CharactersSection } from './CharactersSection';
 import { AiLogsSection } from './AiLogsSection';
@@ -26,6 +27,8 @@ export function AdminScreen({ onOpenMenu }: { onOpenMenu: () => void }) {
     <div className="flex-1 min-h-0 flex flex-col">
       {adminSection === 'users' ? (
         <UsersSection onOpenMenu={onOpenMenu} />
+      ) : adminSection === 'analytics' ? (
+        <AnalyticsSection onOpenMenu={onOpenMenu} />
       ) : adminSection === 'content' ? (
         <ContentSection onOpenMenu={onOpenMenu} />
       ) : adminSection === 'characters' ? (

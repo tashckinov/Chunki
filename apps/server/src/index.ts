@@ -15,6 +15,7 @@ import { reminderRoutes } from './modules/reminders/routes.js';
 import { startReminderDispatcher } from './modules/reminders/dispatcher.js';
 import { grammarTestAdminRoutes } from './modules/grammarTests/routes.js';
 import { progressRoutes } from './modules/progress/routes.js';
+import { analyticsRoutes, adminAnalyticsRoutes } from './modules/analytics/routes.js';
 import { adminRoutes } from './modules/admin/routes.js';
 import { charactersRoutes } from './modules/characters/routes.js';
 import { paymentsRoutes } from './modules/payments/routes.js';
@@ -57,6 +58,8 @@ async function main() {
     app.addHook('onClose', async () => stop());
   }
   await app.register(progressRoutes, { prefix: '/api/progress' });
+  await app.register(analyticsRoutes, { prefix: '/api/analytics' });
+  await app.register(adminAnalyticsRoutes, { prefix: '/api/admin/analytics' });
   await app.register(adminRoutes, { prefix: '/api/admin' });
   await app.register(grammarTestAdminRoutes, { prefix: '/api/admin/grammar-tests' });
   await app.register(charactersRoutes, { prefix: '/api/admin/characters' });

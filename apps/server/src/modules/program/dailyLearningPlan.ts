@@ -15,9 +15,9 @@ export async function getDailyLearningPlan(userId: string, timeZone: string) {
   }).sort((a, b) => a.dueAt - b.dueAt);
   const newTopic = recommended.find(({ status }) => status === 'assigned');
   await pool.query(
-    `INSERT INTO daily_learning_plans (user_id, day, review_ids, new_topic_id)
-     VALUES ($1, $2, $3, $4) ON CONFLICT (user_id, day) DO NOTHING`,
-    [userId, day, reviews.map(({ id }) => id), newTopic?.id ?? null],
+    `INSERT INTO daily_learning_plans (user_id, day, review_ids, new_topic_id, time_zone)
+     VALUES ($1, $2, $3, $4, $5) ON CONFLICT (user_id, day) DO NOTHING`,
+    [userId, day, reviews.map(({ id }) => id), newTopic?.id ?? null, timeZone],
   );
   const { rows } = await pool.query<{ id: string; kind: 'review' | 'new'; done: boolean }>(
     `SELECT step.id, step.kind, EXISTS (

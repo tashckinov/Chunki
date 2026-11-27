@@ -1,3 +1,4 @@
+import { track } from '../lib/productAnalytics';
 import { useAppStore } from '../store/appStore';
 import { flattenChunks } from '../lib/collections';
 import { IconButton } from '../components/ui/IconButton';
@@ -29,7 +30,13 @@ export function DialogueScreen() {
       </div>
 
       <div className="flex-none px-5 pb-7 pt-3">
-        <Button size="lg" className="w-full" onClick={s.closeDialogue}>
+        <Button size="lg" className="w-full" onClick={() => {
+          if (s.dialogueChunkId && s.analyticsComicId) {
+            track(s.user?.id, 'comic_completed', { contentId: s.dialogueChunkId, journeyId: s.analyticsComicId,
+              context: s.dialogueContinuation === 'browse' ? 'browse' : 'deck' }, s.analyticsComicId);
+          }
+          s.closeDialogue();
+        }}>
           Продолжить
         </Button>
       </div>

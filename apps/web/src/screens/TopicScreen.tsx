@@ -1,3 +1,4 @@
+import { track } from '../lib/productAnalytics';
 import { useAppStore } from '../store/appStore';
 import { daysUntil } from '../lib/schedule';
 import { TopicStudyMaterial } from '../components/chatmd/TopicStudyMaterial';
@@ -57,7 +58,13 @@ export function TopicScreen() {
         )}
         {s.gradingError && <p role="alert" className="text-negative">{s.gradingError}</p>}
         {s.topicMode === 'study' && topic.status !== 'mastered' && !waitingForReconfirm && (
-          <Button size="lg" onClick={() => void s.goExercises()} className="w-full">
+          <Button size="lg" onClick={() => {
+            if (study && topic.status === 'assigned') {
+              track(s.user?.id, 'topic_study_started', { contentId: topic.id,
+                context: topic.source === 'self' ? 'independent' : 'recommended' });
+            }
+            void s.goExercises();
+          }} className="w-full">
             К упражнениям
           </Button>
         )}

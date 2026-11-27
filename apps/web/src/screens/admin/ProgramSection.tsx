@@ -28,7 +28,7 @@ export function ProgramSection({ onOpenMenu }: { onOpenMenu: () => void }) {
       <div className="scroll-clean flex-1 min-h-0 px-5 py-4">
         <ProgramCatalogPanel />
         <details className="mt-5 rounded-xl border border-border">
-          <summary className="cursor-pointer px-4 py-3 font-medium">Активность учеников</summary>
+          <summary className="cursor-pointer px-4 py-3 font-medium">Текущие состояния тем учеников</summary>
           {error && <div className="px-5 py-4 text-negative">{error}</div>}
           {!error && !topics && <div className="px-5 py-4 text-body-secondary">Загрузка…</div>}
           {!error && topics && (

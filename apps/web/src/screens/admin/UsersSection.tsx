@@ -1,3 +1,4 @@
+import { useAppStore } from '../../store/appStore';
 import { useEffect, useState } from 'react';
 import { NavigationBar } from '../../components/ui/NavigationBar';
 import { IconButton } from '../../components/ui/IconButton';
@@ -153,6 +154,10 @@ export function UsersSection({ onOpenMenu }: { onOpenMenu: () => void }) {
                   </Button>
                 </div>
                 <div className="border-t border-border pt-2">
+                  <Button size="sm" variant="ghost"
+                    onClick={() => useAppStore.setState({ adminSection: 'analytics', analyticsUser: u.id })}>
+                    История действий
+                  </Button>
                   <Button size="sm" variant="secondary" disabled={regenerating !== null} onClick={() => void regenerate(u.id)}>
                     {regenerating === u.id ? 'Подбираем темы…' : 'Пересобрать программу по последнему тесту'}
                   </Button>
