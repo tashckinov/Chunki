@@ -35,7 +35,13 @@ export function DailyPlanCard({ plan }: { plan: DailyLearningPlan }) {
               </li>
             ))}
           </ul>
-          <Button className="w-full" onClick={() => void useAppStore.getState().openTopic(next.topic.id)}>
+          <Button className="w-full" onClick={() => {
+            const state = useAppStore.getState();
+            if (!state.user) return;
+            void state.openTopic(next.topic.id, 'study', {
+              plan, userId: state.user.id, origin: state.screen === 'home' ? 'home' : 'program',
+            });
+          }}>
             {plan.steps.some(({ done }) => done) ? 'Продолжить занятие' : 'Начать занятие'}
           </Button>
         </>

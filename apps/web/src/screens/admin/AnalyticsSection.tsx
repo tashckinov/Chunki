@@ -10,6 +10,7 @@ const labels: Record<string, string> = {
   app_opened: 'Открыл приложение', registered: 'Регистрация', placement_started: 'Начал тест уровня',
   placement_completed: 'Завершил тест уровня', placement_result_viewed: 'Открыл результат теста',
   program_prepared: 'Получил программу', program_opened: 'Открыл программу', topic_opened: 'Открыл тему',
+  starred_topic_study_started: 'Начал изучать тему под звёздочкой',
   topic_assigned: 'Назначена тема', topic_study_started: 'Перешёл от урока к упражнениям', topic_check_started: 'Начал проверку по теме',
   topic_check_completed: 'Завершил проверку по теме', collection_opened: 'Открыл коллекцию',
   deck_started: 'Начал карточки', card_viewed: 'Увидел карточку', card_reviewed: 'Ответил по карточке',
@@ -120,6 +121,12 @@ export function AnalyticsSection({ onOpenMenu }: { onOpenMenu: () => void }) {
         <Stats items={[[ 'Успешные первые проверки рекомендованных тем', report.totals.recommended_passes ]]} />
         <Stats items={report.events.filter(({ name }) => name.startsWith('topic_') || name === 'program_opened')
           .map(({ name, segment, events, users }) => [`${labels[name]} ${segments[segment] ? '· ' + segments[segment] : ''}`, `${events} · учеников ${users}`])} />
+        <h2 className="text-section-title">Темы под звёздочкой</h2>
+        <Stats items={[
+          ['Начали изучать тему под звёздочкой', report.totals.starred_study_users],
+          ['Проверили знания в теме под звёздочкой', report.totals.starred_check_users],
+        ]} />
+        <p className="text-meta">Уникальные ученики за период. Проверкой считается завершённая первая попытка.</p>
         <h2 className="text-section-title">Следование ежедневному плану</h2>
         <Stats items={[[ 'Полностью выполненные планы за прошедшие дни', ratio(report.adherence.finished, report.adherence.plans) ]]} />
         <h2 className="text-section-title">Завершение начатых занятий</h2>

@@ -1,3 +1,4 @@
+import { track } from '../lib/productAnalytics';
 import { useEffect, useState, type ReactNode } from 'react';
 import type { CurriculumModule } from '@app/shared';
 import { Button } from '../components/ui/Button';
@@ -35,6 +36,9 @@ export function ProgramModules({ topics, userId, renderTopic }: {
       if (check) {
         await state.goExercises(topicId);
       } else {
+        if (program.topics.some(({ id, source }) => id === topicId && source === 'self')) {
+          track(userId, 'starred_topic_study_started', { contentId: topicId, context: 'independent' });
+        }
         await state.openTopic(topicId);
       }
     } catch (error) {
@@ -95,7 +99,7 @@ export function ProgramModules({ topics, userId, renderTopic }: {
             <div>{assigned.filter(({ curriculumId }) => !curriculumId || !uncheckedIds.has(curriculumId)).map(renderTopic)}</div>
             {unchecked.length > 0 && (
               <details className="py-3">
-                <summary className="cursor-pointer text-sm font-medium">Темы, по которым знания ещё не проверены</summary>
+                <summary className="cursor-pointer text-sm font-medium">Темы под звёздочкой</summary>
                 <ul className="mt-2 divide-y divide-border">
                   {unchecked.map(({ id, title }) => (
                     <li key={id} className="flex flex-wrap items-center justify-between gap-2 py-2">

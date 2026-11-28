@@ -11,6 +11,7 @@ import {
   startTopicAttempt as apiStartTopicAttempt,
   submitPlacementTest as apiSubmitPlacementTest,
   submitTopicAttempt as apiSubmitTopicAttempt,
+  type DailyLearningPlan,
   type ProgramState,
   type TopicAttempt,
   type TopicStudy,
@@ -109,6 +110,8 @@ const BACK_MAP: Partial<Record<Screen, Screen>> = {
 
 export type AdminSection = 'analytics' | 'users' | 'content' | 'characters' | 'program' | 'curriculumModules' | 'grammarTests' | 'payments' | 'timecodes' | 'chunkGroups' | 'aiLogs';
 
+type DailySession = { plan: DailyLearningPlan; origin: 'home' | 'program'; userId: string };
+
 interface AppState {
   screen: Screen;
   profileReturnScreen: Screen;
@@ -161,6 +164,7 @@ interface AppState {
   grammarView: 'overview' | 'level' | 'topics' | 'independent';
   activeTopicId: string | null;
   topicMode: 'study' | 'read';
+  dailySession: DailySession | null;
   topicReturnScreen: 'program' | 'home';
   learningTopic: { userId: string; topicId: string } | null;
   /** Study material cache, keyed by user_topic id — generated once server-side and cached there too, so caching here just avoids a redundant fetch. */
@@ -288,7 +292,7 @@ interface AppState {
   /** Refetches the program (topic list + statuses) — called by checkAuth() and after grading a topic test. */
   loadProgram: () => Promise<ProgramState | undefined>;
   openPlacementResult: (id: string) => Promise<void>;
-  openTopic: (userTopicId: string, mode?: 'study' | 'read') => Promise<void>;
+  openTopic: (userTopicId: string, mode?: 'study' | 'read', session?: DailySession) => Promise<void>;
   setNavTab: (v: number) => void;
   setAdminSection: (s: AdminSection) => void;
 
@@ -378,6 +382,7 @@ export const useAppStore = create<AppState>()(
       grammarView: 'overview',
       activeTopicId: null,
       topicMode: 'study',
+      dailySession: null,
       topicReturnScreen: 'program',
       learningTopic: null,
       topicStudyByTopic: {},
@@ -440,9 +445,9 @@ export const useAppStore = create<AppState>()(
         if (screen === 'profile' && s.screen !== 'profile' && !(s.screen === 'checkout' && s.checkoutFromProfile)) {
           return { screen, profileReturnScreen: s.screen };
         }
-        if (screen === 'program') return { screen, grammarView: 'overview' };
+        if (screen === 'program') return { screen, grammarView: 'overview', dailySession: null };
         if (screen === 'checkout' && s.screen !== 'checkout') return { screen, checkoutFromProfile: s.screen === 'profile' };
-        return { screen };
+        return { screen, dailySession: null };
       }),
       back: () => set((s) => {
         if (s.screen === 'profile') return { screen: s.profileReturnScreen };
@@ -452,7 +457,7 @@ export const useAppStore = create<AppState>()(
         }
         if (s.screen === 'exercises' && s.activeTopicId && !s.topicStudyByTopic[s.activeTopicId]) return { screen: s.topicReturnScreen };
         if (s.screen === 'topic' && s.topicMode === 'read') return { screen: 'program', grammarView: 'topics' };
-        if (s.screen === 'topic') return { screen: s.topicReturnScreen };
+        if (s.screen === 'topic') return { screen: s.topicReturnScreen, dailySession: null };
         if (s.screen === 'program' && s.grammarView !== 'overview') return { grammarView: 'overview' };
         return { screen: BACK_MAP[s.screen] ?? 'cardslib' };
       }),
@@ -607,7 +612,7 @@ export const useAppStore = create<AppState>()(
       skipPaywall: () => set({ screen: 'program' }),
 
       goHome: () => set({ screen: 'home' }),
-      goProgram: () => set({ screen: 'program', grammarView: 'overview' }),
+      goProgram: () => set({ screen: 'program', grammarView: 'overview', dailySession: null }),
       goCardsLib: () => set({ screen: 'cardslib' }),
       refreshStudyGoal: async () => {
         const user = get().user;
@@ -728,7 +733,7 @@ export const useAppStore = create<AppState>()(
         track(userId, 'placement_result_viewed', { contentId: summary.variantId, journeyId: id });
         set({ placementResult: result, placementResultOwner: userId, placementResultGoal: summary.goal, placementResultSkipSchedule: true, screen: 'result' });
       },
-      openTopic: async (userTopicId, mode = 'study') => {
+      openTopic: async (userTopicId, mode = 'study', session) => {
         const { user, programTopics } = get();
         const learning = mode === 'study' && user && programTopics.some(({ id, status, source }) => id === userTopicId && status === 'assigned' && source !== 'self');
         const topic = programTopics.find(({ id }) => id === userTopicId);
@@ -738,9 +743,10 @@ export const useAppStore = create<AppState>()(
           track(user?.id, 'topic_opened', { contentId: userTopicId, context });
         }
         const previous = get().screen;
-        const topicReturnScreen = previous === 'home' ? 'home' : previous === 'topic' ? get().topicReturnScreen : 'program';
+        const dailySession = session ?? (previous === 'topic' && get().activeTopicId === userTopicId ? get().dailySession : null);
+        const topicReturnScreen = dailySession?.origin ?? (previous === 'home' ? 'home' : previous === 'topic' ? get().topicReturnScreen : 'program');
         set({
-          topicReturnScreen, activeTopicId: userTopicId, topicMode: mode, screen: 'topic', topicStudyError: null, gradingError: null,
+          dailySession, topicReturnScreen, activeTopicId: userTopicId, topicMode: mode, screen: 'topic', topicStudyError: null, gradingError: null,
           ...(learning ? { learningTopic: { userId: user.id, topicId: userTopicId } } : {}),
         });
         if (get().topicStudyByTopic[userTopicId]) return;
@@ -1200,6 +1206,7 @@ export const useAppStore = create<AppState>()(
           studyGoal,
           studyGoalChecked,
           topicStudyError,
+          dailySession,
           user,
           authChecked,
           authError,
@@ -1229,6 +1236,7 @@ export const useAppStore = create<AppState>()(
         void studyGoal;
         void studyGoalChecked;
         void topicStudyError;
+        void dailySession;
         void user;
         void authChecked;
         void authError;
