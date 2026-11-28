@@ -13,8 +13,8 @@ const contentTitles = `LEFT JOIN program_topics t ON e.content_type = 'topic' AN
 export async function analyticsReport(days: number, zone: string) {
   const params = [days, zone];
   const [totals, events, content, cohort, delivery, completion, adherence] = await Promise.all([
-    pool.query(`SELECT (SELECT count(*)::int FROM users) AS registered,
-      (SELECT count(*)::int FROM users WHERE created_at BETWEEN ${period} AND now()) AS new_users,
+    pool.query(`SELECT (SELECT count(*)::int FROM analytics_users) AS registered,
+      (SELECT count(*)::int FROM analytics_users WHERE created_at BETWEEN ${period} AND now()) AS new_users,
       count(DISTINCT user_id) FILTER (WHERE occurred_at BETWEEN ${period} AND now() AND name IN ${learning})::int AS learners,
       count(*) FILTER (WHERE occurred_at BETWEEN ${period} AND now() AND name IN ${learning})::int AS learning_actions,
       count(DISTINCT user_id) FILTER (WHERE occurred_at BETWEEN ${period} AND now()
@@ -26,13 +26,13 @@ export async function analyticsReport(days: number, zone: string) {
       count(DISTINCT user_id) FILTER (WHERE (occurred_at AT TIME ZONE $2)::date = (now() AT TIME ZONE $2)::date)::int AS active_1,
       count(DISTINCT user_id) FILTER (WHERE (occurred_at AT TIME ZONE $2)::date >= (now() AT TIME ZONE $2)::date - 6)::int AS active_7,
       count(DISTINCT user_id) FILTER (WHERE (occurred_at AT TIME ZONE $2)::date >= (now() AT TIME ZONE $2)::date - 29)::int AS active_30
-      FROM product_activity WHERE occurred_at <= now() AND ${active}`, params),
+      FROM analytics_activity WHERE occurred_at <= now() AND ${active}`, params),
     pool.query(`SELECT name, coalesce(properties->>'context',
         CASE WHEN name LIKE 'topic_check_%' THEN
           CASE WHEN properties->>'kind' = 'reconfirm' THEN 'reconfirm'
             WHEN source = 'self' THEN 'independent' ELSE 'recommended' END END, source) AS segment,
       count(*)::int AS events, count(DISTINCT user_id)::int AS users
-      FROM product_activity WHERE occurred_at BETWEEN ${period} AND now()
+      FROM analytics_activity WHERE occurred_at BETWEEN ${period} AND now()
       GROUP BY name, segment ORDER BY name, segment`, params),
     pool.query(`WITH grouped AS (
       SELECT e.content_type, e.content_id, e.user_id,
@@ -40,7 +40,7 @@ export async function analyticsReport(days: number, zone: string) {
         count(*) FILTER (WHERE name IN ('topic_study_started','topic_check_started','deck_started','card_reviewed','comic_completed')) AS actions,
         count(*) FILTER (WHERE name IN ${learning}) AS finishes,
         count(DISTINCT (occurred_at AT TIME ZONE $2)::date) AS active_days
-      FROM product_activity e
+      FROM analytics_activity e
       WHERE occurred_at BETWEEN ${period} AND now() AND content_type IN ('topic','collection','card','comic') AND content_id IS NOT NULL AND name <> 'topic_assigned'
       GROUP BY e.content_type, e.content_id, e.user_id
     ), ranked AS (
@@ -51,7 +51,7 @@ export async function analyticsReport(days: number, zone: string) {
       FROM grouped e ${contentTitles} GROUP BY e.content_type, e.content_id, t.title, c.title, k.text
     ) SELECT * FROM ranked WHERE rank <= 10 ORDER BY content_type, rank`, params),
     pool.query(`WITH cohort AS (
-      SELECT id, created_at, (created_at AT TIME ZONE $2)::date AS joined FROM users WHERE created_at BETWEEN ${period} AND now()
+      SELECT id, created_at, (created_at AT TIME ZONE $2)::date AS joined FROM analytics_users WHERE created_at BETWEEN ${period} AND now()
     ), milestones AS (
       SELECT c.id, c.joined,
         min(occurred_at) FILTER (WHERE name IN ('placement_started','placement_completed')) AS test_started,
@@ -60,8 +60,8 @@ export async function analyticsReport(days: number, zone: string) {
       FROM cohort c LEFT JOIN product_activity e ON e.user_id = c.id AND e.occurred_at BETWEEN c.created_at AND now() GROUP BY c.id,c.joined
     ), user_metrics AS (
       SELECT m.*,
-        exists (SELECT 1 FROM product_activity e WHERE e.user_id=m.id AND e.occurred_at <= now() AND ${activation}) AS activated,
-        exists (SELECT 1 FROM product_activity e WHERE e.user_id=m.id AND e.occurred_at BETWEEN m.tested AND now()
+        exists (SELECT 1 FROM analytics_activity e WHERE e.user_id=m.id AND e.occurred_at <= now() AND ${activation}) AS activated,
+        exists (SELECT 1 FROM analytics_activity e WHERE e.user_id=m.id AND e.occurred_at BETWEEN m.tested AND now()
           AND name = 'topic_check_completed' AND properties->>'passed' = 'true' AND source IN ('placement','discovered')
           AND properties->>'kind' = 'initial') AS first_lesson
       FROM milestones m
@@ -71,31 +71,31 @@ export async function analyticsReport(days: number, zone: string) {
       (SELECT jsonb_agg(v ORDER BY day) FROM (
           SELECT day, count(*) FILTER (WHERE joined + day < (now() AT TIME ZONE $2)::date)::int AS eligible,
             count(*) FILTER (WHERE joined + day < (now() AT TIME ZONE $2)::date AND EXISTS (
-              SELECT 1 FROM product_activity e WHERE e.user_id=m.id AND (e.occurred_at AT TIME ZONE $2)::date=joined+day
+              SELECT 1 FROM analytics_activity e WHERE e.user_id=m.id AND (e.occurred_at AT TIME ZONE $2)::date=joined+day
                 AND ${active}
             ))::int AS returned
           FROM (VALUES (1),(7),(30)) d(day) LEFT JOIN user_metrics m ON true GROUP BY day
         ) v) AS retention
     FROM user_metrics`, params),
     pool.query(`SELECT
-      (SELECT count(DISTINCT user_id)::int FROM study_reminders) AS subscribers,
+      (SELECT count(DISTINCT user_id)::int FROM study_reminders r JOIN analytics_users u ON u.id = r.user_id) AS subscribers,
       count(*)::int AS scheduled, count(attempted_at)::int AS attempted, count(accepted_at)::int AS sent,
       count(failed_at)::int AS failed, count(clicked_at) FILTER (WHERE accepted_at IS NOT NULL)::int AS clicks,
       count(DISTINCT user_id) FILTER (WHERE clicked_at IS NOT NULL AND accepted_at IS NOT NULL)::int AS clicked_users
-      FROM notification_deliveries WHERE scheduled_at BETWEEN ${period} AND now()`, params),
+      FROM notification_deliveries d JOIN analytics_users u ON u.id = d.user_id WHERE scheduled_at BETWEEN ${period} AND now()`, params),
     pool.query(`SELECT name, count(*)::int AS started, count(*) FILTER (WHERE finished)::int AS finished
       FROM (
         SELECT e.name, EXISTS (
-          SELECT 1 FROM product_activity f WHERE f.user_id=e.user_id AND f.journey_id=e.journey_id
+          SELECT 1 FROM analytics_activity f WHERE f.user_id=e.user_id AND f.journey_id=e.journey_id
             AND f.name = CASE e.name WHEN 'deck_started' THEN 'deck_completed' WHEN 'comic_opened' THEN 'comic_completed'
               ELSE 'topic_check_completed' END AND f.occurred_at BETWEEN e.occurred_at AND now()
         ) AS finished
-        FROM product_activity e
+        FROM analytics_activity e
         WHERE e.occurred_at BETWEEN ${period} AND now() AND e.name IN ('deck_started','comic_opened','topic_check_started')
       ) observed GROUP BY name`, params),
     pool.query(`WITH plans AS (
       SELECT p.*, ((p.day + 1)::timestamp AT TIME ZONE p.time_zone) AS deadline
-      FROM daily_learning_plans p WHERE p.created_at BETWEEN ${period} AND now() AND p.time_zone IS NOT NULL
+      FROM daily_learning_plans p JOIN analytics_users u ON u.id = p.user_id WHERE p.created_at BETWEEN ${period} AND now() AND p.time_zone IS NOT NULL
         AND (cardinality(p.review_ids) > 0 OR p.new_topic_id IS NOT NULL)
     ), finished AS (
       SELECT p.user_id, p.day,

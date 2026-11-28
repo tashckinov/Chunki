@@ -18,6 +18,7 @@ import {
   listUsers,
   setUserPremiumUntil,
   resetDailyChecksForAdmin,
+  setUserAnalyticsExcluded,
   listCollectionsAdmin,
   createCollection,
   updateCollection,
@@ -153,6 +154,14 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       return { error: 'not_found' };
     }
     return { user: result.user };
+  });
+
+  app.patch('/users/:id/analytics-exclusion', async (request, reply) => {
+    const params = idParamSchema.safeParse(request.params);
+    const body = z.object({ excluded: z.boolean() }).safeParse(request.body);
+    if (!params.success || !body.success) return reply.code(400).send({ error: 'invalid_request' });
+    const user = await setUserAnalyticsExcluded(params.data.id, body.data.excluded);
+    return user ? { user } : reply.code(404).send({ error: 'not_found' });
   });
 
   app.post('/users/:id/reset-daily-checks', async (request, reply) => {

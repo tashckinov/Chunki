@@ -19,6 +19,7 @@ vi.mock('./service.js', () => ({
   listUsers: vi.fn(),
   setUserPremiumUntil: vi.fn(),
   resetDailyChecksForAdmin: vi.fn(),
+  setUserAnalyticsExcluded: vi.fn(),
   listCollectionsAdmin: vi.fn(),
   createCollection: vi.fn(),
   updateCollection: vi.fn(),
@@ -100,7 +101,7 @@ describe('GET /api/admin/users', () => {
   it('returns the user list for an admin', async () => {
     vi.mocked(session.getSession).mockResolvedValue(adminSession);
     const users = [
-      { id: validId, email: 'a@b.com', displayName: null, createdAt: '2026-01-01T00:00:00.000Z', lastLoginAt: '2026-01-01T00:00:00.000Z', isAdmin: false, premiumUntil: null, currentTariffId: null, dailyChecksUsed: 0, dailyChecksDate: null },
+      { id: validId, email: 'a@b.com', displayName: null, createdAt: '2026-01-01T00:00:00.000Z', lastLoginAt: '2026-01-01T00:00:00.000Z', isAdmin: false, excludedFromAnalytics: false, premiumUntil: null, currentTariffId: null, dailyChecksUsed: 0, dailyChecksDate: null },
     ];
     vi.mocked(service.listUsers).mockResolvedValue(users);
 
@@ -123,6 +124,7 @@ describe('PATCH /api/admin/users/:id', () => {
       isAdmin: false,
       premiumUntil: '2026-02-01T00:00:00.000Z',
       currentTariffId: null,
+      excludedFromAnalytics: false,
       dailyChecksUsed: 0,
       dailyChecksDate: null,
     };
@@ -144,7 +146,7 @@ describe('PATCH /api/admin/users/:id', () => {
     vi.mocked(session.getSession).mockResolvedValue(adminSession);
     vi.mocked(service.setUserPremiumUntil).mockResolvedValue({
       kind: 'ok',
-      user: { id: validId, email: null, displayName: null, createdAt: '', lastLoginAt: '', isAdmin: false, premiumUntil: null, currentTariffId: null, dailyChecksUsed: 0, dailyChecksDate: null },
+      user: { id: validId, email: null, displayName: null, createdAt: '', lastLoginAt: '', isAdmin: false, excludedFromAnalytics: false, premiumUntil: null, currentTariffId: null, dailyChecksUsed: 0, dailyChecksDate: null },
     });
 
     const res = await app.inject({
@@ -201,6 +203,7 @@ describe('POST /api/admin/users/:id/reset-daily-checks', () => {
       isAdmin: false,
       premiumUntil: null,
       currentTariffId: null,
+      excludedFromAnalytics: false,
       dailyChecksUsed: 0,
       dailyChecksDate: null,
     };

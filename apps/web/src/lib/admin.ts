@@ -8,6 +8,7 @@ export interface AdminUser {
   createdAt: string;
   lastLoginAt: string;
   isAdmin: boolean;
+  excludedFromAnalytics: boolean;
   premiumUntil: string | null;
   currentTariffId: string | null;
   dailyChecksUsed: number;
@@ -69,6 +70,11 @@ export async function fetchAdminUsers(): Promise<AdminUser[]> {
 
 export async function setUserPremiumUntil(userId: string, premiumUntil: string | null): Promise<AdminUser> {
   const data = await patchJson<{ user: AdminUser }>(`/api/admin/users/${userId}`, { premiumUntil });
+  return data.user;
+}
+
+export async function setUserAnalyticsExcluded(userId: string, excluded: boolean): Promise<AdminUser> {
+  const data = await patchJson<{ user: AdminUser }>(`/api/admin/users/${userId}/analytics-exclusion`, { excluded });
   return data.user;
 }
 

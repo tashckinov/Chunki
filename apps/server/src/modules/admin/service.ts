@@ -1,5 +1,6 @@
 import {
   listUsers as repoListUsers,
+  setUserAnalyticsExcluded as repoSetUserAnalyticsExcluded,
   setUserPremiumUntil as repoSetUserPremiumUntil,
   resetDailyChecksUsedForAdmin as repoResetDailyChecksUsedForAdmin,
   listCollectionsAdmin as repoListCollectionsAdmin,
@@ -41,6 +42,7 @@ export interface AdminUserSummary {
   createdAt: string;
   lastLoginAt: string;
   isAdmin: boolean;
+  excludedFromAnalytics: boolean;
   premiumUntil: string | null;
   currentTariffId: string | null;
   dailyChecksUsed: number;
@@ -55,6 +57,7 @@ function toUserSummary(row: AdminUserRow): AdminUserSummary {
     createdAt: row.created_at.toISOString(),
     lastLoginAt: row.last_login_at.toISOString(),
     isAdmin: row.is_admin,
+    excludedFromAnalytics: row.excluded_from_analytics,
     premiumUntil: row.premium_until ? row.premium_until.toISOString() : null,
     currentTariffId: row.current_tariff_id,
     dailyChecksUsed: row.daily_checks_used,
@@ -71,6 +74,11 @@ export type SetPremiumResult = { kind: 'ok'; user: AdminUserSummary } | { kind: 
 export async function setUserPremiumUntil(userId: string, premiumUntil: Date | null): Promise<SetPremiumResult> {
   const row = await repoSetUserPremiumUntil(userId, premiumUntil);
   return row ? { kind: 'ok', user: toUserSummary(row) } : { kind: 'not_found' };
+}
+
+export async function setUserAnalyticsExcluded(userId: string, excluded: boolean): Promise<AdminUserSummary | null> {
+  const row = await repoSetUserAnalyticsExcluded(userId, excluded);
+  return row ? toUserSummary(row) : null;
 }
 
 export async function resetDailyChecksForAdmin(userId: string): Promise<SetPremiumResult> {

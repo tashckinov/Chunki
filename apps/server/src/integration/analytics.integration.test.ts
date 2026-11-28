@@ -136,3 +136,28 @@ it('distinguishes saved placement attempts from observed starts and uses local c
     await pool.query('DELETE FROM users WHERE id = $1', [learner.id]);
   }
 });
+
+it('excludes a user from historical aggregates while preserving the individual timeline', async () => {
+  const { setUserAnalyticsExcluded } = await import('../modules/admin/service.js');
+  const { rows: [learner] } = await pool.query<{ id: string }>('INSERT INTO users DEFAULT VALUES RETURNING id');
+  try {
+    await recordClientEvents(learner.id, [{ id: randomUUID(), name: 'comic_completed', at: new Date().toISOString() }]);
+    await pool.query('INSERT INTO notification_deliveries (user_id, scheduled_at, accepted_at) VALUES ($1, now(), now())', [learner.id]);
+    const read = () => analyticsReport(7, 'Europe/Moscow');
+    const before = await read();
+    expect(await setUserAnalyticsExcluded(learner.id, true)).toMatchObject({ excludedFromAnalytics: true });
+    const excluded = await read();
+    expect(excluded.totals.registered).toBe(before.totals.registered - 1);
+    expect(excluded.totals.learning_actions).toBe(before.totals.learning_actions - 1);
+    expect(excluded.cohort.activated).toBe(before.cohort.activated - 1);
+    expect(excluded.delivery.sent).toBe(before.delivery.sent - 1);
+    const timeline = await activityTimeline({ days: 7, zone: 'Europe/Moscow', user: learner.id, offset: 0 });
+    expect(timeline.rows.map(({ name }) => name)).toContain('comic_completed');
+    expect(await setUserAnalyticsExcluded(learner.id, false)).toMatchObject({ excludedFromAnalytics: false });
+    const restored = await read();
+    expect(restored.totals).toEqual(before.totals);
+    expect(restored.delivery).toEqual(before.delivery);
+  } finally {
+    await pool.query('DELETE FROM users WHERE id = $1', [learner.id]);
+  }
+});

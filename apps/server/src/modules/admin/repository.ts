@@ -8,6 +8,7 @@ export interface AdminUserRow {
   created_at: Date;
   last_login_at: Date;
   is_admin: boolean;
+  excluded_from_analytics: boolean;
   premium_until: Date | null;
   current_tariff_id: string | null;
   daily_checks_used: number;
@@ -15,7 +16,7 @@ export interface AdminUserRow {
 }
 
 const ADMIN_USER_COLUMNS =
-  'id, email, display_name, created_at, last_login_at, is_admin, premium_until, current_tariff_id, daily_checks_used, daily_checks_date';
+  'id, email, display_name, created_at, last_login_at, is_admin, excluded_from_analytics, premium_until, current_tariff_id, daily_checks_used, daily_checks_date';
 
 export async function listUsers(): Promise<AdminUserRow[]> {
   // No pagination yet — fine at this project's current scale; the row cap is
@@ -37,6 +38,14 @@ export async function setUserPremiumUntil(id: string, premiumUntil: Date | null)
     [id, premiumUntil],
   );
   return rows[0] ?? null;
+}
+
+export async function setUserAnalyticsExcluded(id: string, excluded: boolean): Promise<AdminUserRow | null> {
+  const { rows: [row] } = await pool.query<AdminUserRow>(
+    `UPDATE users SET excluded_from_analytics = $2, updated_at = now()
+     WHERE id = $1 RETURNING ${ADMIN_USER_COLUMNS}`, [id, excluded],
+  );
+  return row ?? null;
 }
 
 export async function resetDailyChecksUsedForAdmin(id: string): Promise<AdminUserRow | null> {
