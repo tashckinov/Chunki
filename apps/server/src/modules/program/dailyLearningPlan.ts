@@ -1,8 +1,10 @@
+import { resolveEffectiveTariff } from '../subscriptionTariffs/service.js';
 import { pool } from '../../db/pool.js';
 import { getProgramForUser } from './service.js';
 
 export async function getDailyLearningPlan(userId: string, timeZone: string) {
   const day = new Intl.DateTimeFormat('sv-SE', { dateStyle: 'short', timeZone }).format(new Date());
+  if (!(await resolveEffectiveTariff(userId)).allowProgram) return null;
   const program = await getProgramForUser(userId);
   if (program.status !== 'active' || !program.placement.history.length || program.needsProgramBuild) return null;
 

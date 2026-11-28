@@ -10,7 +10,7 @@ export async function resetLearningProgress(userId: string) {
         withdrawn_at = CASE WHEN source = 'placement' THEN NULL ELSE now() END,
         progress_reset_at = clock_timestamp(), updated_at = now(),
         attempt_generation_token = NULL, attempt_generation_expires_at = NULL
-      WHERE user_id = $1 AND withdrawn_at IS NULL AND status <> 'passed_once'
+      WHERE user_id = $1 AND withdrawn_at IS NULL
     `, [userId]);
     await db.query(`
       DELETE FROM daily_learning_plans
