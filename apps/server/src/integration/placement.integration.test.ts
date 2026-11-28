@@ -535,6 +535,12 @@ it('keeps a daily plan fixed, runs due reviews first, and leaves independent stu
     if (independent.kind !== 'ok') throw new Error(independent.kind);
     expect(await startIndependentTopic(id, 'a2-requests')).toEqual(independent);
     await expect(finish(independent.topicId)).resolves.toMatchObject({ kind: 'ok', newTopicsAdded: 0 });
+    expect(await getProgramForUser(id)).toMatchObject({
+      topics: expect.arrayContaining([expect.objectContaining({
+        id: independent.topicId, status: 'mastered', source: 'self', nextReviewAt: null,
+      })]),
+    });
+    expect(await getTopicStudy(id, independent.topicId)).toMatchObject({ kind: 'ok' });
     expect(await load()).toEqual(plan);
 
     await finish(review.id);

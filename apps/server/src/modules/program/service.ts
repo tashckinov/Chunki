@@ -357,7 +357,9 @@ export async function submitTopicAttempt(userId: string, userTopicId: string, at
   const now = new Date();
   const nextReviewAt = new Date(now.getTime() + result.nextReviewInDays * 86400000);
   let progress: TopicStatusPatch = { status: 'assigned' };
-  if (result.passed) {
+  if (result.passed && row.source === 'self') {
+    progress = { status: 'mastered', passedOnceAt: row.passed_once_at ?? now, masteredAt: now };
+  } else if (result.passed) {
     progress = attempt.kind === 'initial'
       ? { status: 'passed_once', passedOnceAt: now, nextReviewAt }
       : { status: 'mastered', passedOnceAt: row.passed_once_at, masteredAt: now };

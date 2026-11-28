@@ -50,7 +50,7 @@ export function TopicResultScreen() {
     }
   }
 
-  const reviewDate = topic.status === 'passed_once' && topic.nextReviewAt ? new Date(topic.nextReviewAt) : null;
+  const reviewDate = topic.source !== 'self' && topic.status === 'passed_once' && topic.nextReviewAt ? new Date(topic.nextReviewAt) : null;
   const reviewLabel = reviewDate ? formatDayMonth(reviewDate) : null;
 
   return (
@@ -66,7 +66,8 @@ export function TopicResultScreen() {
         </div>
       </div>
 
-      {topic.status === 'mastered' && <div className="text-[14.5px] text-accent">✓ Тема подтверждена — переподтверждение пройдено.</div>}
+      {topic.source === 'self' && result.passed && <p className="text-sm font-medium text-accent">✓ Пройдено</p>}
+      {topic.source !== 'self' && topic.status === 'mastered' && <div className="text-[14.5px] text-accent">✓ Тема подтверждена — переподтверждение пройдено.</div>}
       {reviewLabel && <div className="text-[14.5px] text-text-secondary">Контрольная проверка через {result.nextReviewInDays} дн. — {reviewLabel}</div>}
       {!result.passed && <div className="text-[14.5px] text-text-secondary">Тема нуждается в повторном изучении — вернитесь к материалу и попробуйте ещё раз.</div>}
 
