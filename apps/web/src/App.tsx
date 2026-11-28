@@ -1,3 +1,4 @@
+import { DailySessionProgress } from './screens/DailySessionProgress';
 import { useProductAnalytics } from './lib/useProductAnalytics';
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import { Dialog } from '@base-ui/react/dialog';
@@ -296,6 +297,7 @@ export default function App() {
             </div>
           )}
           <div className={`w-full min-[768px]:max-w-[720px] ${loggedOut ? 'min-[1200px]:max-w-[1040px]' : 'min-[1200px]:max-w-[860px]'} h-dvh overflow-hidden flex flex-col`}>
+            <DailySessionProgress />
             <CurrentScreen onOpenAdminMenu={openSidebar} />
             {screen !== 'admin' && !loggedOut && !studying && (
               <div className="flex-none min-[1200px]:hidden">

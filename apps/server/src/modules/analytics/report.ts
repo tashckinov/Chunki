@@ -3,7 +3,7 @@ import { pool } from '../../db/pool.js';
 const period = `((date_trunc('day', now() AT TIME ZONE $2) - ($1::int - 1) * interval '1 day') AT TIME ZONE $2)`;
 const learning = `('topic_check_completed','deck_completed','card_reviewed','card_first_mastered','comic_completed')`;
 const active = `(name IN ('app_opened','placement_started','placement_completed','program_opened','topic_opened',
-  'topic_study_started','collection_opened','comic_opened','deck_started') OR name IN ${learning})`;
+  'topic_study_started','starred_topic_study_started','collection_opened','comic_opened','deck_started') OR name IN ${learning})`;
 const activation = `(name IN ('deck_completed','card_first_mastered','comic_completed')
   OR (name = 'topic_check_completed' AND properties->>'passed' = 'true'))`;
 const contentTitles = `LEFT JOIN program_topics t ON e.content_type = 'topic' AND t.key = e.content_id
@@ -17,6 +17,10 @@ export async function analyticsReport(days: number, zone: string) {
       (SELECT count(*)::int FROM users WHERE created_at BETWEEN ${period} AND now()) AS new_users,
       count(DISTINCT user_id) FILTER (WHERE occurred_at BETWEEN ${period} AND now() AND name IN ${learning})::int AS learners,
       count(*) FILTER (WHERE occurred_at BETWEEN ${period} AND now() AND name IN ${learning})::int AS learning_actions,
+      count(DISTINCT user_id) FILTER (WHERE occurred_at BETWEEN ${period} AND now()
+        AND name = 'starred_topic_study_started')::int AS starred_study_users,
+      count(DISTINCT user_id) FILTER (WHERE occurred_at BETWEEN ${period} AND now() AND name = 'topic_check_completed'
+        AND source = 'self' AND properties->>'kind' = 'initial')::int AS starred_check_users,
       count(*) FILTER (WHERE occurred_at BETWEEN ${period} AND now() AND name = 'topic_check_completed'
         AND properties->>'passed' = 'true' AND properties->>'kind' = 'initial' AND source IN ('placement','discovered'))::int AS recommended_passes,
       count(DISTINCT user_id) FILTER (WHERE (occurred_at AT TIME ZONE $2)::date = (now() AT TIME ZONE $2)::date)::int AS active_1,

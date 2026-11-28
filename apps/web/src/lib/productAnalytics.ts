@@ -1,7 +1,7 @@
 import { postJson } from './collections';
 
 type EventName = 'app_opened' | 'placement_started' | 'placement_result_viewed' | 'program_opened'
-  | 'topic_opened' | 'topic_study_started' | 'collection_opened' | 'deck_started' | 'card_viewed' | 'deck_completed'
+  | 'topic_opened' | 'topic_study_started' | 'starred_topic_study_started' | 'collection_opened' | 'deck_started' | 'card_viewed' | 'deck_completed'
   | 'comic_opened' | 'comic_completed' | 'notification_permission_granted' | 'notification_permission_denied';
 type Event = { id: string; name: EventName; at: string; contentId?: string; journeyId?: string; context?: string };
 
