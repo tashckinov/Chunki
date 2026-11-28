@@ -289,14 +289,16 @@ export default function App() {
       {waitingForStartup ? (
         <div className="grid h-dvh place-items-center bg-bg text-body-secondary" role="status">Загрузка Chunki…</div>
       ) : showStudyGoal ? <StudyGoalScreen key={user.id} /> : (
-        <div className={`h-dvh w-full flex justify-center bg-bg overflow-hidden ${studying ? 'study-session text-text' : ''}`}>
+        <div className={`h-dvh w-full flex justify-center bg-bg overflow-hidden ${inAdmin ? 'mx-auto max-w-[1920px]' : ''} ${studying ? 'study-session text-text' : ''}`}>
           {!loggedOut && (
             <div className="hidden w-[248px] flex-none min-[1200px]:block">
               <SidebarNav value={navTab} onChange={setNavTab} compact={sidebarCollapsed}
                 onToggle={() => setSidebarCollapsed((value) => !value)} />
             </div>
           )}
-          <div className={`w-full min-[768px]:max-w-[720px] ${loggedOut ? 'min-[1200px]:max-w-[1040px]' : 'min-[1200px]:max-w-[860px]'} h-dvh overflow-hidden flex flex-col`}>
+          <div className={`flex h-dvh min-w-0 flex-col overflow-hidden ${inAdmin
+            ? 'flex-1'
+            : `w-full min-[768px]:max-w-[720px] ${loggedOut ? 'min-[1200px]:max-w-[1040px]' : 'min-[1200px]:max-w-[860px]'}`}`}>
             <DailySessionProgress />
             <CurrentScreen onOpenAdminMenu={openSidebar} />
             {screen !== 'admin' && !loggedOut && !studying && (
