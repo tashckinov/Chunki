@@ -179,26 +179,40 @@ export function ProgramScreen() {
           </>
         )}
         {(view === 'topics' || view === 'independent') && (
-          <section>
-            <p className="text-meta">{latest && latest.level + ' → ' + goal + ' · '}{mastered} из {recommendedCount} подтверждено</p>
+          <section className="space-y-4">
+            {view === 'topics' && latest && (
+              <section className="space-y-2.5 rounded-xl bg-surface-subtle p-3.5 sm:p-4">
+                <h2 className="text-meta">Прогресс персональной программы</h2>
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                  <p className="flex flex-wrap items-baseline gap-2 text-sm">
+                    <span>Уровень <strong>{latest.level}</strong></span>
+                    <span aria-hidden="true">→</span>
+                    <span>Цель <strong className="text-accent">{goal}</strong></span>
+                  </p>
+                  <p className="text-meta">{mastered} из {topicCount(recommendedCount)} освоено</p>
+                </div>
+                <progress aria-label="Освоено тем персональной программы" max={Math.max(1, recommendedCount)} value={mastered}
+                  className="block h-1.5 w-full overflow-hidden rounded-full bg-surface [&::-webkit-progress-bar]:bg-surface [&::-webkit-progress-value]:bg-accent [&::-moz-progress-bar]:bg-accent" />
+              </section>
+            )}
             <ProgramModules topics={topics} userId={userId} renderTopic={(topic) => {
               const isToday = topic.id === today?.id;
               const review = topic.nextReviewAt ? new Date(topic.nextReviewAt) : null;
               const status = topic.status === 'mastered' ? 'Освоено' :
                 topic.status === 'passed_once' ? review && review.getTime() <= now ? 'Можно повторить'
                   : review ? 'Проверка ' + SHORT_DATE.format(review) : 'Ожидает проверки'
-                  : topic.source === 'self' ? 'Самостоятельно' : isToday ? 'Рекомендовано · Сегодня' : 'Рекомендовано';
+                  : topic.source === 'self' ? 'Самостоятельно' : isToday ? 'Рекомендовано сегодня' : 'Рекомендовано';
               return (
                 <button key={topic.id} type="button" onClick={() => void s.openTopic(topic.id, view === 'independent' || topic.source === 'self' ? 'study' : 'read')}
-                  className="pressable flex w-full items-center gap-3 border-b border-border py-4 text-left">
-                  <span className="grid size-5 shrink-0 place-items-center text-accent">
+                  className={`pressable flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 text-left ${isToday ? 'bg-accent-subtle/60' : ''}`}>
+                  <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-accent-subtle text-accent">
                     {topic.status === 'mastered' ? <Check size={16} aria-hidden="true" /> :
                       topic.status === 'passed_once' ? <Clock size={16} aria-hidden="true" /> :
                       isToday ? <BookOpen size={16} aria-hidden="true" /> : <span className="size-2.5 rounded-full bg-accent" />}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block font-medium wrap-anywhere">{topic.title}</span>
-                    <span className="block text-meta">{[topic.level, status, topic.topicNumber != null && 'CEFR №' + topic.topicNumber].filter(Boolean).join(' · ')}</span>
+                    <span className={`block text-meta ${isToday ? 'text-accent' : ''}`}>{[status, s.user?.isAdmin && topic.topicNumber != null && 'CEFR №' + topic.topicNumber].filter(Boolean).join(' · ')}</span>
                   </span>
                   <ChevronRight size={16} className="shrink-0 text-text-secondary" aria-hidden="true" />
                 </button>
