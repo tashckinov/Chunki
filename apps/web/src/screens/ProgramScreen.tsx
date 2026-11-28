@@ -198,7 +198,7 @@ export function ProgramScreen() {
             <ProgramModules topics={topics} userId={userId} renderTopic={(topic) => {
               const isToday = topic.id === today?.id;
               const review = topic.nextReviewAt ? new Date(topic.nextReviewAt) : null;
-              const status = topic.status === 'mastered' ? 'Освоено' :
+              const status = topic.status === 'mastered' ? (topic.source === 'self' ? 'Пройдено' : 'Освоено') :
                 topic.status === 'passed_once' ? review && review.getTime() <= now ? 'Можно повторить'
                   : review ? 'Проверка ' + SHORT_DATE.format(review) : 'Ожидает проверки'
                   : topic.source === 'self' ? 'Самостоятельно' : isToday ? 'Рекомендовано сегодня' : 'Рекомендовано';

@@ -89,7 +89,7 @@ export function ProgramModules({ topics, userId, renderTopic }: {
           const entries = assignedById.get(id);
           return !entries || entries.every(({ source, status }) => source === 'self' && status === 'assigned');
         });
-        const uncheckedIds = new Set(unchecked.map(({ id }) => id));
+        const completedStarred = assigned.filter(({ source, status }) => source === 'self' && status !== 'assigned');
         const mastered = recommended.filter(({ status }) => status === 'mastered').length;
         return (
           <section key={module.id} className="space-y-2 border-b border-border pb-4 last:border-b-0">
@@ -101,8 +101,8 @@ export function ProgramModules({ topics, userId, renderTopic }: {
               </p>
             </div>
             <p className="text-meta">{module.description}</p>
-            <div className="space-y-1">{assigned.filter(({ curriculumId }) => !curriculumId || !uncheckedIds.has(curriculumId)).map(renderTopic)}</div>
-            {unchecked.length > 0 && (
+            <div className="space-y-1">{recommended.map(renderTopic)}</div>
+            {(unchecked.length > 0 || completedStarred.length > 0) && (
               <details className="group rounded-lg border border-border">
                 <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-2.5 text-sm [&::-webkit-details-marker]:hidden">
                   <Star size={15} className="shrink-0 text-text-secondary" aria-hidden="true" />
@@ -110,6 +110,7 @@ export function ProgramModules({ topics, userId, renderTopic }: {
                   <ChevronRight size={15} className="shrink-0 text-text-secondary group-open:rotate-90" aria-hidden="true" />
                 </summary>
                 <ul className="divide-y divide-border border-t border-border px-2.5">
+                  {completedStarred.map((topic) => <li key={topic.id}>{renderTopic(topic)}</li>)}
                   {unchecked.map(({ id, title }) => (
                     <li key={id} className="flex flex-wrap items-center justify-between gap-2 py-2">
                       <span className="min-w-0 text-body-secondary wrap-anywhere">{title}</span>
