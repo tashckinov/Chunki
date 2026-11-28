@@ -65,6 +65,11 @@ function topicPlanInstructions(plan: TopicPlanContext | undefined, currentLevel:
   ].join('\n');
 }
 
+const OPEN_ANSWER_RULES = 'Grade open answers against the actual requirements in the question. Never add unstated constraints. ' +
+  'Treat reference answers as examples, not exhaustive lists. Give full credit to any semantically correct answer that satisfies the prompt. ' +
+  'For example, “Latte, Cappuccino, Americano” fully answers “Name three drinks you can order in a café.” ' +
+  'Different drink categories are required only when explicitly requested.';
+
 const GRADE_DETAIL_SCHEMA = {
   type: 'object',
   properties: {
@@ -218,7 +223,7 @@ export class OpenRouterGradingProvider implements GradingProvider {
     ].join('\n');
 
     const out = await this.#callTool<ToolOutput>({
-      system: 'You are an expert CEFR English examiner grading a Russian-speaking learner and building them a personalized study plan. Be precise, concise, and encouraging. Always respond only via the provided tool.',
+      system: 'You are an expert CEFR English examiner grading a Russian-speaking learner and building them a personalized study plan. Be precise, concise, and encouraging. Always respond only via the provided tool. ' + OPEN_ANSWER_RULES,
       user,
       toolName: 'submit_placement_grade',
       maxTokens: 6144,
@@ -341,7 +346,7 @@ export class OpenRouterGradingProvider implements GradingProvider {
 
     const out = writeItems.length || missedChoices.length
       ? await this.#callTool<ToolOutput>({
-          system: 'You are an expert CEFR English tutor grading exercise answers for a Russian-speaking learner. Always respond only via the provided tool.',
+          system: 'You are an expert CEFR English tutor grading exercise answers for a Russian-speaking learner. Always respond only via the provided tool. ' + OPEN_ANSWER_RULES,
           user,
           toolName: 'submit_exercise_grade',
           maxTokens: 4096,
@@ -449,7 +454,8 @@ export class OpenRouterGradingProvider implements GradingProvider {
     const out = await this.#callTool<ToolOutput>({
       system: 'You are an expert English teacher writing a short practice quiz for a Russian-speaking learner. Always respond only via the provided tool.',
       user: [
-        'Write 5–8 practice exercises.',
+        'Write 5–8 practice exercises. Make the requested action match the available options: if options are articles, ask which article fills the blank. If omission is an option, tell the learner they can choose no article, without revealing the answer.',
+        'If the prompt asks learners to choose a sentence, all options must be full sentences. For open questions, state any required count or category constraint in the question.',
         TOPIC_ENGLISH_INSTRUCTION,
         topicScope(topic, curriculum),
         ...(curriculum ? [] : [`Learner context: ${topic.rationale}`]),
