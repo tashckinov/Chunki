@@ -1,3 +1,4 @@
+import { ChevronRight, Star } from 'lucide-react';
 import { track } from '../lib/productAnalytics';
 import { useEffect, useState, type ReactNode } from 'react';
 import type { CurriculumModule } from '@app/shared';
@@ -91,16 +92,24 @@ export function ProgramModules({ topics, userId, renderTopic }: {
         const uncheckedIds = new Set(unchecked.map(({ id }) => id));
         const mastered = recommended.filter(({ status }) => status === 'mastered').length;
         return (
-          <section key={module.id} className="border-b border-border py-3">
-            <h2 className="text-section-title">{module.title}</h2>
-            <p className="text-meta">{module.level} · {module.type === 'core' ? 'Основной модуль' : 'Дополнительный модуль'}</p>
-            <p className="mt-1 text-body-secondary">{module.description}</p>
-            <p className="mt-2 text-sm font-medium">Освоено {mastered} из {recommended.length} рекомендованных тем</p>
-            <div>{assigned.filter(({ curriculumId }) => !curriculumId || !uncheckedIds.has(curriculumId)).map(renderTopic)}</div>
+          <section key={module.id} className="space-y-2 border-b border-border pb-4 last:border-b-0">
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className="min-w-0 text-sm font-semibold wrap-anywhere">{module.title}</h2>
+              <p className="shrink-0 text-meta tabular-nums">
+                {module.level} <span aria-hidden="true">·</span>{' '}
+                <span aria-label={`Освоено ${mastered} из ${recommended.length} рекомендованных тем`}>{mastered}/{recommended.length}</span>
+              </p>
+            </div>
+            <p className="text-meta">{module.description}</p>
+            <div className="space-y-1">{assigned.filter(({ curriculumId }) => !curriculumId || !uncheckedIds.has(curriculumId)).map(renderTopic)}</div>
             {unchecked.length > 0 && (
-              <details className="py-3">
-                <summary className="cursor-pointer text-sm font-medium">Темы под звёздочкой</summary>
-                <ul className="mt-2 divide-y divide-border">
+              <details className="group rounded-lg border border-border">
+                <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-2.5 text-sm [&::-webkit-details-marker]:hidden">
+                  <Star size={15} className="shrink-0 text-text-secondary" aria-hidden="true" />
+                  <span className="flex-1">Темы под звёздочкой</span>
+                  <ChevronRight size={15} className="shrink-0 text-text-secondary group-open:rotate-90" aria-hidden="true" />
+                </summary>
+                <ul className="divide-y divide-border border-t border-border px-2.5">
                   {unchecked.map(({ id, title }) => (
                     <li key={id} className="flex flex-wrap items-center justify-between gap-2 py-2">
                       <span className="min-w-0 text-body-secondary wrap-anywhere">{title}</span>
