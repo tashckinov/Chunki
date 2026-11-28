@@ -620,7 +620,7 @@ it('enforces module access for direct assignment, study and knowledge checks wit
   }
 });
 
-it('resets program progress through the authenticated endpoint and preserves tests, reviews and attempts', async () => {
+it('resets program progress through the authenticated endpoint and preserves tests and attempts while clearing reviews', async () => {
   const { fastify } = await import('fastify');
   const { default: cookie } = await import('@fastify/cookie');
   const { createSession } = await import('../modules/auth/session.js');
@@ -633,14 +633,14 @@ it('resets program progress through the authenticated endpoint and preserves tes
       fromLevel: null, toLevel: 'B1', purpose: [], mcqAnswers: {}, open9: '', open10: '', essay: '',
     });
     if (result.kind !== 'ok') throw new Error(result.kind);
-    const [mastered, reviewing, pending] = result.topics;
+    const [mastered, reviewing, pending, extra] = result.topics;
+    await pool.query("UPDATE user_topics SET source = 'discovered', status = 'passed_once', next_review_at = now() WHERE id = $1", [extra.id]);
     await pool.query("UPDATE user_topics SET status = 'mastered', mastered_at = now() WHERE id = $1", [mastered.id]);
     await pool.query("UPDATE user_topics SET status = 'passed_once', passed_once_at = now(), next_review_at = now() + interval '2 days' WHERE id = $1", [reviewing.id]);
     const attempt = await startTopicAttempt(id, pending.id);
     if (attempt.kind !== 'ok') throw new Error(attempt.kind);
     await pool.query("INSERT INTO daily_learning_plans (user_id, day, review_ids, new_topic_id, time_zone) VALUES ($1, (now() AT TIME ZONE 'UTC')::date, '{}', $2, 'UTC')", [id, pending.id]);
     const reviews = () => pool.query('SELECT status, passed_once_at, next_review_at FROM user_topics WHERE id = $1', [reviewing.id]).then(({ rows }) => rows);
-    const beforeReview = await reviews();
     const beforeHistory = (await getProgramForUser(id)).placement;
     await app.register(cookie);
     await app.register(programRoutes, { prefix: '/api/program' });
@@ -652,7 +652,9 @@ it('resets program progress through the authenticated endpoint and preserves tes
     expect((await reset('ДА')).statusCode).toBe(400);
     expect((await reset('Я УВЕРЕН')).statusCode).toBe(200);
     expect((await getProgramForUser(id)).placement).toEqual(beforeHistory);
-    expect(await reviews()).toEqual(beforeReview);
+    expect(await reviews()).toEqual([{ status: 'assigned', passed_once_at: null, next_review_at: null }]);
+    expect((await pool.query('SELECT withdrawn_at, next_review_at FROM user_topics WHERE id = $1', [extra.id])).rows)
+      .toEqual([{ withdrawn_at: expect.any(Date), next_review_at: null }]);
     expect((await pool.query('SELECT status, mastered_at FROM user_topics WHERE id = $1', [mastered.id])).rows)
       .toEqual([{ status: 'assigned', mastered_at: null }]);
     expect((await pool.query('SELECT 1 FROM daily_learning_plans WHERE user_id = $1', [id])).rowCount).toBe(0);
@@ -663,5 +665,47 @@ it('resets program progress through the authenticated endpoint and preserves tes
   } finally {
     await app.close();
     await pool.query('DELETE FROM users WHERE id = $1', [id]);
+  }
+});
+
+it('allows one test on the free tariff with the learning program disabled', async () => {
+  const { fastify } = await import('fastify');
+  const { default: cookie } = await import('@fastify/cookie');
+  const { createSession } = await import('../modules/auth/session.js');
+  const { programRoutes } = await import('../modules/program/routes.js');
+  const app = fastify();
+  const { rows: [tariff] } = await pool.query('SELECT id, allow_program, monthly_placement_limit FROM subscription_tariffs WHERE is_default');
+  const { rows: [{ id }] } = await pool.query<{ id: string }>('INSERT INTO users DEFAULT VALUES RETURNING id');
+  try {
+    await pool.query('UPDATE subscription_tariffs SET allow_program = false, monthly_placement_limit = 1 WHERE id = $1', [tariff.id]);
+    await app.register(cookie);
+    await app.register(programRoutes, { prefix: '/api/program' });
+    const { token } = await createSession(id, null);
+    const headers = { authorization: 'Bearer ' + token };
+    const variant = () => app.inject({ url: '/api/program/placement-variant', headers });
+    expect((await variant()).statusCode).toBe(200);
+
+    const input: PlacementTestSubmission = {
+      submissionId: randomUUID(), variantId: 'builtin', fromLevel: null, toLevel: 'B1', purpose: [],
+      mcqAnswers: {}, open9: '', open10: '', essay: '',
+    };
+    await expect(submitPlacementTest(id, input)).resolves.toMatchObject({ kind: 'ok', topics: [], result: { topics: [] } });
+    expect(await getPlacementResult(id, input.submissionId!)).not.toBeNull();
+    expect(await getProgramForUser(id)).toMatchObject({
+      placement: { quota: { allowed: true, used: 1, limit: 1 } }, needsProgramBuild: false,
+    });
+    expect((await variant()).statusCode).toBe(429);
+    await expect(submitPlacementTest(id, { ...input, submissionId: randomUUID() })).resolves.toMatchObject({ kind: 'limit_reached' });
+    expect(await rebuildProgramFromLastTest(id)).toBe('not_allowed');
+
+    await pool.query('UPDATE subscription_tariffs SET allow_program = true WHERE id = $1', [tariff.id]);
+    expect(await getProgramForUser(id)).toMatchObject({ needsProgramBuild: true });
+    expect(await rebuildProgramFromLastTest(id)).toBe('ready');
+    expect(await getProgramForUser(id)).toMatchObject({ needsProgramBuild: false });
+  } finally {
+    await app.close();
+    await pool.query('DELETE FROM users WHERE id = $1', [id]);
+    await pool.query('UPDATE subscription_tariffs SET allow_program = $2, monthly_placement_limit = $3 WHERE id = $1',
+      [tariff.id, tariff.allow_program, tariff.monthly_placement_limit]);
   }
 });

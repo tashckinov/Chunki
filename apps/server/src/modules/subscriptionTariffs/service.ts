@@ -186,7 +186,7 @@ export async function resolvePlacementAccess(userId: string): Promise<{ tariffId
   const row = await findAccountTariff(account);
   return {
     tariffId: row?.id ?? null,
-    allowed: account.isAdmin || (row?.allow_program ?? true),
+    allowed: true,
     limit: row ? row.monthly_placement_limit : null,
   };
 }

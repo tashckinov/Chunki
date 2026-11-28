@@ -113,7 +113,9 @@ function toPlacementSummary(row: Awaited<ReturnType<typeof listPlacementTests>>[
 }
 
 export async function getProgramForUser(userId: string): Promise<ProgramForUser> {
-  const [topics, history, quota] = await Promise.all([findUserTopics(userId), listPlacementTests(userId), getPlacementQuota(userId)]);
+  const [topics, history, quota, tariff] = await Promise.all([
+    findUserTopics(userId), listPlacementTests(userId), getPlacementQuota(userId), resolveEffectiveTariff(userId),
+  ]);
   const placement = { history: history.map(toPlacementSummary), quota };
   if (topics.length === 0 && history.length === 0) return { status: 'none', placement };
   const latest = history[0];
@@ -122,7 +124,7 @@ export async function getProgramForUser(userId: string): Promise<ProgramForUser>
     status: 'active',
     topics: visible,
     placement,
-    needsProgramBuild: quota.allowed && !!latest && !latest.program_built_at,
+    needsProgramBuild: tariff.allowProgram && !!latest && !latest.program_built_at,
   };
 }
 
@@ -180,7 +182,8 @@ export async function submitPlacementTest(userId: string, input: PlacementTestSu
 
     const definition = await findGrammarTest(input.variantId);
     if (!definition) return { kind: 'variant_not_found' };
-    const plan = await topicPlan(userId, input.fromLevel, input.toLevel);
+    const { allowProgram } = await resolveEffectiveTariff(userId);
+    const plan = allowProgram ? await topicPlan(userId, input.fromLevel, input.toLevel) : undefined;
     const provider = getGradingProvider();
     const grade = await withAiCallLogging({ userId, chunkId: null, provider: provider.name, model: provider.model ?? null, request: input }, () => provider.gradePlacementTest(input, definition, plan));
     const levels = topicLevels(grade.overallLevel, input.toLevel);
@@ -195,7 +198,7 @@ export async function submitPlacementTest(userId: string, input: PlacementTestSu
       mcqScore: grade.mcqScore,
       openGrades: grade.openGrades,
       essayGrade: grade.essayGrade,
-    }, grade.topics, levels, token);
+    }, grade.topics, levels, token, allowProgram);
 
     const topics = visibleTopics(await findUserTopics(userId), grade.overallLevel, input.toLevel);
     return { kind: 'ok', result: { ...grade, topics: assigned, review: buildPlacementReview(definition, input, grade) }, topics };
@@ -216,7 +219,7 @@ export async function rebuildProgramFromLastTest(
     const [latest] = await listPlacementTests(userId);
     if (!latest) return replaceUnstarted ? 'no_result' : 'ready';
     if (!replaceUnstarted && latest.program_built_at) return 'ready';
-    if (!replaceUnstarted && !(await resolvePlacementAccess(userId)).allowed) return 'not_allowed';
+    if (!replaceUnstarted && !(await resolveEffectiveTariff(userId)).allowProgram) return 'not_allowed';
 
     const saved = await getPlacementResult(userId, latest.id);
     if (!saved) return replaceUnstarted ? 'no_result' : 'ready';
