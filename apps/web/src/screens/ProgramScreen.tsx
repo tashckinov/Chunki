@@ -143,7 +143,7 @@ export function ProgramScreen() {
         {view === 'overview' && latest && (
           <>
             {latest && (
-              <section className="space-y-1.5 border-b border-border pb-5">
+              <section className="space-y-1.5">
                 <div className="flex items-center justify-between gap-2">
                   <h2 className="text-sm font-semibold">Прогресс персональной программы</h2>
                   <span className="text-meta">{mastered} из {recommendedCount}</span>

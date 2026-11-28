@@ -1,3 +1,4 @@
+import { dailyPlanSteps } from '../lib/dailyPlanSteps';
 import { useAppStore } from '../store/appStore';
 
 export function DailySessionProgress() {
@@ -5,14 +6,13 @@ export function DailySessionProgress() {
   if (!dailySession || dailySession.userId !== user?.id ||
       !(['topic', 'exercises', 'topicresult'].includes(screen) || (screen === 'checking' && checkingContext === 'exercise'))) return null;
 
-  const steps = dailySession.plan.steps.flatMap(({ topic, kind, done }) =>
-    (kind === 'new' ? ['Новая тема', 'Практика'] : ['Повторение']).map((title) => ({ title, id: topic.id, done })));
-  const first = steps.findIndex(({ id }) => id === activeTopicId);
+  const steps = dailyPlanSteps(dailySession.plan);
+  const first = steps.findIndex(({ topic }) => topic.id === activeTopicId);
   if (first === -1) return null;
-  const index = steps[first].title === 'Новая тема' && screen !== 'topic' ? first + 1 : first;
+  const index = steps[first].stage === 'lesson' && screen !== 'topic' ? first + 1 : first;
   const graded = screen === 'topicresult' && exerciseResult;
   const completed = steps.filter((step, i) => step.done ||
-    (step.id === activeTopicId && (i < index || (i === index && graded)))).length;
+    (step.topic.id === activeTopicId && (i < index || (i === index && graded)))).length;
 
   return <section className="flex-none border-b border-border px-5 py-3">
     <div className="mb-2 flex items-center justify-between gap-2 text-sm">

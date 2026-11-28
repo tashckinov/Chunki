@@ -50,7 +50,7 @@ export function HomeScreen() {
         </section>}
 
         {latest && (
-          <section className="space-y-2 border-b border-border pb-5">
+          <section className="space-y-2">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <h2 className="text-section-title">Прогресс персональной программы</h2>
               <span className="text-meta">{mastered} из {recommendedCount} подтверждено</span>
@@ -76,7 +76,7 @@ export function HomeScreen() {
           </section>
         )}
 
-        <section className="border-t border-border">
+        <section>
           {([['cardslib', 'Карточки', Layers], ['comics', 'Комиксы', BookOpen]] as const).map(([screen, title, Icon]) => (
             <button key={screen} type="button" className="pressable flex min-h-12 w-full items-center gap-3 border-b border-border py-3 text-left"
               onClick={() => go(screen)}>

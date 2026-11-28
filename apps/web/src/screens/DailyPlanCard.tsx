@@ -1,40 +1,38 @@
-import { BookOpen, Check, ChevronRight, CircleCheck, MessageCircle, RefreshCw } from 'lucide-react';
+import { dailyPlanSteps } from '../lib/dailyPlanSteps';
+import { Check, ChevronRight, CircleCheck } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { useAppStore } from '../store/appStore';
 import type { DailyLearningPlan } from '../lib/program';
 
 export function DailyPlanCard({ plan }: { plan: DailyLearningPlan }) {
-  const reviews = plan.steps.filter(({ kind }) => kind === 'review');
-  const lesson = plan.steps.find(({ kind }) => kind === 'new');
-  const next = plan.steps.find(({ done }) => !done);
-  const rows = [
-    ...(reviews.length ? [{ title: 'Повторение', detail: reviews.map(({ topic }) => topic.title).join(' · '),
-      Icon: RefreshCw, done: reviews.every(({ done }) => done) }] : []),
-    ...(lesson ? [
-      { title: 'Новая тема', detail: lesson.topic.title, Icon: BookOpen, done: lesson.done },
-      { title: 'Практика', detail: 'Упражнения по новой теме', Icon: MessageCircle, done: lesson.done },
-    ] : []),
-  ];
+  const steps = dailyPlanSteps(plan);
+  const nextIndex = steps.findIndex(({ done }) => !done);
+  const next = steps[nextIndex];
+  const completed = steps.filter(({ done }) => done).length;
 
   return (
     <section className="rounded-2xl border border-border p-4 sm:p-5">
       {next ? (
         <>
-          <h2 className="text-section-title">На сегодня</h2>
-          <ul className="my-2 divide-y divide-border">
-            {rows.map(({ title, detail, Icon, done }) => (
-              <li key={title} className="flex items-center gap-3 py-3">
-                <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-accent-subtle text-accent">
-                  <Icon size={17} aria-hidden="true" />
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-section-title">На сегодня</h2>
+            <p className="text-meta">Выполнено {completed} из {steps.length}</p>
+          </div>
+          <ol className="my-2 list-none divide-y divide-border" aria-label="Шаги занятия" role="list">
+            {steps.map(({ topic, stage, title, done }, index) => (
+              <li key={`${topic.id}:${stage}`} aria-current={index === nextIndex ? 'step' : undefined}
+                className="flex items-center gap-3 py-3">
+                <span className={`grid size-8 shrink-0 place-items-center rounded-full text-sm font-semibold tabular-nums ${index === nextIndex ? 'bg-accent-subtle text-accent' : 'bg-surface-subtle text-text-secondary'}`}>
+                  {index + 1}
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold">{title}</p>
-                  <p className="text-meta wrap-anywhere">{detail}</p>
+                  <p className="text-meta wrap-anywhere">{topic.title}</p>
                 </div>
-                {done && <span aria-label="Выполнено"><Check size={17} className="text-accent" aria-hidden="true" /></span>}
+                {done && <><span className="sr-only">Выполнено</span><Check size={17} className="shrink-0 text-accent" aria-hidden="true" /></>}
               </li>
             ))}
-          </ul>
+          </ol>
           <Button className="w-full" onClick={() => {
             const state = useAppStore.getState();
             if (!state.user) return;
@@ -42,7 +40,7 @@ export function DailyPlanCard({ plan }: { plan: DailyLearningPlan }) {
               plan, userId: state.user.id, origin: state.screen === 'home' ? 'home' : 'program',
             });
           }}>
-            {plan.steps.some(({ done }) => done) ? 'Продолжить занятие' : 'Начать занятие'}
+            {completed > 0 ? 'Продолжить занятие' : 'Начать занятие'}
           </Button>
         </>
       ) : (
