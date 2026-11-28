@@ -274,16 +274,8 @@ export async function getTopicStudy(userId: string, userTopicId: string): Promis
 
 export type RedactedExerciseItem = { type: 'choice'; q: string; options: string[] } | { type: 'write'; q: string; rows: number; placeholder: string };
 
-function exerciseItems(items: ExerciseItem[]): ExerciseItem[] {
-  return items.map((item) => item.type === 'choice' && item.options.some((option) => /no article/i.test(option))
-    ? { ...item, q: item.q.replace(/^Choose where no article is needed:\s*(?=.*_{2,})/i,
-      'Choose the correct article, or select no article: ') }
-    : item);
-}
-
 function redact(items: ExerciseItem[]): RedactedExerciseItem[] {
-  return exerciseItems(items).map((item) =>
-    item.type === 'choice' ? { type: 'choice', q: item.q, options: item.options } : item);
+  return items.map((item) => item.type === 'choice' ? { type: 'choice', q: item.q, options: item.options } : item);
 }
 
 export type StartAttemptResult =
@@ -349,7 +341,7 @@ export async function submitTopicAttempt(userId: string, userTopicId: string, at
   const upsellTariffs = await checkProgramAllowed(userId);
   if (upsellTariffs) return { kind: 'not_allowed', upsellTariffs };
 
-  const items = exerciseItems(attempt.items as ExerciseItem[]);
+  const items = attempt.items as ExerciseItem[];
   const topic = { ...toTopicIdentity(row), rationale: row.rationale };
   const gradeInput = { topic, items, answers };
   const [latest] = await listPlacementTests(userId);

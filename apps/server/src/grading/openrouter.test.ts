@@ -186,3 +186,22 @@ it('tells the grader to accept valid drinks without imposing categories', async 
   expect(messages[1].content).toContain(question);
   expect(result).toMatchObject({ scoreOutOf10: 10, passed: true, corrections: [] });
 });
+
+it('reviews generated exercises before serving them and replaces a rejected set', async () => {
+  const invalid = { type: 'choice', q: 'Find the sentence in which no article is needed: ___ water is useful.',
+    options: ['A', 'The', 'No article'], answer: 'No article' };
+  const valid = { ...invalid, q: 'Choose what fits the blank: ___ water is useful.' };
+  const set = (item: typeof valid) => ({ items: [item, ...Array.from({ length: 4 }, (_, index) => ({
+    type: 'write', q: 'Write an example for situation ' + index,
+  }))] });
+  create.mockResolvedValueOnce(completion(set(invalid), 'tool_calls', 'submit_topic_exercises'))
+    .mockResolvedValueOnce(completion({ valid: false }, 'tool_calls', 'review_topic_exercises'))
+    .mockResolvedValueOnce(completion(set(valid), 'tool_calls', 'submit_topic_exercises'))
+    .mockResolvedValueOnce(completion({ valid: true }, 'tool_calls', 'review_topic_exercises'));
+
+  const result = await grader.generateTopicExercises({ key: 'articles', title: 'Articles', category: 'Грамматика', level: 'A1', rationale: '' });
+  expect(result[0]).toEqual(valid);
+  expect(create).toHaveBeenCalledTimes(4);
+  expect(create.mock.calls[1][0].messages[0].content).toContain('Never give away the correct answer');
+  expect(create.mock.calls[1][0].messages[1].content).toContain(invalid.q);
+});
