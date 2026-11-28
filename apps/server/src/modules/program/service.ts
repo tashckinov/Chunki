@@ -275,7 +275,7 @@ export async function getTopicStudy(userId: string, userTopicId: string): Promis
 export type RedactedExerciseItem = { type: 'choice'; q: string; options: string[] } | { type: 'write'; q: string; rows: number; placeholder: string };
 
 function redact(items: ExerciseItem[]): RedactedExerciseItem[] {
-  return items.map((item) => (item.type === 'choice' ? { type: 'choice', q: item.q, options: item.options } : item));
+  return items.map((item) => item.type === 'choice' ? { type: 'choice', q: item.q, options: item.options } : item);
 }
 
 export type StartAttemptResult =
