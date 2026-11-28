@@ -3,7 +3,7 @@ import { pool } from '../../db/pool.js';
 export async function objectiveReport(days: number, zone: string) {
   const { rows } = await pool.query(`
     WITH observed AS (
-      SELECT * FROM product_activity
+      SELECT * FROM analytics_activity
       WHERE curriculum_objective_id IS NOT NULL
         AND occurred_at >= (date_trunc('day', now() AT TIME ZONE $2) - ($1::int - 1) * interval '1 day') AT TIME ZONE $2
         AND occurred_at <= now()

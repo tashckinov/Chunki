@@ -6,7 +6,7 @@ import { NavigationBar } from '../../components/ui/NavigationBar';
 import { IconButton } from '../../components/ui/IconButton';
 import { ApiError } from '../../lib/collections';
 import { Button } from '../../components/ui/Button';
-import { fetchAdminUsers, setUserPremiumUntil, resetDailyChecks, fetchAdminTariffs, regenerateUserProgram, type AdminUser, type AdminTariff } from '../../lib/admin';
+import { fetchAdminUsers, setUserPremiumUntil, setUserAnalyticsExcluded, resetDailyChecks, fetchAdminTariffs, regenerateUserProgram, type AdminUser, type AdminTariff } from '../../lib/admin';
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
@@ -80,6 +80,19 @@ export function UsersSection({ onOpenMenu }: { onOpenMenu: () => void }) {
     }
   }
 
+  async function updateAnalytics(userId: string, excluded: boolean) {
+    setBusyId(userId);
+    setError(null);
+    try {
+      const updated = await setUserAnalyticsExcluded(userId, excluded);
+      setUsers((prev) => prev?.map((u) => (u.id === userId ? updated : u)) ?? prev);
+    } catch {
+      setError('Не удалось изменить учёт в статистике.');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function resetChecks(userId: string) {
     setBusyId(userId);
     setError(null);
@@ -114,6 +127,7 @@ export function UsersSection({ onOpenMenu }: { onOpenMenu: () => void }) {
       cell: (u) => <div className="min-w-44">
         <div className="font-medium wrap-anywhere">{u.displayName || u.email || u.id}</div>
         {u.displayName && u.email && u.displayName !== u.email && <div className="text-meta wrap-anywhere">{u.email}</div>}
+        {u.excludedFromAnalytics && <div className="text-meta">Исключён из статистики</div>}
       </div> },
     { id: 'tariff', label: 'Тариф', sortValue: tariffLabel,
       cell: (u) => <span className={`inline-block rounded-md px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${isPremiumActive(u.premiumUntil) ? 'bg-accent-subtle text-accent' : 'bg-surface-subtle text-text-secondary'}`}>
@@ -168,6 +182,15 @@ export function UsersSection({ onOpenMenu }: { onOpenMenu: () => void }) {
             </label>
             <Button size="sm" variant="secondary" disabled={!!busyId || !customDate}
               onClick={() => void apply(selected.id, new Date(customDate).toISOString())}>Задать дату</Button>
+          </div>
+          <div className="space-y-1.5 border-t border-border pt-3">
+            <label className="flex items-center gap-2.5 font-medium text-text">
+              <input type="checkbox" checked={!!selected.excludedFromAnalytics} disabled={!!busyId}
+                className="size-4 accent-accent" aria-describedby="analytics-exclusion-description"
+                onChange={(event) => void updateAnalytics(selected.id, event.target.checked)} />
+              Исключить из статистики
+            </label>
+            <p id="analytics-exclusion-description" className="text-meta">Сводные отчёты пересчитаются за все периоды. История действий останется доступна.</p>
           </div>
           <div className="space-y-2 border-t border-border pt-3">
             <Button size="sm" variant="ghost" disabled={!!busyId} onClick={() => void resetChecks(selected.id)}>Сбросить попытки</Button>
