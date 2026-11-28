@@ -1,3 +1,4 @@
+import { resetLearningProgress } from './resetProgress.js';
 import { getDailyLearningPlan } from './dailyLearningPlan.js';
 import { listLearningModules } from './learningModules.js';
 import { listCurriculumTopics } from './topicCatalog.js';
@@ -50,6 +51,13 @@ export const programRoutes: FastifyPluginAsync = async (app) => {
   app.get('/', { preHandler: requireAuthenticatedSession }, async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
     return getProgramForUser(request.session!.userId);
+  });
+
+  app.post('/reset-progress', { preHandler: requireAuthenticatedSession }, async (request, reply) => {
+    const input = z.object({ confirmation: z.literal('Я УВЕРЕН') }).safeParse(request.body);
+    if (!input.success) return reply.code(400).send({ error: 'invalid_confirmation' });
+    await resetLearningProgress(request.session!.userId);
+    return { ok: true };
   });
 
   app.post('/daily-plan', { preHandler: requireAuthenticatedSession }, async (request, reply) => {
