@@ -332,6 +332,7 @@ export async function submitTopicAttempt(userId: string, userTopicId: string, at
 
   const attempt = await findAttempt(attemptId);
   if (!attempt || attempt.user_topic_id !== row.id) return { kind: 'attempt_not_found' };
+  if (row.progress_reset_at && attempt.created_at <= row.progress_reset_at) return { kind: 'attempt_not_found' };
   if (attempt.graded_at) return { kind: 'already_graded' };
 
   const upsellTariffs = await checkProgramAllowed(userId);

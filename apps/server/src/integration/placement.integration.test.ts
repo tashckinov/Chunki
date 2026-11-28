@@ -619,3 +619,49 @@ it('enforces module access for direct assignment, study and knowledge checks wit
     await pool.query('DELETE FROM users WHERE id = $1', [id]);
   }
 });
+
+it('resets program progress through the authenticated endpoint and preserves tests, reviews and attempts', async () => {
+  const { fastify } = await import('fastify');
+  const { default: cookie } = await import('@fastify/cookie');
+  const { createSession } = await import('../modules/auth/session.js');
+  const { programRoutes } = await import('../modules/program/routes.js');
+  const { findOpenTopicAttempt } = await import('../modules/program/repository.js');
+  const app = fastify();
+  const { rows: [{ id }] } = await pool.query<{ id: string }>('INSERT INTO users (is_admin) VALUES (true) RETURNING id');
+  try {
+    const result = await submitPlacementTest(id, {
+      fromLevel: null, toLevel: 'B1', purpose: [], mcqAnswers: {}, open9: '', open10: '', essay: '',
+    });
+    if (result.kind !== 'ok') throw new Error(result.kind);
+    const [mastered, reviewing, pending] = result.topics;
+    await pool.query("UPDATE user_topics SET status = 'mastered', mastered_at = now() WHERE id = $1", [mastered.id]);
+    await pool.query("UPDATE user_topics SET status = 'passed_once', passed_once_at = now(), next_review_at = now() + interval '2 days' WHERE id = $1", [reviewing.id]);
+    const attempt = await startTopicAttempt(id, pending.id);
+    if (attempt.kind !== 'ok') throw new Error(attempt.kind);
+    await pool.query("INSERT INTO daily_learning_plans (user_id, day, review_ids, new_topic_id, time_zone) VALUES ($1, (now() AT TIME ZONE 'UTC')::date, '{}', $2, 'UTC')", [id, pending.id]);
+    const reviews = () => pool.query('SELECT status, passed_once_at, next_review_at FROM user_topics WHERE id = $1', [reviewing.id]).then(({ rows }) => rows);
+    const beforeReview = await reviews();
+    const beforeHistory = (await getProgramForUser(id)).placement;
+    await app.register(cookie);
+    await app.register(programRoutes, { prefix: '/api/program' });
+    const { token } = await createSession(id, null);
+    const reset = (confirmation: string) => app.inject({
+      method: 'POST', url: '/api/program/reset-progress', headers: { authorization: 'Bearer ' + token }, payload: { confirmation },
+    });
+
+    expect((await reset('ДА')).statusCode).toBe(400);
+    expect((await reset('Я УВЕРЕН')).statusCode).toBe(200);
+    expect((await getProgramForUser(id)).placement).toEqual(beforeHistory);
+    expect(await reviews()).toEqual(beforeReview);
+    expect((await pool.query('SELECT status, mastered_at FROM user_topics WHERE id = $1', [mastered.id])).rows)
+      .toEqual([{ status: 'assigned', mastered_at: null }]);
+    expect((await pool.query('SELECT 1 FROM daily_learning_plans WHERE user_id = $1', [id])).rowCount).toBe(0);
+    expect((await pool.query('SELECT 1 FROM topic_attempts WHERE id = $1', [attempt.attemptId])).rowCount).toBe(1);
+    expect(await findOpenTopicAttempt(pending.id, 'initial')).toBeNull();
+    expect(await submitTopicAttempt(id, pending.id, attempt.attemptId, {})).toMatchObject({ kind: 'attempt_not_found' });
+    expect(await startTopicAttempt(id, pending.id)).toMatchObject({ kind: 'ok', attemptId: expect.not.stringMatching(attempt.attemptId) });
+  } finally {
+    await app.close();
+    await pool.query('DELETE FROM users WHERE id = $1', [id]);
+  }
+});

@@ -1,3 +1,4 @@
+import { ResetLearningProgress } from '../components/ui/ResetLearningProgress';
 import { useState } from 'react';
 import { KeyRound } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
@@ -135,6 +136,7 @@ export function ProfileScreen() {
                 <InterfaceModeSetting />
                 <StudyGoalSetting />
                 <StudyReminderSetting />
+                <ResetLearningProgress key={user.id} userId={user.id} />
               </section>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-meta">Chunki · сборка {APP_VERSION}</p>

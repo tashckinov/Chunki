@@ -26,6 +26,7 @@ export interface UserTopicRow {
   passed_once_at: Date | null;
   next_review_at: Date | null;
   mastered_at: Date | null;
+  progress_reset_at?: Date | null;
   last_attempt_at?: Date | null;
   created_at: Date;
   updated_at: Date;
@@ -276,6 +277,7 @@ export async function findUserTopics(userId: string): Promise<UserTopicRow[]> {
      LEFT JOIN LATERAL (
        SELECT max(a.created_at) AS last_attempt_at FROM topic_attempts a
        WHERE a.user_topic_id = topics.id AND topics.status = 'assigned'
+         AND (topics.progress_reset_at IS NULL OR a.created_at > topics.progress_reset_at)
      ) attempts ON true
      ORDER BY topics.created_at, topics.id`, [userId]);
   return rows;
@@ -314,7 +316,9 @@ export interface TopicAttemptRow {
 
 export async function findOpenTopicAttempt(id: string, kind: TopicAttemptKind): Promise<TopicAttemptRow | null> {
   const { rows: [attempt] } = await pool.query<TopicAttemptRow>(
-    'SELECT * FROM topic_attempts WHERE user_topic_id = $1 AND kind = $2 ORDER BY created_at DESC, id DESC LIMIT 1',
+    `SELECT a.* FROM topic_attempts a JOIN user_topics t ON t.id = a.user_topic_id
+     WHERE a.user_topic_id = $1 AND a.kind = $2 AND (t.progress_reset_at IS NULL OR a.created_at > t.progress_reset_at)
+     ORDER BY a.created_at DESC, a.id DESC LIMIT 1`,
     [id, kind],
   );
   return attempt && !attempt.graded_at ? attempt : null;
@@ -372,7 +376,10 @@ export async function saveTopicGrade(
   try {
     await db.query('BEGIN');
     const pending = await db.query(
-      'SELECT id FROM topic_attempts WHERE id = $1 AND graded_at IS NULL FOR UPDATE',
+      `SELECT a.id FROM topic_attempts a JOIN user_topics t ON t.id = a.user_topic_id
+       WHERE a.id = $1 AND a.graded_at IS NULL AND t.withdrawn_at IS NULL
+         AND (t.progress_reset_at IS NULL OR a.created_at > t.progress_reset_at)
+       FOR UPDATE OF t, a`,
       [attempt.id],
     );
     if (!pending.rowCount) {
